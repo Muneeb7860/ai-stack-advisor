@@ -67,11 +67,12 @@ def test_unknown_analysis_id_is_404_on_share():
     assert resp.status_code == 404
 
 
-def test_mcp_server_still_raises_on_import():
-    """The only remaining stub (v2 milestone 4) — app/mcp/server.py raises NotImplementedError
-    at import time, deliberately (see its module docstring). This is the tripwire for it: if
-    someone accidentally makes the module importable without actually building it, this test
-    fails loudly instead of the stub silently looking done. Both /api/refine and /api/ask are
-    now real — see tests/test_refine.py and tests/test_ask.py."""
-    with pytest.raises(NotImplementedError):
-        import app.mcp.server  # noqa: F401
+def test_mcp_server_is_now_built_not_a_stub():
+    """All four v2 milestones (share links, /api/refine, /api/ask, MCP tool wrapper) are now
+    real — see tests/test_refine.py, tests/test_ask.py, tests/test_mcp_server.py, and
+    tests/test_rule_engine.py for their coverage. app/mcp/server.py used to raise
+    NotImplementedError at import time (a deliberate stub, per its old module docstring);
+    this test replaces that tripwire now that there's nothing left stubbed to guard."""
+    import app.mcp.server as mcp_module
+
+    assert mcp_module.mcp.name == "ai-stack-advisor"

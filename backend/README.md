@@ -10,7 +10,7 @@ must stay that way** (PRD NFR-5) — nothing here is a hard dependency for the c
 | Share links | **Built, tested** | `POST /api/analyses`, `POST /api/analyses/{id}/share`, `GET /api/analyses/shared/{slug}` |
 | LLM refinement | **Built, tested** | `POST /api/refine` — see `app/routers/refine.py` docstring for the constrained-reasoning design and a resolved gap (optional `analysis_id`) not covered by the original spec |
 | Grounded follow-up Q&A | **Built, tested** | `POST /api/ask` — see `app/routers/ask.py` docstring; scoped structurally to one `analysis_id`, replays full conversation history each turn |
-| MCP tool wrapper | Stub (raises on import) | `app/mcp/server.py` — spec in module docstring |
+| MCP tool wrapper | **Built, tested** | `app/mcp/server.py` — `recommend_stack()` tool, backed by `app/rule_engine.py` (Python port of `index.html`'s rule engine, verified against it — see `../docs/adr/0001-mcp-rule-engine-port.md`) |
 
 Full requirement traceability: `../docs/AI-Stack-Advisor-PRD.docx` FR-27/28/29, the ERD
 (`../diagrams/erd.html`), and the DDD (`../docs/AI-Stack-Advisor-DDD.docx`).
@@ -43,11 +43,11 @@ uvicorn app.main:app --reload
 pytest tests/ -v
 ```
 
-24 tests currently, all passing:
+42 tests currently, all passing:
 - `test_share.py` (7): health check, create/share/fetch round-trip, share idempotency (same
-  slug on repeat calls), 404s on unknown analysis/slug, and a tripwire test that fails loudly
-  if `app/mcp/server.py` (the one remaining stub) ever becomes importable without actually
-  being built.
+  slug on repeat calls), 404s on unknown analysis/slug, and a sanity check that the MCP
+  server module is fully built (replaces the old import-time-stub tripwire now that there's
+  nothing left stubbed).
 - `test_refine.py` (8): analysis creation-vs-reuse based on whether `analysis_id` is passed,
   the exact inputs forwarded to the model, the API key never appearing in the response,
   append-only persistence of `RefinementResult` across repeat calls, the input-length
@@ -58,10 +58,20 @@ pytest tests/ -v
   first's history — the DDD 4.3 invariant), the API key never appearing in the response, the
   input-length guardrail (422), Anthropic failures surfacing as 502, and no orphaned
   question-with-no-answer row when the model call fails.
+- `test_rule_engine.py` (12): regression tests for `app/rule_engine.py`, one per bug
+  `../validation-report.md` found and fixed in the original JS (negation handling, on-prem
+  override, warehouse detection, team-size conflicts, the small-team regex fallback) plus
+  structural checks (all 30 recommendation categories present, signal dict keys stay
+  camelCase matching `index.html`). Pure functions, no DB/network needed.
+- `test_mcp_server.py` (6): invocation logging (with and without a client name), the
+  nullable-then-populated `analysis_id` (DDD 4.4), and — the one this suite actually caught
+  during manual verification — logging still happens even when the rule engine raises.
 
-Both `test_refine.py` and `test_ask.py` monkeypatch the real Anthropic call
+`test_refine.py` and `test_ask.py` monkeypatch the real Anthropic call
 (`app.routers.refine._run_refinement` / `app.routers.ask._run_ask`) — no live API key or
-network access needed to run either file.
+network access needed to run either file. `test_mcp_server.py` calls
+`app.mcp.server._log_and_recommend()` directly rather than going through the MCP
+transport/protocol layer — see that module's docstring for why.
 
 Note: if you're on a machine with a native Postgres already bound to host port 5432 (Docker's
 own `db` container will lose that port silently — you'll get a real `password authentication
@@ -107,7 +117,22 @@ raising that with the user first.
    doc-citation bug: the original spec cited "design-doc-v2.md Section 9.2," which doesn't
    exist in that file — the real cites are design-doc-v2.md §3.2 (refine) / §3.3 (ask), and
    PRD §9.2 (the section number that was actually meant).
-4. MCP tool wrapper — the only milestone left. See `app/mcp/server.py`. Decision already made
-   (see kickoff Q&A): port `detectSignals()`/`pickX()` to Python rather than shelling out to
-   Node — port faithfully against the bugs already found/fixed in `../validation-report.md`,
-   don't re-derive the logic from first principles.
+4. ✅ MCP tool wrapper — done. All four v2 milestones are now complete. See
+   `app/mcp/server.py` and `app/rule_engine.py` (the Python port of `index.html`'s rule
+   engine — verified against the actual JS with zero diffs across 13 scenarios before this
+   was built; see `../docs/adr/0001-mcp-rule-engine-port.md`).
+
+## MCP tool (`recommend_stack`)
+
+Run the server: `python -m app.mcp.server` (stdio transport). Point Claude Desktop's or
+Claude Code's MCP config at this command (needs `DATABASE_URL` set, same as the API). Once
+connected, `recommend_stack(requirement_text: str)` returns the same `{signals,
+recommendations}` shape as `POST /api/analyses` expects as input — the same rule engine
+`index.html` runs client-side, just callable from inside an agent conversation instead of a
+web form.
+
+Every invocation is logged as an `McpInvocation` row the instant the tool is called — before
+the rule engine has necessarily produced a result (DDD 4.4) — including the calling client's
+self-reported name (e.g. "Claude Desktop") when available. A successful call also persists
+an `Analysis` row and links it back to the invocation; a failed call (e.g. empty
+`requirement_text`) still leaves the invocation logged, just with `analysis_id` left null.

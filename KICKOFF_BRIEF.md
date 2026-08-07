@@ -19,17 +19,18 @@ to read once, not every session.
   research, the v2 architecture design, and a log of bugs found/fixed during a validation
   pass on the rule engine (worth reading before touching `index.html`'s signal-detection
   logic — several non-obvious false-positive bugs were already found and fixed there).
-- **`backend/`** — FastAPI + Postgres + Alembic scaffold. Share-links (PRD FR-28),
-  `/api/refine` (PRD FR-27), and `/api/ask` are all built and tested (24 passing tests,
-  verified end-to-end against a real Postgres instance — not just unit-tested against mocks).
-  The MCP tool wrapper is the only remaining stub, spec in its module docstring. **Read
-  `backend/README.md` first** — it has the quickstart, test instructions, and build-order
-  detail this brief doesn't repeat.
+- **`backend/`** — FastAPI + Postgres + Alembic scaffold. **All four v2 milestones from the
+  PRD are now built and tested**: share-links (FR-28), `/api/refine` (FR-27), `/api/ask`, and
+  the MCP tool wrapper (FR-29) — 42 passing tests, verified end-to-end against a real
+  Postgres instance, not just unit-tested against mocks. The MCP tool's rule-engine port
+  (`backend/app/rule_engine.py`) was verified byte-for-byte against `index.html`'s actual
+  JavaScript across 13 scenarios before anything depended on it — see
+  `docs/adr/0001-mcp-rule-engine-port.md`. **Read `backend/README.md` first** — it has the
+  quickstart, test instructions, and full status detail this brief doesn't repeat.
   <br>_Status as of this update: this brief's original "prompt to paste into Claude Code"
-  section (below) has already been acted on in full — share links, refine, and ask are all
-  done. It's kept for the historical record of what was originally handed off; treat
-  `backend/README.md`'s "Build order" section as the current source of truth — the only
-  thing left is the MCP tool wrapper._
+  section (below) has been acted on in full — nothing from the original v2 scope remains
+  unbuilt. It's kept for the historical record of what was originally handed off. What's next
+  is genuinely open — see "What's next" below — not a continuation of a fixed build order._
 
 ## Decisions already made (don't re-litigate without a reason)
 
@@ -41,24 +42,24 @@ one, that's a real conversation to have with the user, not a silent implementati
    `refine.py`/`ask.py` for the full reasoning.
 2. **Database**: Postgres via Docker Compose for local dev, matching production — not SQLite.
    `backend/docker-compose.yml` is ready to go (`docker compose up --build`).
-3. **Build order**: share links (done) → `/api/refine` (done) → `/api/ask` (done) → MCP tool
-   wrapper. Each milestone was chosen to be buildable and testable independently; don't skip ahead to MCP
-   before refine/ask exist, since the MCP wrapper is supposed to expose the same recommend
-   logic those endpoints will eventually also call.
+3. **Build order** (complete): share links → `/api/refine` → `/api/ask` → MCP tool wrapper.
+   Each milestone was built and tested independently, in that order, per the original plan.
 4. **Sharing has no auth** — `GET /api/analyses/shared/{slug}` is intentionally public and
    unauthenticated (matches the ERD's "Deliberately Excluded: no accounts" scope). Don't add
    auth to it without flagging that as a scope change against the PRD first.
 5. **No revoke-share feature yet** — also intentional (ERD note), not an oversight.
+6. **Rule engine port** (ADR 0001): `app/rule_engine.py` is a Python port of `index.html`'s
+   JS, not a shared-source dependency — the two files WILL drift if one changes without the
+   other. Any future change to `index.html`'s `detectSignals()`/`pickX()` functions needs the
+   equivalent change in `rule_engine.py` in the same or a clearly-linked commit. No automated
+   check currently catches drift between them (flagged as a real gap in the ADR, not silently
+   accepted) — worth revisiting if this becomes a real maintenance cost.
 
 ## Known traps (things that will look like bugs in review if you don't know this context)
 
-- `app/mcp/server.py` raises `NotImplementedError` at **import time** — that's deliberate
-  (a loud placeholder, not broken code). Don't import it from anywhere until it's real.
-- The v1 rule engine (`index.html`'s `detectSignals()`/`pickX()` functions) already went
-  through a recursive audit that found and fixed several real bugs (false-positive keyword
-  matches, a same-report contradiction between two cards, an on-prem detection edge case).
-  If the MCP wrapper re-implements this logic in Python from scratch instead of porting it
-  faithfully, it will likely reintroduce bugs that were already found and fixed once.
+- `app/mcp/server.py` and `app/rule_engine.py` are BOTH real now — the old "raises
+  NotImplementedError at import time" trap no longer applies (that was true of the stub, not
+  the current file). See ADR 0001 for the port decision and how it was verified.
 - `RefinementResult` is **append-only by design** — never update/overwrite a row, always
   insert a new one. This is what makes the "disagreement rate" success metric (BRD Section 7)
   measurable later. It'll look like a missing UPDATE endpoint in review; it isn't missing,
@@ -66,13 +67,37 @@ one, that's a real conversation to have with the user, not a silent implementati
 - `ConversationMessage` queries must filter by `analysis_id` in every single query, not just
   restrict via system-prompt wording — the DDD calls this out as a structural invariant, not
   a suggestion.
+- `McpInvocation.analysis_id` is nullable and gets populated AFTER the row is first inserted
+  (logged the instant the tool is called, before the rule engine has run) — a query that
+  filters `WHERE analysis_id IS NOT NULL` expecting "all invocations" will silently miss any
+  invocation whose rule-engine call failed. That's intentional (DDD 4.4), not a bug.
+- `app/rule_engine.py`'s signal dict keys are deliberately camelCase (`onPrem`, not
+  `on_prem`), unlike everything else in this Python codebase — this is a conscious exception
+  (see that module's docstring) to keep it a diffable port of `index.html`, not an
+  inconsistency to "fix."
+
+## What's next
+
+There is no fixed build order left — the BRD (Section 12, "High-Level Roadmap") frames what
+comes after v2 as "v3 — informed by real user feedback, scope not yet defined." Candidates
+raised in the BRD/PRD's own open-questions sections, none committed:
+- **BR-7 (not met):** get the tool in front of real external users — flagged in the BRD as
+  higher priority than further feature work once v2 ships.
+- **BR-8 (not met):** commit to one of the three target segments (non-technical founder /
+  developer / enterprise architect) instead of building for all three.
+- Success-metrics instrumentation (completion/re-use/disagreement rate) without violating
+  NFR-1's "no data leaves the browser unless the backend is explicitly used" posture — still
+  an open tension, not resolved by anything built so far.
+- Wiring the MCP server into an actual Claude Desktop/Code config for a real end-to-end test
+  from inside an agent conversation (built and unit-tested, but not yet exercised through a
+  live MCP client connection outside this session's own manual verification).
 
 ## Prompt to paste into Claude Code (historical — already acted on, kept for the record)
 
-_This was the original kickoff prompt for this repo's first Claude Code session. Share links
-`/api/refine`, and `/api/ask` are all done now (24 passing tests) — a new session picking
-this up should use `backend/README.md`'s "Build order" section instead, which starts at
-the MCP tool wrapper, the only milestone left._
+_This was the original kickoff prompt for this repo's first Claude Code session. All four v2
+milestones (share links, `/api/refine`, `/api/ask`, MCP tool wrapper) are done now — 42
+passing tests. A new session picking this up should read "What's next" above instead; there
+is no fixed build order left to resume._
 
 ```
 I'm continuing work on AI Stack Advisor, an app that recommends AI/tech architecture from a
