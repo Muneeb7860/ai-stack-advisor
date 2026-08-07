@@ -1,37 +1,184 @@
-"""STUB — build order milestone 2 (see backend/KICKOFF_BRIEF.md).
+"""POST /api/refine — v2 milestone 2 (see backend/KICKOFF_BRIEF.md, docs/design-doc-v2.md
+Section 7/9.2, and PRD FR-27).
 
-Spec (from docs/design-doc-v2.md Section 7 + PRD FR-27):
-  POST /api/refine
-  Body: { requirement_text: str, recommendations: dict, anthropic_api_key: str }
-  - anthropic_api_key comes from the REQUEST, not server env — see .env.example note.
-    Never log it, never persist it, pass it straight to the Anthropic SDK client for this
-    one call and let it go out of scope.
-  - Send the v1 rule-engine output + original text to Claude. The system prompt must
-    constrain the model to REASONING ABOUT the existing recommendation, not re-deriving a
-    new one from scratch (DDD 4.3 invariant) — every adjustment the model proposes must
-    cite a specific reason traceable back to requirement_text, not a generic preference.
-  - Only override a v1 pick when the model can cite that specific reason (design doc
-    Section 9.2). If it can't, leave the pick alone and surface it as an "open question"
-    instead of a silent override.
-  - Persist the result as a RefinementResult row (append-only — never update/overwrite a
-    prior refinement pass; that history is what makes the "disagreement rate" success
-    metric in BRD Section 7 measurable later).
-  - Response should return both the adjusted picks AND the original v1 picks side by side,
-    so the frontend can render "AI suggested changing X because Y" without losing the
-    original rule-engine reasoning.
+LLM-assisted second pass over an existing v1 rule-engine result. Constrained by design: the
+model may only ADJUST specific category picks, each with a reason it can cite back to
+requirement_text — it never re-derives a full recommendation set from scratch (DDD 4.3
+"Refinement Context ... cannot override [Analysis Context's] structure, only annotate/adjust
+specific picks with cited reasons"). If the model can't cite a specific reason for a category
+it's unsure about, that goes into open_questions instead of a silent override — see
+SYSTEM_PROMPT below.
 
-This file intentionally raises 501 so the endpoint fails loudly instead of silently doing
-nothing if it's accidentally left unwired.
+API key handling (locked decision — see .env.example and README "API key handling"):
+anthropic_api_key comes from the REQUEST BODY, never server env. It's passed straight to the
+Anthropic SDK for this one call and allowed to go out of scope at the end of the request —
+never logged, never persisted (it is NOT one of RefinementResult's columns in models.py).
+
+Design gap resolved here, not silently: the docstring this file originally shipped with
+specified a request body of { requirement_text, recommendations, anthropic_api_key } with no
+analysis_id, but RefinementResult.analysis_id is a non-null FK. Resolution (see
+schemas.RefineRequest): analysis_id is optional on the request — omitted means "create a new
+Analysis from this text+recommendations first," matching the ERD's own framing that "an
+Analysis is created the moment a v1 result is first sent to the backend for refinement OR
+sharing." Provided means "attach this refinement to an already-persisted Analysis." Flagging
+this so it's revisited deliberately if it turns out to be wrong, not discovered as a surprise.
+
+Guardrails per design-doc-v2 Section 3.2 ("the tool practicing what it recommends"):
+- Input length cap: enforced in schemas.RefineRequest (max_length=10_000 on requirement_text).
+- Output schema validation: enforced by requiring the model to call a tool with a fixed
+  input_schema (REFINEMENT_TOOL) rather than parsing free-form prose.
+- No execution of anything the model returns: adjusted_picks/rationale/open_questions are
+  stored and displayed as data, never interpreted as instructions or code.
+- Rate limiting per session: NOT implemented in this milestone — there is no session/user
+  concept yet in this schema (no accounts, by design). Flagging as a real gap rather than
+  claiming it's covered; revisit if abuse becomes a concern before accounts ever exist.
 """
-from fastapi import APIRouter, HTTPException
+import json
+
+from anthropic import Anthropic, APIError
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from .. import models, schemas
+from ..db import get_db
 
 router = APIRouter(prefix="/api", tags=["refine"])
 
+# Sonnet tier per design-doc-v2.md Section 4's own self-recommendation ("strong
+# instruction-following for the 'only override with a cited reason' constraint").
+MODEL = "claude-sonnet-5"
 
-@router.post("/refine")
-def refine():
-    raise HTTPException(
-        status_code=501,
-        detail="Not implemented yet — see backend/app/routers/refine.py docstring and "
-        "docs/design-doc-v2.md Section 7 for the full spec.",
+SYSTEM_PROMPT = """You are reviewing an existing technology/AI architecture recommendation \
+that was produced by a deterministic rule engine. You are NOT generating a new \
+recommendation from scratch.
+
+You will be given:
+1. The original free-text business/product requirement.
+2. The rule engine's full set of category recommendations, as JSON.
+
+Your job is narrow: identify ONLY the categories where the rule engine's pick is contradicted \
+or clearly under-supported by the requirement text, and propose a specific replacement pick \
+for that category alone.
+
+Hard constraints:
+- Do not propose a change unless you can cite the specific phrase or fact in the requirement \
+text that justifies it. A generic stylistic preference is not a valid reason.
+- Do not touch categories the rule engine got right — leave them out of adjusted_picks \
+entirely. An empty adjusted_picks list is a valid, good answer if nothing is wrong.
+- If a category seems debatable but you cannot point to a specific textual reason, raise it \
+as an open question instead of silently overriding it.
+- Never invent a new category that was not present in the original recommendation set.
+- Call the submit_refinement tool exactly once with your findings. Do not respond in prose.
+"""
+
+REFINEMENT_TOOL = {
+    "name": "submit_refinement",
+    "description": "Submit the results of this refinement pass over the rule engine's output.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "adjusted_picks": {
+                "type": "array",
+                "description": "Only categories actually changed. Empty array if none.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "category": {"type": "string"},
+                        "pick": {"type": "string"},
+                        "reason": {
+                            "type": "string",
+                            "description": "Must cite specific text from the requirement.",
+                        },
+                    },
+                    "required": ["category", "pick", "reason"],
+                },
+            },
+            "rationale": {
+                "type": "string",
+                "description": "One-paragraph summary of this refinement pass overall.",
+            },
+            "open_questions": {
+                "type": "array",
+                "items": {"type": "string"},
+            },
+        },
+        "required": ["adjusted_picks", "rationale", "open_questions"],
+    },
+}
+
+
+def _run_refinement(api_key: str, requirement_text: str, recommendations: dict) -> dict:
+    """Isolated into its own function so tests can monkeypatch it instead of hitting the real
+    Anthropic API — no network calls, no real API key, needed to test this endpoint."""
+    client = Anthropic(api_key=api_key)
+    try:
+        message = client.messages.create(
+            model=MODEL,
+            max_tokens=2048,
+            system=SYSTEM_PROMPT,
+            tools=[REFINEMENT_TOOL],
+            tool_choice={"type": "tool", "name": "submit_refinement"},
+            messages=[
+                {
+                    "role": "user",
+                    "content": (
+                        f"Requirement text:\n{requirement_text}\n\n"
+                        f"Rule engine recommendations (JSON):\n{json.dumps(recommendations)}"
+                    ),
+                }
+            ],
+        )
+    except APIError as exc:
+        # Surfaced as a 502 (upstream failure), not a 500 — this backend did nothing wrong,
+        # the LLM call itself failed (bad key, rate limit, outage, etc).
+        raise HTTPException(status_code=502, detail=f"Anthropic API error: {exc}") from exc
+
+    for block in message.content:
+        if block.type == "tool_use" and block.name == "submit_refinement":
+            return block.input
+    raise HTTPException(status_code=502, detail="Model did not return a refinement result.")
+
+
+@router.post("/refine", response_model=schemas.RefineResponse)
+def refine(payload: schemas.RefineRequest, db: Session = Depends(get_db)):
+    if payload.analysis_id:
+        analysis = db.query(models.Analysis).filter_by(id=payload.analysis_id).first()
+        if not analysis:
+            raise HTTPException(status_code=404, detail="Analysis not found")
+    else:
+        # No signals payload in the refine spec's request body — recorded as {} rather than
+        # inventing signal data this endpoint was never given. If this Analysis is later
+        # fetched via a share link, its `signals` field will legitimately be empty; that's a
+        # real, documented gap, not a bug — signals only ever come from POST /api/analyses.
+        analysis = models.Analysis(
+            requirement_text=payload.requirement_text,
+            signals={},
+            recommendations=payload.recommendations,
+        )
+        db.add(analysis)
+        db.commit()
+        db.refresh(analysis)
+
+    result = _run_refinement(
+        payload.anthropic_api_key, payload.requirement_text, payload.recommendations
+    )
+
+    refinement_row = models.RefinementResult(
+        analysis_id=analysis.id,
+        adjusted_picks=result["adjusted_picks"],
+        rationale=result["rationale"],
+        open_questions=result["open_questions"],
+        llm_model_used=MODEL,
+    )
+    db.add(refinement_row)
+    db.commit()
+    db.refresh(refinement_row)
+
+    return schemas.RefineResponse(
+        analysis_id=analysis.id,
+        original_recommendations=payload.recommendations,
+        adjusted_picks=result["adjusted_picks"],
+        rationale=result["rationale"],
+        open_questions=result["open_questions"],
+        llm_model_used=MODEL,
     )

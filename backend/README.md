@@ -8,7 +8,7 @@ must stay that way** (PRD NFR-5) — nothing here is a hard dependency for the c
 | Feature | Status | Endpoint(s) |
 |---|---|---|
 | Share links | **Built, tested** | `POST /api/analyses`, `POST /api/analyses/{id}/share`, `GET /api/analyses/shared/{slug}` |
-| LLM refinement | Stub (501) | `POST /api/refine` — spec in `app/routers/refine.py` docstring |
+| LLM refinement | **Built, tested** | `POST /api/refine` — see `app/routers/refine.py` docstring for the constrained-reasoning design and a resolved gap (optional `analysis_id`) not covered by the original spec |
 | Grounded follow-up Q&A | Stub (501) | `POST /api/ask` — spec in `app/routers/ask.py` docstring |
 | MCP tool wrapper | Stub (raises on import) | `app/mcp/server.py` — spec in module docstring |
 
@@ -43,10 +43,27 @@ uvicorn app.main:app --reload
 pytest tests/ -v
 ```
 
-7 tests currently, all passing — health check, create/share/fetch round-trip, share
-idempotency (same slug on repeat calls), 404s on unknown analysis/slug, and a tripwire test
-that fails loudly if `/api/refine` or `/api/ask` ever silently stop being 501 without
-actually being implemented.
+15 tests currently, all passing:
+- `test_share.py` (7): health check, create/share/fetch round-trip, share idempotency (same
+  slug on repeat calls), 404s on unknown analysis/slug, and a tripwire test that fails loudly
+  if `/api/ask` ever silently stops being 501 without actually being implemented.
+- `test_refine.py` (8): analysis creation-vs-reuse based on whether `analysis_id` is passed,
+  the exact inputs forwarded to the model, the API key never appearing in the response,
+  append-only persistence of `RefinementResult` across repeat calls, the input-length
+  guardrail (422), and Anthropic API failures surfacing as 502 rather than a crash. The real
+  Anthropic call is monkeypatched (`app.routers.refine._run_refinement`) — no live API key or
+  network access needed to run this file.
+
+Note: if you're on a machine with a native Postgres already bound to host port 5432 (Docker's
+own `db` container will lose that port silently — you'll get a real `password authentication
+failed` from the *other* Postgres, not a connection error, which is a confusing failure mode
+if you don't know to look for it), run tests inside the container instead of against
+`localhost:5432` from the host:
+```bash
+docker exec -e DATABASE_URL=postgresql+psycopg2://advisor:advisor@db:5432/advisor \
+  <api-container-name> python -m pytest tests/ -v
+```
+`tests/` is bind-mounted into the container alongside `app/` and `alembic/` for this reason.
 
 ## Schema changes
 
@@ -73,9 +90,12 @@ raising that with the user first.
 
 ## Build order (as agreed)
 
-1. ✅ Share links — done, this milestone.
-2. `/api/refine` — see docstring in `app/routers/refine.py`.
+1. ✅ Share links — done.
+2. ✅ `/api/refine` — done. See docstring in `app/routers/refine.py`, including a design gap
+   it resolves explicitly (the original spec's request body had no `analysis_id`, but
+   `RefinementResult` requires one — resolved as "optional; omitted creates a new Analysis").
 3. `/api/ask` — see docstring in `app/routers/ask.py`. Builds on #2's prompt-constraint pattern.
-4. MCP tool wrapper — see `app/mcp/server.py`. Needs a Python port-vs-shell-out decision for
-   the v1 rule engine first (documented as an open question in that file — write it up as an
-   ADR when you decide).
+4. MCP tool wrapper — see `app/mcp/server.py`. Decision already made (see kickoff Q&A):
+   port `detectSignals()`/`pickX()` to Python rather than shelling out to Node — port
+   faithfully against the bugs already found/fixed in `../validation-report.md`, don't
+   re-derive the logic from first principles.

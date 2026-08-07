@@ -67,9 +67,9 @@ def test_unknown_analysis_id_is_404_on_share():
     assert resp.status_code == 404
 
 
-def test_refine_and_ask_are_still_stubs():
-    """These should stay 501 until milestone 2 — this test is a tripwire: if someone half-
-    wires the endpoint (e.g. adds a route that returns 200 with empty data) without actually
-    implementing the spec, this test fails loudly instead of the stub silently looking done."""
-    assert client.post("/api/refine").status_code == 501
+def test_ask_is_still_a_stub():
+    """Should stay 501 until milestone 3 (/api/refine, milestone 2, is now implemented — see
+    tests/test_refine.py). This is a tripwire: if someone half-wires /api/ask (e.g. a route
+    that returns 200 with empty data) without actually implementing the spec, this fails
+    loudly instead of the stub silently looking done."""
     assert client.post("/api/ask").status_code == 501
