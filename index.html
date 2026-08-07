@@ -1,0 +1,1288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Stack Advisor</title>
+<style>
+  :root{
+    --bg:#0a0c11; --panel:#12151d; --panel2:#151922; --border:#1f2430;
+    --text:#e8ebf1; --muted:#828a99; --muted2:#9aa1ae; --accent:#5b8def; --accent2:#7c5bef;
+    --good:#34c98a; --warn:#e0a23c; --chip:#171b24;
+    --radius:10px; --radius-sm:7px; --radius-lg:12px;
+    --ease:cubic-bezier(.2,.7,.3,1);
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;}
+  body{
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:radial-gradient(1100px 700px at 18% -8%, #151b28 0%, var(--bg) 55%), var(--bg);
+    color:var(--text); min-height:100vh; padding:26px 16px 64px;
+    letter-spacing:-0.006em; font-size:14px; line-height:1.5;
+  }
+  .wrap{max-width:920px; margin:0 auto;}
+  header{margin-bottom:18px;}
+  h1{font-size:21px; margin:0 0 5px; letter-spacing:-0.02em; font-weight:700; display:flex; align-items:center; gap:8px;}
+  .sub{color:var(--muted); font-size:13px; line-height:1.5; max-width:600px; letter-spacing:-0.006em;}
+  .card{
+    background:linear-gradient(180deg, var(--panel), var(--panel2));
+    border:1px solid var(--border); border-radius:var(--radius-lg);
+    padding:16px; margin-bottom:16px;
+  }
+  label.field-label{font-size:11.5px; color:var(--muted2); font-weight:600; letter-spacing:0.01em;}
+  textarea{
+    width:100%; min-height:140px; resize:vertical; background:#0a0e15;
+    border:1px solid var(--border); border-radius:var(--radius); color:var(--text);
+    padding:12px; font-size:13.5px; line-height:1.5; font-family:inherit;
+    transition:border-color .15s var(--ease);
+  }
+  textarea::placeholder{color:#4d5567;}
+  textarea:focus{outline:none; border-color:var(--accent);}
+  .examples{display:flex; flex-wrap:wrap; gap:6px; margin-top:9px;}
+  .ex-btn{
+    background:var(--chip); border:1px solid var(--border); color:var(--muted);
+    font-size:11.5px; padding:5px 10px; border-radius:999px; cursor:pointer;
+    transition:border-color .15s var(--ease), color .15s var(--ease);
+  }
+  .ex-btn:hover{color:var(--text); border-color:var(--accent);}
+  .actions{display:flex; gap:8px; margin-top:12px; align-items:center; flex-wrap:wrap;}
+  button.primary{
+    background:linear-gradient(135deg, var(--accent), var(--accent2));
+    border:none; color:white; padding:9px 16px; border-radius:var(--radius);
+    font-size:13px; font-weight:600; cursor:pointer; letter-spacing:-0.006em;
+    transition:filter .15s var(--ease), transform .1s var(--ease);
+  }
+  button.primary:hover{filter:brightness(1.08);}
+  button.primary:active{transform:scale(.98);}
+  button.ghost{
+    background:transparent; border:1px solid var(--border); color:var(--muted);
+    padding:9px 14px; border-radius:var(--radius); font-size:13px; cursor:pointer;
+    transition:border-color .15s var(--ease), color .15s var(--ease);
+  }
+  button.ghost:hover{color:var(--text); border-color:var(--accent);}
+  #results{display:none;}
+  .section-title{
+    font-size:10.5px; text-transform:uppercase; letter-spacing:0.06em; color:var(--accent);
+    margin:22px 0 9px; font-weight:700;
+  }
+  .grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(264px,1fr)); gap:10px;}
+  .stack-card{
+    background:var(--panel2); border:1px solid var(--border); border-radius:var(--radius); padding:13px;
+    transition:border-color .15s var(--ease);
+  }
+  .stack-card:hover{border-color:#2c3342;}
+  .stack-card{position:relative;}
+  .stack-card .head{display:flex; justify-content:space-between; align-items:flex-start; gap:8px;}
+  .stack-card h3{margin:0 0 3px; font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.03em; font-weight:600;}
+  .stack-card .pick{font-size:14.5px; font-weight:700; margin:3px 0 6px; color:var(--text); letter-spacing:-0.01em;}
+  .stack-card .why{font-size:12px; color:var(--muted); line-height:1.48;}
+  .conf{
+    flex-shrink:0; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.02em;
+    padding:2px 6px; border-radius:5px; white-space:nowrap; margin-top:1px;
+  }
+  .conf-high{background:rgba(52,201,138,0.13); color:var(--good); border:1px solid rgba(52,201,138,0.35);}
+  .conf-medium{background:rgba(224,162,60,0.13); color:var(--warn); border:1px solid rgba(224,162,60,0.35);}
+  .conf-low{background:rgba(130,138,153,0.13); color:var(--muted); border:1px solid rgba(130,138,153,0.35);}
+  .badge{
+    display:inline-block; background:rgba(91,141,239,0.13); color:#8fb2f7;
+    border:1px solid rgba(91,141,239,0.3); border-radius:5px; padding:1px 7px;
+    font-size:10px; font-weight:600; margin-right:5px; margin-bottom:4px;
+  }
+  .llm-picks{display:flex; flex-direction:column; gap:7px;}
+  .llm-row{
+    display:flex; justify-content:space-between; align-items:center; gap:10px;
+    background:#0a0e15; border:1px solid var(--border); border-radius:var(--radius); padding:9px 12px;
+  }
+  .llm-row .name{font-weight:600; font-size:13px; letter-spacing:-0.006em;}
+  .llm-row .tag{color:var(--muted); font-size:11px;}
+  .rag-pick{background:#0a0e15; border:1px solid var(--border); border-radius:var(--radius); padding:12px;}
+  .rag-pick .name{font-size:14px; font-weight:700; color:var(--good); margin-bottom:3px; letter-spacing:-0.01em;}
+  .guardrail-list{display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;}
+  .g-chip{background:rgba(224,162,60,0.1); border:1px solid rgba(224,162,60,0.3); color:#e8c07e; border-radius:6px; padding:5px 9px; font-size:11.5px;}
+  .signals{display:flex; flex-wrap:wrap; gap:5px; margin-top:5px;}
+  .sig{background:var(--chip); border:1px solid var(--border); color:var(--muted); border-radius:999px; padding:3px 8px; font-size:10.5px;}
+  .footer-note{color:var(--muted); font-size:11px; margin-top:24px; line-height:1.55; border-top:1px solid var(--border); padding-top:13px;}
+  .docs-row{display:flex; gap:8px; flex-wrap:wrap; margin-top:5px;}
+  .doc-chip{background:#0a0e15; border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 11px; font-size:12px; flex:1; min-width:145px;}
+  .doc-chip b{display:block; font-size:11px; color:var(--accent); margin-bottom:2px;}
+  .persona{font-size:9px; color:var(--accent2); text-transform:uppercase; letter-spacing:0.03em; margin-top:2px; font-weight:700;}
+  .opt-item{background:#0a0e15; border:1px solid var(--border); border-radius:var(--radius); padding:11px 13px; margin-bottom:7px;}
+  .opt-item:last-child{margin-bottom:0;}
+  .opt-item .t{font-weight:600; font-size:12.5px; margin-bottom:3px; color:var(--text); letter-spacing:-0.006em;}
+  .opt-item .w{font-size:11.5px; color:var(--muted); line-height:1.48;}
+  .gov-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(232px,1fr)); gap:10px;}
+  .gov-block{background:#0a0e15; border:1px solid var(--border); border-radius:var(--radius); padding:13px;}
+  .gov-block h4{margin:0 0 8px; font-size:10.5px; text-transform:uppercase; letter-spacing:0.04em; color:var(--accent2); font-weight:700;}
+  .gov-block ul{margin:0; padding-left:16px; font-size:12px; color:var(--text); line-height:1.6;}
+  .assumption{font-size:11px; color:var(--muted); margin-top:9px; padding-top:9px; border-top:1px dashed var(--border); line-height:1.5;}
+  .tradeoff-card{background:#0a0e15; border:1px solid var(--border); border-radius:var(--radius); padding:14px; margin-bottom:9px;}
+  .tradeoff-card:last-child{margin-bottom:0;}
+  .tradeoff-card .head{display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:2px;}
+  .tradeoff-card h3{margin:0; font-size:11.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.03em; font-weight:600;}
+  .tradeoff-card .rec{font-size:14.5px; font-weight:700; margin:3px 0 6px; color:var(--good); letter-spacing:-0.01em;}
+  .tradeoff-card .why{font-size:12px; color:var(--text); line-height:1.5; margin-bottom:9px;}
+  .tradeoff-card .when{font-size:12px; color:var(--muted); line-height:1.5; background:rgba(224,162,60,0.07); border:1px solid rgba(224,162,60,0.22); border-radius:var(--radius-sm); padding:8px 11px;}
+  .tradeoff-card .when b{color:var(--warn); font-weight:700;}
+  .glossary{font-size:11.5px; color:var(--muted); line-height:1.55; background:#0a0e15; border:1px solid var(--border); border-radius:var(--radius); padding:11px 13px; margin-bottom:12px;}
+  .vram-table{width:100%; border-collapse:collapse; font-size:11.5px;}
+  .vram-table th{text-align:left; color:var(--accent2); font-size:10px; text-transform:uppercase; letter-spacing:0.03em; padding:7px 9px; border-bottom:1px solid var(--border); font-weight:700;}
+  .vram-table td{padding:8px 9px; border-bottom:1px solid var(--border); color:var(--text); vertical-align:top; line-height:1.48;}
+  .vram-table tr:last-child td{border-bottom:none;}
+  .vram-table tr.recommended td{background:rgba(52,201,138,0.06);}
+  .vram-table td.tier{font-weight:700; white-space:nowrap;}
+  .rec-star{color:var(--good); font-size:10px; font-weight:700; margin-left:5px;}
+  .iam-vendor-list{display:flex; flex-direction:column; gap:8px;}
+  .iam-vendor-card{background:#0a0e15; border:1px solid var(--border); border-radius:var(--radius); padding:12px 14px;}
+  .iam-vendor-card.recommended{border-color:rgba(52,201,138,0.4); background:rgba(52,201,138,0.05);}
+  .iam-vendor-card .ivc-head{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;}
+  .iam-vendor-card .ivc-name{font-weight:700; font-size:13px; color:var(--text); letter-spacing:-0.006em;}
+  .iam-vendor-card .ivc-cat{font-size:9.5px; text-transform:uppercase; letter-spacing:0.03em; color:var(--accent2); font-weight:700; background:rgba(124,91,239,0.12); border:1px solid rgba(124,91,239,0.3); border-radius:5px; padding:2px 6px;}
+  .iam-vendor-card .ivc-row{font-size:11.5px; color:var(--muted); line-height:1.5; margin-top:3px;}
+  .iam-vendor-card .ivc-row b{color:var(--muted2); font-weight:600;}
+  .iam-complementary{background:rgba(124,91,239,0.08); border:1px solid rgba(124,91,239,0.28); border-radius:var(--radius); padding:11px 13px; margin-top:10px;}
+  .iam-complementary .name{font-weight:700; font-size:12.5px; color:var(--accent2); margin-bottom:2px;}
+  .iam-complementary .cat-tag{font-size:9.5px; text-transform:uppercase; color:var(--muted); font-weight:700; letter-spacing:0.03em;}
+  .subhead{font-size:12.5px; font-weight:700; color:var(--text); margin:14px 0 7px; letter-spacing:-0.006em;}
+  .subhead:first-child{margin-top:0;}
+  .toc{
+    position:sticky; top:0; z-index:20; display:flex; gap:5px; overflow-x:auto; white-space:nowrap;
+    padding:9px 4px; margin:0 -4px 16px; background:rgba(10,12,17,0.94); backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--border); scrollbar-width:thin;
+  }
+  .toc a{
+    flex-shrink:0; background:var(--chip); border:1px solid var(--border); color:var(--muted);
+    font-size:11px; padding:5px 10px; border-radius:999px; text-decoration:none;
+    transition:border-color .15s var(--ease), color .15s var(--ease);
+  }
+  .toc a:hover{color:var(--text); border-color:var(--accent);}
+  .toc-toggle{
+    flex-shrink:0; margin-left:3px; background:transparent; border:1px solid var(--accent); color:var(--accent);
+    font-size:11px; padding:5px 10px; border-radius:999px; cursor:pointer;
+    transition:background .15s var(--ease);
+  }
+  .toc-toggle:hover{background:rgba(91,141,239,0.1);}
+
+  .view-toggle{display:none; gap:0; margin-bottom:10px;}
+  .view-toggle button{
+    background:var(--chip); border:1px solid var(--border); color:var(--muted);
+    font-size:11.5px; padding:6px 14px; cursor:pointer; transition:all .15s var(--ease); font-weight:600;
+  }
+  .view-toggle button:first-child{border-radius:8px 0 0 8px;}
+  .view-toggle button:last-child{border-radius:0 8px 8px 0; border-left:none;}
+  .view-toggle button.active{background:var(--accent); color:#fff; border-color:var(--accent);}
+
+  #flowWrap{display:none; position:relative; border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; background:#0a0c11; height:min(560px, 72vh); margin-bottom:16px;}
+  #flowViewport{position:absolute; inset:0; overflow:hidden; cursor:grab; touch-action:none;}
+  #flowViewport.panning{cursor:grabbing;}
+  #flowCanvas{position:absolute; top:0; left:0; transform-origin:0 0; will-change:transform;}
+  #flowSvg{position:absolute; top:0; left:0; overflow:visible; pointer-events:none;}
+  .flow-node{
+    position:absolute; width:208px; background:linear-gradient(180deg, var(--panel), var(--panel2));
+    border:1px solid var(--border); border-left:3px solid var(--cat-color, var(--accent));
+    border-radius:9px; padding:10px 12px; cursor:grab; user-select:none; touch-action:none;
+    box-shadow:0 2px 10px rgba(0,0,0,0.35); transition:border-color .12s var(--ease), box-shadow .12s var(--ease);
+  }
+  .flow-node:hover{border-color:var(--cat-color, var(--accent)); box-shadow:0 4px 16px rgba(0,0,0,0.5);}
+  .flow-node .fn-cat{font-size:9px; text-transform:uppercase; letter-spacing:0.04em; color:var(--cat-color, var(--accent)); font-weight:700; margin-bottom:3px;}
+  .flow-node .fn-title{font-size:12.5px; font-weight:700; color:var(--text); line-height:1.3; margin-bottom:2px;}
+  .flow-node .fn-sub{font-size:10.5px; color:var(--muted); line-height:1.35;}
+  .flow-node .fn-conf{position:absolute; top:9px; right:9px; width:7px; height:7px; border-radius:50%;}
+  .flow-toolbar{position:absolute; left:12px; bottom:12px; z-index:5; display:flex; gap:4px; background:rgba(18,21,29,0.9); backdrop-filter:blur(6px); border:1px solid var(--border); border-radius:8px; padding:4px;}
+  .flow-toolbar button{background:transparent; border:none; color:var(--muted); width:26px; height:26px; border-radius:5px; cursor:pointer; font-size:14px; transition:background .12s var(--ease), color .12s var(--ease);}
+  .flow-toolbar button:hover{background:var(--chip); color:var(--text);}
+  #flowMinimap{position:absolute; right:12px; top:12px; z-index:5; width:170px; height:110px; background:rgba(10,12,17,0.85); border:1px solid var(--border); border-radius:8px; overflow:hidden;}
+  #flowMinimap .mm-node{position:absolute; border-radius:2px; opacity:0.85;}
+  #flowMinimap .mm-viewport{position:absolute; border:1.5px solid var(--accent); background:rgba(91,141,239,0.08); border-radius:2px;}
+  #flowLegend{position:absolute; left:12px; top:12px; z-index:5; display:flex; flex-direction:column; gap:4px; background:rgba(18,21,29,0.85); backdrop-filter:blur(6px); border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:10px; color:var(--muted);}
+  #flowLegend .lg-row{display:flex; align-items:center; gap:6px;}
+  #flowLegend .lg-dot{width:8px; height:8px; border-radius:50%; flex-shrink:0;}
+  .flow-popover{position:fixed; z-index:50; max-width:280px; background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:12px 14px; box-shadow:0 12px 32px rgba(0,0,0,0.5); display:none;}
+  .flow-popover .fp-close{position:absolute; top:6px; right:8px; cursor:pointer; color:var(--muted); font-size:12px;}
+  .flow-popover .fp-cat{font-size:9px; text-transform:uppercase; color:var(--accent); font-weight:700; margin-bottom:4px;}
+  .flow-popover .fp-title{font-size:13.5px; font-weight:700; margin-bottom:6px;}
+  .flow-popover .fp-why{font-size:11.5px; color:var(--muted); line-height:1.5;}
+  .flow-popover .fp-why ul{margin:0; padding-left:16px; color:var(--muted); font-size:11.5px; line-height:1.55;}
+  .flow-popover .fp-persona{font-size:9.5px; color:var(--accent2); text-transform:uppercase; font-weight:700; margin-top:8px;}
+  .flow-hint{font-size:10.5px; color:var(--muted); margin-bottom:8px;}
+
+  details.section-block{margin-bottom:16px; scroll-margin-top:50px;}
+  #sig-anchor{scroll-margin-top:50px;}
+  summary.section-title{
+    cursor:pointer; list-style:none; display:flex; align-items:center; justify-content:space-between; gap:10px; user-select:none;
+    transition:color .15s var(--ease);
+  }
+  summary.section-title::-webkit-details-marker{display:none;}
+  summary.section-title::after{content:'▾'; font-size:9px; color:var(--muted); transition:transform .15s var(--ease); flex-shrink:0;}
+  details[open] summary.section-title::after{transform:rotate(180deg);}
+  summary.section-title:hover{color:#8fb2f7;}
+  @media (max-width:600px){ h1{font-size:19px;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🧭 AI Stack Advisor</h1>
+    <div class="sub">Describe your product or business requirement in plain language. This tool synthesizes the perspectives of a Solution Architect, Enterprise Architect, Application Architect, AI Architect, TPM, and senior SDE to recommend a full technical + AI architecture — stack, cost optimization, concurrency/throughput design, and governance (KRA/KPI/SLA/Reliability targets) — grounded in signals detected in your text.</div>
+  </header>
+
+  <div class="card">
+    <label style="font-size:13px; color:var(--muted); font-weight:600;">Business / Product Requirements</label>
+    <div style="margin-top:8px;">
+      <textarea id="input" placeholder="e.g. We're a fintech startup building a mobile + web app for real-time fraud detection on card transactions. Need to handle high transaction volume, support a chatbot for customer support that can answer questions from our internal policy documents, must be SOC2/PCI compliant, small team of 6 engineers, want to move fast..."></textarea>
+    </div>
+    <div class="examples">
+      <button class="ex-btn" onclick="loadExample(0)">Fintech fraud detection</button>
+      <button class="ex-btn" onclick="loadExample(1)">Healthcare patient chatbot</button>
+      <button class="ex-btn" onclick="loadExample(2)">E-commerce recommendation engine</button>
+      <button class="ex-btn" onclick="loadExample(3)">Internal enterprise knowledge assistant</button>
+      <button class="ex-btn" onclick="loadExample(4)">Early-stage MVP / small team</button>
+    </div>
+    <div class="actions">
+      <button class="primary" onclick="analyze()">Analyze &amp; Recommend</button>
+      <button class="ghost" onclick="clearAll()">Clear</button>
+    </div>
+  </div>
+
+  <div class="view-toggle" id="viewToggle">
+    <button id="viewCardsBtn" class="active" onclick="setView('cards')">📋 Cards</button>
+    <button id="viewFlowBtn" onclick="setView('flow')">🔀 Flow</button>
+  </div>
+
+  <div id="results"></div>
+
+  <div id="flowWrap">
+    <div id="flowLegend"></div>
+    <div id="flowMinimap"></div>
+    <div id="flowViewport">
+      <div id="flowCanvas">
+        <svg id="flowSvg"></svg>
+        <div id="flowNodes"></div>
+      </div>
+    </div>
+    <div class="flow-toolbar">
+      <button onclick="flowZoom(1.2)" title="Zoom in">＋</button>
+      <button onclick="flowZoom(0.8)" title="Zoom out">－</button>
+      <button onclick="flowFit()" title="Fit to screen">⤢</button>
+    </div>
+  </div>
+  <div class="flow-popover" id="flowPopover"></div>
+
+  <div class="footer-note">
+    This is a heuristic advisor, not a substitute for architecture review. It runs entirely in your browser — no data leaves this page. Re-run it anytime your requirements change; recommendations are directional starting points meant to be validated against real constraints (existing vendor contracts, team skills, budget, latency SLAs, and compliance scope).
+  </div>
+</div>
+
+<script>
+const EXAMPLES = [
+`We're a fintech startup building a mobile + web app for real-time fraud detection on card transactions. Need to handle high transaction volume, support a chatbot for customer support that can answer questions from our internal policy documents, must be SOC2/PCI compliant, small team of 6 engineers, want to move fast but stay secure.`,
+`Healthcare provider building a patient-facing chatbot that answers questions using our clinical knowledge base and EHR data. Must be HIPAA compliant, support voice and web, handle sensitive PII, need strong guardrails against hallucination, and integrate with existing hospital systems. Enterprise scale, multi-region.`,
+`E-commerce platform needs a personalized product recommendation and search engine, plus an AI shopping assistant. High traffic during sales events, global customers, need low latency, React web app and Flutter mobile app, already on AWS.`,
+`We want an internal enterprise assistant for employees to search across Confluence, Google Drive, and Jira using natural language, with role-based access control and audit logging. Large enterprise, already using Okta and GCP, need agentic workflows that can take actions in Jira.`,
+`Early-stage startup, 3 engineers, building an MVP web app for scheduling and CRM with an AI email drafting assistant. Budget conscious, need to launch fast, don't have compliance requirements yet, want serverless and low ops overhead.`
+];
+function loadExample(i){ document.getElementById('input').value = EXAMPLES[i]; }
+function clearAll(){
+  document.getElementById('input').value='';
+  document.getElementById('results').style.display='none';
+  document.getElementById('viewToggle').style.display='none';
+  document.getElementById('flowWrap').style.display='none';
+  document.getElementById('flowPopover').style.display='none';
+}
+
+// ---------- Signal detection ----------
+// Strip short negated clauses ("no document search", "don't have compliance requirements yet")
+// before keyword matching, so stated non-requirements don't get read as requirements.
+function stripNegations(text){
+  return text.replace(/\b(no|not|without|don't|doesn't|isn't|won't|never|excluding|except for|except)\b[^.,;!?]{0,60}/gi, ' ');
+}
+function detectSignals(text){
+  const raw = text.toLowerCase(); // used only for phrases that are themselves phrased with "no"/"cannot" — the negation IS the requirement
+  const t = stripNegations(text).toLowerCase();
+  const has = (arr) => arr.some(w => t.includes(w));
+  const hasRaw = (arr) => arr.some(w => raw.includes(w));
+  // "on-prem" alone is ambiguous with a hybrid setup that explicitly also mentions cloud
+  // ("hybrid on-prem and cloud systems") — only the unambiguous air-gapped/no-cloud phrasings
+  // should override regardless of nearby "hybrid"/"cloud" wording.
+  const strongOnPrem = hasRaw(['air-gapped','air gapped','airgapped','cannot use any public cloud','no public cloud','private cloud only','bare metal deployment']);
+  const softOnPrem = hasRaw(['on-prem','on premises','on-premise']) && !(hasRaw(['hybrid']) && hasRaw(['cloud']));
+  return {
+    onPrem: strongOnPrem || softOnPrem,
+    healthcare: has(['health','hipaa','patient','clinical','ehr','medical']),
+    finance: has(['fintech','bank','payment','fraud','pci','transaction','trading','ledger','finance']),
+    ecommerce: has(['ecommerce','e-commerce','retail','shopping','product recommendation','cart','checkout']),
+    enterprise: has(['enterprise','large organization','corporate','multi-region','audit logging','role-based access','okta','sso']),
+    startupMvp: has(['startup','mvp','early-stage','small team','move fast','budget conscious','budget-conscious','bootstrapped']),
+    highScale: has(['high traffic','high volume','high transaction','scale','millions of users','peak load','sales event','black friday']),
+    realtime: has(['real-time','real time','low latency','streaming','live']),
+    chatbot: has(['chatbot','conversational','customer support bot','assistant','virtual agent']),
+    knowledgeBase: has(['knowledge base','internal documents','policy documents','confluence','wiki','document search','faq']),
+    agentic: has(['agentic','multi-agent','take actions','automate workflow','autonomous','tool use','function calling']),
+    mobile: has(['mobile','flutter','ios','android','react native']),
+    web: has(['web app','website','web application','react','angular','vue']),
+    voice: has(['voice','speech','call center','ivr']),
+    compliance: has(['soc2','hipaa','pci','gdpr','compliance','regulated','audit']),
+    security: has(['security','pii','sensitive data','encryption','zero trust']),
+    dataHeavy: has(['big data','analytics','data pipeline','data lake','etl','warehouse']),
+    structured: has(['structured data','relational','transactional','sql','ledger','orders']),
+    unstructured: has(['unstructured','documents','pdf','images','logs','text data']),
+    iot: has(['iot','sensor','device telemetry','edge device']),
+    awsShop: has(['aws','amazon web services']),
+    azureShop: has(['azure','microsoft']),
+    gcpShop: has(['gcp','google cloud']),
+    oktaMentioned: has(['okta']),
+    entraMentioned: has(['entra id','entra','azure ad','azure active directory']),
+    pingMentioned: has(['ping identity','pingone','ping federate']),
+    forgerockMentioned: has(['forgerock']),
+    oneloginMentioned: has(['onelogin','one identity']),
+    jumpcloudMentioned: has(['jumpcloud']),
+    cyberarkMentioned: has(['cyberark']),
+    sailpointMentioned: has(['sailpoint']),
+    oracleIamMentioned: has(['oracle identity','oracle iam','oracle access manager']),
+    saviyntMentioned: has(['saviynt']),
+    privilegedAccess: has(['privileged access','pam ','vaulting','session recording','admin credential','privileged account']),
+    identityGovernance: has(['identity governance','access certification','access review','segregation of duties','sod ','iga ']),
+    deviceMgmt: has(['device management','mdm','mac-heavy','mostly macs','byod','endpoint management']),
+    // Word-boundary + negative-lookahead: plain " java" would also match inside " javascript".
+    javaMentioned: /\bjava\b(?!script)/i.test(t),
+    pythonMentioned: has(['python']),
+    // Avoid matching the common English word "go" (e.g. "go live", "let's go fast") —
+    // only count it when phrased as the language (golang, "go lang", "written/using in Go").
+    goMentioned: has(['golang']) || /\bgo\s*(lang|language)\b/.test(t) || /\b(written in|using|in)\s+go\b/.test(t),
+    smallTeam: has(['small team','2 engineers','3 engineers','4 engineers','5 engineers','6 engineers','solo founder','few engineers'])
+      || /\b([1-9]|1[0-2])[- ]?(person|people)\b/.test(t) || /team of\s*([1-9]|1[0-2])\b/.test(t),
+    largeTeam: has(['large team','many teams','multiple teams','platform team']),
+    globalMultiRegion: has(['global','multi-region','worldwide','international']),
+    search: has(['search engine','semantic search','recommendation']),
+    email: has(['email drafting','email assistant','draft email']),
+    ragNeed: has(['knowledge base','document search','internal documents','confluence','faq','clinical knowledge','policy documents','search across']),
+  };
+}
+
+// ---------- Category logic ----------
+function pickCloud(s){
+  if(s.onPrem) return {v:'On-premises / private infrastructure — no public cloud', why:'An air-gapped or explicit no-public-cloud requirement rules out AWS/Azure/GCP entirely. You need a private data center, bare-metal, or air-gapped virtualization stack (VMware, OpenStack, or a vetted sovereign/government enclave) instead.', conf:'high'};
+  if(s.awsShop) return {v:'AWS', why:'Explicit AWS usage detected — build on existing footprint (IAM, VPC, billing) rather than introducing a second cloud.', conf:'high'};
+  if(s.gcpShop || s.agentic) return {v:'Google Cloud (GCP)', why:'GCP mentioned, or agentic/data-heavy workload — GCP pairs well with Vertex AI, BigQuery, and Gemini models.', conf: s.gcpShop ? 'high' : 'medium'};
+  if(s.azureShop || s.enterprise) return {v:'Microsoft Azure', why:'Azure mentioned, or enterprise context with likely existing Microsoft 365/AD investment.', conf: s.azureShop ? 'high' : 'medium'};
+  if(s.startupMvp) return {v:'AWS (or GCP)', why:'Broadest managed-service catalog and hiring pool for a small team moving fast; GCP is a fine alternative if the team is more data/ML-leaning.', conf:'medium'};
+  return {v:'AWS', why:'Default choice given broadest ecosystem maturity; revisit if there is an existing cloud commitment.', conf:'low'};
+}
+function pickGateway(s){
+  if(s.onPrem) return {v:'Internal API gateway (Kong or Apigee Edge on-prem, or NGINX/Envoy) — no public CDN/edge service', why:'Cloudflare and similar public edge services require internet egress, which an air-gapped environment doesn\'t have. Run your gateway entirely inside the isolated network boundary.', conf:'high'};
+  const picks=[]; let hits=0;
+  if(s.security||s.compliance||s.highScale){ picks.push('Cloudflare (WAF, DDoS, edge caching, bot management)'); hits++; }
+  if(s.enterprise||s.largeTeam){ picks.push('Apigee (API lifecycle management, monetization, enterprise governance)'); hits++; }
+  if(picks.length===0) picks.push('Cloud-native gateway (AWS API Gateway / GCP API Gateway) + Cloudflare in front for DNS & DDoS protection');
+  return {v:picks.join(' + '), why:'Cloudflare handles edge security/performance; Apigee (if present) adds API productization and governance for many external consumers.', conf: hits>=2?'high':hits===1?'medium':'low'};
+}
+// Identity-provider landscape beyond Okta. Sourced/grounded against published vendor
+// comparisons (lumos.com/identity-matters: "Okta competitors and alternatives", "Ping Identity
+// competitors and alternatives", "Best identity and access management tools") as of mid-2026 —
+// pricing moves fast in this market, so treat $ figures as directional, not quoted.
+// IMPORTANT categorization note baked into the logic below: CyberArk (PAM), SailPoint/Saviynt
+// (IGA) are NOT drop-in Okta replacements — they solve different problems (privileged-credential
+// vaulting, and access-certification/compliance workflows) and are usually layered ON TOP of
+// an IdP, not instead of one — pickIAM() returns them as a separate "complementary" list.
+// OWNERSHIP NOTE: Thoma Bravo owns Ping, SailPoint, and the former ForgeRock — cross-shopping
+// those three specifically doesn't create the independent competitive pressure it looks like.
+const IAM_VENDORS = [
+  {id:'okta', name:'Okta', cat:'SSO / IdP', bestFor:'General default — broadest app-integration catalog, no strong ecosystem pull elsewhere', strength:'Largest pre-built app/SSO integration library; mature admin & developer APIs', drawback:'2025–26 repricing bundled SSO+MFA with a ~$1,500/yr minimum, raising the entry bar for very small teams; per-seat cost scales quickly; governance (OIG) is a costly add-on with less delta-review depth than purpose-built IGA tools', pricing:'~$6/user/mo (Starter, SSO+MFA) · ~$17/user/mo (Enterprise/Essentials) · Auth0 (CIAM) from ~$3,000/mo enterprise'},
+  {id:'entra', name:'Microsoft Entra ID', cat:'SSO / IdP', bestFor:'Organizations already on Microsoft 365 / Azure AD', strength:'Bundled into M365 E3/E5 — often close to free marginal cost; native Azure/Windows/Intune integration', drawback:'Governance feels bolted-on rather than purpose-built; advanced conditional access needs the pricier P2 tier; weaker for non-Microsoft SaaS sprawl and non-human identity coverage', pricing:'Free tier w/ M365 · P1 ~$6/user/mo · P2 ~$9/user/mo · Governance add-on ~$7/user/mo'},
+  {id:'ping', name:'Ping Identity (incl. ForgeRock, post-merger)', cat:'SSO / IdP', bestFor:'Large enterprises with hybrid/on-prem infrastructure or complex legacy federation', strength:'Strong federation & hybrid deployment flexibility; ForgeRock\'s customization depth is being folded in', drawback:'Complex modular architecture needs dedicated engineers; longer implementations; product roadmap still consolidating post-merger (as of 2026); Thoma Bravo also owns SailPoint — don\'t assume Ping-vs-SailPoint is neutral competitive shopping', pricing:'PingOne Workforce from ~$3/user/mo (5,000-seat minimum) · Plus ~$6/user/mo · enterprise bundles custom-quoted'},
+  {id:'onelogin', name:'OneLogin (One Identity)', cat:'SSO / IdP', bestFor:'Cost-sensitive mid-market teams that want Okta-like SSO for less', strength:'Materially cheaper than Okta for comparable core SSO/provisioning; accessible admin UI; published pricing', drawback:'Thinner integration library than Okta; minimal governance/access-review features; some reported service-interruption/support-responsiveness issues; roadmap has slowed since the One Identity acquisition', pricing:'~$3–10/user/mo · Enterprise custom-quoted'},
+  {id:'jumpcloud', name:'JumpCloud', cat:'SSO / IdP + Device Mgmt', bestFor:'Small-to-mid-market teams (up to ~1,000 employees) that also need device/MDM management, especially Mac-heavy fleets', strength:'Unifies SSO + directory + device management in one console — avoids stacking a separate MDM tool', drawback:'Thinner governance/access-review capability; not built for enterprise-scale compliance needs', pricing:'Free tier (small orgs) · Device mgmt from ~$9/user/mo · SSO/directory ~$13/user/mo · Platform bundle ~$19/user/mo'},
+  {id:'oracle', name:'Oracle IAM (Access/Identity Manager)', cat:'SSO / IdP + Governance', bestFor:'Organizations already running Oracle Cloud/on-prem infrastructure', strength:'Dual SaaS + on-prem deployment options; broad legacy-resource support (agent-based); fits naturally into an existing Oracle estate', drawback:'Interface complexity and reported performance issues; strongest value is concentrated in Oracle-centric shops, less compelling otherwise', pricing:'Custom tiered pricing, starting ~$3/user/mo (Workforce Users)'},
+  {id:'cyberark', name:'CyberArk', cat:'PAM (not an IdP)', bestFor:'Regulated enterprises (finserv/healthcare/gov) needing to secure privileged/admin credentials specifically', strength:'Mature credential vaulting, session recording, and SIEM/SOAR integration for privileged accounts; machine-identity management via Venafi', drawback:'PAM-first design makes it heavy for ordinary workforce SSO; governance layer (Zilla) still maturing; real implementation needs professional services (often 20–40% of first-year license cost on top)', pricing:'Reported median ~$31k/yr for a base deployment; full multi-module rollouts commonly reach seven figures over 3 years'},
+  {id:'sailpoint', name:'SailPoint', cat:'IGA (not an IdP)', bestFor:'Large regulated enterprises that need formal access certification / segregation-of-duties workflows for audit', strength:'Deepest IGA feature set in the category (reported ~53% of Fortune 500 use it); mature SoD enforcement and audit-trail reporting for SOX/GDPR/HIPAA-style compliance programs', drawback:'12–24 month implementations; static role model with quarterly (not delta) reviews; implementation services often add 30–60% on top of first-year license; commonly oversized for mid-market', pricing:'Reported median ~$111k/yr plus substantial implementation services'},
+  {id:'saviynt', name:'Saviynt', cat:'IGA + PAM (not an IdP)', bestFor:'Cloud-forward enterprises wanting one converged platform instead of separate IGA + PAM tools', strength:'Cloud-native architecture; strong AWS/Azure/GCP/Snowflake coverage; converges IGA, PAM, and application governance in one platform; covers human, non-human, and AI-agent identities', drawback:'Steep learning curve and UI friction reported; still needs professional services for most real deployments; pricing reflects enterprise positioning', pricing:'Custom, demo-led pricing — typically low-to-mid six figures/yr plus services'},
+];
+
+// Curated from lumos.com/identity-matters "Identity and access management metrics" — full
+// source article lists ~19; these 8 are the highest-signal set for a first-draft target sheet.
+const IAM_METRICS = [
+  {m:'Orphaned account rate', target:'Target: 0% (~1% tolerance during transitions) — active accounts with no valid owner/justification'},
+  {m:'Dormant account rate', target:'Auto-disable at 90 days no sign-in (human accounts), 180 days (service accounts)'},
+  {m:'Time-to-deprovision', target:'24h for standard accounts · 4h for privileged roles · same-day for high-risk departures'},
+  {m:'MFA coverage', target:'95%+ of workforce · 100% of privileged/admin accounts'},
+  {m:'Phishing-resistant MFA adoption (passkeys/FIDO2/WebAuthn)', target:'100% of privileged accounts · 50%+ of general workforce within one year'},
+  {m:'SSO adoption', target:'80%+ of apps federated · 90%+ of authentications going through SSO'},
+  {m:'Access review completion & remediation', target:'100% of certification campaigns completed on schedule · critical findings revoked within 48h'},
+  {m:'JIT privileged access coverage', target:'90%+ of admin access granted just-in-time with approval + expiry, not standing'},
+];
+// Curated from lumos.com/identity-matters "IAM/RBAC best practices" (12 in the source article).
+const IAM_BEST_PRACTICES = [
+  'Discover everything first — you can\'t govern apps, identities, and permissions you don\'t have a full inventory of, including shadow IT and non-human identities.',
+  'Default to zero trust — verify every access request independently rather than trusting anything inside the network boundary.',
+  'Enforce least privilege continuously — access should decay over time via pruning/right-sizing, not just get set once at provisioning.',
+  'Phishing-resistant MFA (passkeys/hardware keys) on every privileged account — SMS and push notifications aren\'t sufficient there.',
+  'Centralize under SSO wherever possible — it\'s what makes fast provisioning and, critically, fast revocation actually possible.',
+  'Automate joiner-mover-leaver from HR system events, not manual tickets — this is what keeps time-to-deprovision low in practice.',
+  'Replace static quarterly access reviews with continuous delta reviews — review what changed since last time, not the whole list every cycle.',
+  'Just-in-time access for elevated permissions — time-bound and auto-expiring, not standing admin rights.',
+  'Govern non-human identities (service accounts, API keys, tokens) with the same rigor as human accounts.',
+  'AI agent access controls: scope every agent to minimal permissions, make access time-bound, log every action taken, and keep a revocation path — apply this specifically wherever this report recommends an agentic/MCP pattern.',
+];
+
+function pickIAM(s){
+  let primary;
+  if(s.onPrem){
+    primary = {id:'selfhosted', v:'Self-hosted open-source IdP (Keycloak or FreeIPA)', why:'None of the mainstream SaaS identity providers (Okta, Entra ID, Ping, OneLogin, JumpCloud) can run air-gapped — they are hosted cloud services by design. A self-hosted, open-source IdP inside your network boundary is the realistic option.', conf:'high'};
+  } else if(s.oktaMentioned){
+    primary = {id:'okta', v:'Okta', why:'Explicit Okta usage detected — build on existing footprint rather than migrating identity providers.', conf:'high'};
+  } else if(s.entraMentioned || (s.azureShop && !s.gcpShop && !s.awsShop)){
+    primary = {id:'entra', v:'Microsoft Entra ID', why:'Already-Microsoft context (Azure/M365) makes Entra ID close to a marginal-cost decision — you\'re likely paying for at least P1-equivalent licensing already, and it integrates natively with the rest of the Microsoft stack.', conf: s.entraMentioned?'high':'medium'};
+  } else if(s.pingMentioned || s.forgerockMentioned){
+    primary = {id:'ping', v:'Ping Identity (incl. ForgeRock, post-merger)', why:'Explicit Ping/ForgeRock mention detected. Note the two companies merged in 2023 and are still consolidating product roadmaps as of 2026 — validate current packaging before committing budget.', conf:'high'};
+  } else if(s.oracleIamMentioned){
+    primary = {id:'oracle', v:'Oracle IAM (Access/Identity Manager)', why:'Explicit Oracle IAM mention detected — likely reflects an existing Oracle Cloud/on-prem footprint, which is where this product delivers most of its value.', conf:'high'};
+  } else if((s.enterprise||s.largeTeam) && (s.compliance||s.security) && !s.startupMvp && !s.smallTeam){
+    primary = {id:'ping', v:'Ping Identity (incl. ForgeRock, post-merger) — or Okta if you want a less complex rollout', why:'Large regulated org with likely hybrid/legacy federation needs benefits from Ping\'s deployment flexibility; Okta remains the simpler-to-implement enterprise default if you don\'t specifically need hybrid federation depth.', conf:'medium'};
+  } else if(s.deviceMgmt && (s.startupMvp||s.smallTeam)){
+    primary = {id:'jumpcloud', v:'JumpCloud', why:'You need SSO/directory AND device management, and you\'re a small team — JumpCloud unifies both in one console instead of stacking a separate MDM tool, at a lower blended cost than Okta + Jamf/Intune.', conf:'high'};
+  } else if(s.jumpcloudMentioned){
+    primary = {id:'jumpcloud', v:'JumpCloud', why:'Explicit JumpCloud mention detected.', conf:'high'};
+  } else if(s.oneloginMentioned){
+    primary = {id:'onelogin', v:'OneLogin (One Identity)', why:'Explicit OneLogin mention detected.', conf:'high'};
+  } else if(s.startupMvp || (s.smallTeam && !s.enterprise)){
+    primary = {id:'onelogin', v:'OneLogin (One Identity) — or cloud-native (AWS Cognito / Firebase Auth) for the simplest cases', why:'Materially cheaper than Okta for comparable core SSO/provisioning, which matters more than governance depth at your stage; move to Okta or Entra ID once you have enterprise/B2B SSO customers demanding it.', conf:'medium'};
+  } else if(s.enterprise){
+    primary = {id:'okta', v:'Okta', why:'Enterprise-grade IdP with strong SSO/SCIM support and the deepest app-integration catalog — the safe general default absent a specific reason (existing Microsoft/Ping footprint, device-mgmt need, or budget pressure) to pick an alternative.', conf:'medium'};
+  } else {
+    primary = {id:'okta', v:'Okta (or cloud-native IAM)', why:'Use Okta once you need enterprise SSO/SCIM/compliance audit trails; otherwise a managed cloud IAM (Cognito/Firebase Auth) is sufficient.', conf:'low'};
+  }
+
+  const complementary = [];
+  if(s.privilegedAccess || (s.enterprise && (s.compliance||s.finance) && (s.security||s.healthcare))){
+    complementary.push({vendor:'CyberArk', cat:'PAM', why:'Your profile involves privileged/admin credentials in a regulated context — this is a genuinely different problem from workforce SSO (protecting the accounts that can change infrastructure/data, not just logging employees in). Layer it on top of your primary IdP pick above, don\'t treat it as a replacement.', conf: s.privilegedAccess?'high':'medium'});
+  }
+  if(s.saviyntMentioned){
+    complementary.push({vendor:'Saviynt', cat:'IGA + PAM', why:'Explicit Saviynt mention detected — a cloud-native converged alternative to buying separate IGA and PAM tools, with stronger multi-cloud (AWS/Azure/GCP) coverage than SailPoint. Still layer it on top of your primary IdP pick above, not instead of it.', conf:'high'});
+  } else if(s.identityGovernance || (s.enterprise && s.largeTeam && s.compliance)){
+    const pingAlready = primary.id === 'ping';
+    complementary.push({vendor:'SailPoint (or Saviynt for a more modern, cloud-native converged IGA+PAM alternative)', cat:'IGA', why:'Formal access-certification / segregation-of-duties workflows for audit (SOX/GDPR/HIPAA-style) are a compliance-program purchase, not a quick add-on — expect a 12–24 month implementation and a reported median around $111k/yr plus substantial services for SailPoint specifically. Only take this on if you have an actual audit/compliance mandate requiring it; it is commonly oversized for mid-market teams.' + (pingAlready ? ' Since your primary IdP pick above is Ping, note that Ping and SailPoint share the same majority owner (Thoma Bravo) — worth knowing going into vendor conversations, even though the products themselves still solve different problems.' : ''), conf: s.identityGovernance?'high':'medium'});
+  }
+
+  return {...primary, primaryId: primary.id, alternatives: IAM_VENDORS, complementary};
+}
+function pickLanguages(s){
+  const picks=[]; let hits=0;
+  if(s.javaMentioned || s.enterprise || s.finance){ picks.push('Java (Spring Boot) for core transactional services'); if(s.javaMentioned) hits++; }
+  if(s.pythonMentioned || s.agentic || s.dataHeavy || s.ragNeed){ picks.push('Python (FastAPI) for AI/ML, RAG, and agent orchestration services'); if(s.pythonMentioned) hits++; }
+  if(s.goMentioned || s.highScale){ picks.push('Go for high-throughput, low-latency infrastructure services'); if(s.goMentioned) hits++; }
+  if(picks.length===0) picks.push('Python (FastAPI) for AI-heavy services, Java (Spring Boot) or Go for core backend');
+  return {v:picks.join(' · '), why:'Split by workload: Java/Go for performance-critical transactional paths, Python for AI/ML and RAG pipelines where the ecosystem (LangChain, LlamaIndex, etc.) lives.', conf: hits>=1?'high':picks.length? 'medium':'low'};
+}
+function pickArchitecture(s){
+  // Team size is the primary driver of monolith-vs-microservices (Conway's law) — a 3-person team
+  // shouldn't run real microservices even if compliance/enterprise needs are also present; those
+  // needs are served by governance practices (audit logging, IAM), not by service-decomposition granularity.
+  if(s.startupMvp || s.smallTeam) return {v:'Modular monolith (hexagonal internal structure), split into microservices later', why:'Small teams move faster with one deployable unit; hexagonal internal layering keeps a future microservices split cheap.' + (s.enterprise||s.compliance ? ' Compliance/enterprise requirements are met through governance practices (audit logging, strict domain boundaries, IAM) inside this monolith, not by splitting into services your team is too small to operate.' : ''), conf:'high'};
+  if(s.enterprise || s.largeTeam) return {v:'Microservices with Hexagonal (Ports & Adapters) architecture', why:'Enterprise scale and multiple teams benefit from independent deployability and clean domain boundaries isolated from infrastructure concerns.', conf:'high'};
+  return {v:'Microservices, hexagonal per bounded context', why:'Balances scalability with maintainability for a mid-size team and domain.', conf:'low'};
+}
+function pickCompute(s){
+  if(s.onPrem) return {v:'Self-managed Kubernetes on bare metal/VMware — no public-cloud serverless', why:'Serverless compute (Lambda/Cloud Run) is a public-cloud managed service and isn\'t available air-gapped/on-prem — self-managed Kubernetes (or a simpler container orchestrator) inside your isolated network is the realistic option.', conf:'high'};
+  if((s.startupMvp || s.smallTeam) && (s.highScale || s.enterprise || s.realtime)){
+    return {v:'Serverless containers (Cloud Run / Fargate) with autoscaling', why:'Small team and real-time/high-scale/enterprise needs pull in different directions here — managed serverless containers give real autoscaling and container-level control without the ops burden of running your own Kubernetes cluster. Move to full self-managed Kubernetes only once you have dedicated platform engineering capacity.', conf:'medium'};
+  }
+  if(s.startupMvp || (s.smallTeam && !s.highScale)) return {v:'Serverless (Cloud Run / Lambda / Cloud Functions)', why:'Minimal ops overhead, pay-per-use, ideal for small teams and unpredictable early-stage traffic.', conf:'high'};
+  if(s.highScale || s.enterprise || s.realtime) return {v:'Kubernetes (containers) with autoscaling', why:'Predictable performance, fine-grained resource control, and portability needed at scale or for latency-sensitive workloads.', conf:'high'};
+  return {v:'Hybrid: serverless for bursty/event-driven work, Kubernetes for core always-on services', why:'Use the right compute per workload rather than one-size-fits-all.', conf:'low'};
+}
+function pickMessaging(s){
+  const picks=[]; let hits=0;
+  if(s.highScale || s.realtime || s.finance){ picks.push('Kafka (durable, high-throughput event streaming)'); hits++; }
+  if(s.gcpShop){ picks.push('Google Pub/Sub (if GCP-native)'); hits++; }
+  if(s.startupMvp && !s.highScale){ picks.push('Managed queue (SQS/Pub/Sub) rather than self-managed Kafka'); hits++; }
+  if(picks.length===0) picks.push('Kafka for event streaming, Redis for pub/sub-style ephemeral messaging');
+  return {v:picks.join(' · '), why:"Kafka for durable, replayable event streams (audit, fraud, analytics); lighter managed queues when volume/ops budget don't justify Kafka yet.", conf: hits>=2?'high':hits===1?'medium':'low'};
+}
+function pickMesh(s){
+  if(s.enterprise || s.largeTeam) return {v:'Istio', why:'Multiple services/teams benefit from mTLS, traffic shaping, and observability at the mesh layer.', conf:'medium'};
+  return {v:'Not needed yet (revisit past ~10-15 services)', why:'Service mesh adds operational complexity; skip until service count and cross-team traffic policy needs justify it.', conf:'medium'};
+}
+function pickCache(s){
+  return {v:'Redis', why:'De facto standard for caching, session storage, rate limiting, and lightweight pub/sub — recommended almost universally.', conf:'high'};
+}
+function pickDatabase(s){
+  const picks=[]; let hits=0;
+  // Analytics/ETL/reporting-centric workload with no transactional/chat/RAG signal = a warehouse question, not an OLTP-database question.
+  const warehouseNeed = s.dataHeavy && !s.structured && !s.chatbot && !s.ragNeed;
+  if(warehouseNeed){ picks.push('Cloud data warehouse (BigQuery / Snowflake / Redshift) as the analytics store'); hits++; }
+  if(s.structured || s.finance || (!s.unstructured && !warehouseNeed)){ picks.push('PostgreSQL (primary transactional store)'); if(s.structured||s.finance) hits++; }
+  if(s.unstructured || s.chatbot || s.ragNeed){ picks.push('MongoDB (flexible schema for content, chat history, documents)'); if(s.unstructured) hits++; }
+  if(s.iot || (s.highScale && s.dataHeavy)){ picks.push('Cassandra (write-heavy, high-scale, multi-region time-series/event data)'); hits++; }
+  if(picks.length===0) picks.push('PostgreSQL as primary store');
+  const why = warehouseNeed
+    ? 'Your workload reads as analytics/ETL/reporting-centric rather than transactional — a columnar cloud warehouse is built for exactly that (large scans, aggregations, BI-tool integration), which Postgres/Mongo/Cassandra are not optimized for. Add Postgres alongside it only if you also have an operational/transactional app component; add Cassandra alongside it if you also have high-volume write ingestion (e.g. IoT/event streams) feeding the warehouse.'
+    : 'Postgres for relational/transactional integrity, MongoDB for flexible document data, Cassandra only when write volume and multi-region needs exceed what Postgres/Mongo comfortably handle.';
+  return {v:picks.join(' · '), why, conf: hits>=1?'high':'medium'};
+}
+function pickContainers(s){
+  if(s.onPrem) return {v:'Docker + self-managed Kubernetes (kubeadm/Rancher/RKE2 on bare metal or VMware) — not EKS/GKE/AKS', why:'Managed Kubernetes offerings are public-cloud services; an air-gapped/on-prem environment needs a self-managed distribution you can run entirely inside your network boundary.', conf:'high'};
+  if(s.startupMvp) return {v:'Docker + managed serverless containers (Cloud Run / Fargate)', why:'Keep container benefits without managing a Kubernetes control plane.', conf:'high'};
+  return {v:'Docker + Kubernetes (EKS/GKE/AKS matching chosen cloud)', why:'Standard for portable, scalable container orchestration once team/scale justify it.', conf: (s.enterprise||s.highScale)?'high':'medium'};
+}
+function pickObservability(s){
+  if(s.onPrem) return {v:'OpenTelemetry (instrumentation standard) + self-hosted Grafana + Prometheus + Loki (or ELK/OpenSearch)', why:'SaaS observability platforms (Datadog, Splunk Cloud, Dynatrace SaaS) require sending telemetry to the vendor\'s cloud, which an air-gapped network can\'t reach — self-hosted OSS observability is the only realistic option inside the boundary.', conf:'high'};
+  let apm = 'Datadog';
+  let why = 'Best all-around breadth (APM, logs, infra, RUM) with fastest time-to-value.';
+  let conf = 'low';
+  if(s.enterprise && s.compliance){ apm='Splunk (+ Datadog or Dynatrace for APM)'; why='Enterprises with heavy compliance/audit needs often standardize log management on Splunk alongside a dedicated APM tool.'; conf='high'; }
+  else if(s.enterprise && s.highScale){ apm='Dynatrace'; why='Strong automatic root-cause analysis (AI-assisted) valuable at large, complex enterprise scale.'; conf='high'; }
+  else if(s.startupMvp){ apm='Grafana + Prometheus (OSS) or Datadog free tier'; why='Lower cost for a small team; upgrade to Datadog/Dynatrace as scale and budget grow.'; conf='medium'; }
+  return {v:`OpenTelemetry (instrumentation standard) + ${apm}`, why:`Instrument everything with OpenTelemetry (vendor-neutral) and ship to ${apm.split(' ')[0]}. ${why}`, conf};
+}
+function pickFrontend(s){
+  const picks=[]; let hits=0;
+  if(s.web || (!s.mobile)){ picks.push(s.enterprise ? 'Angular' : 'React'); if(s.web) hits++; }
+  if(s.mobile){ picks.push('Flutter (single codebase for iOS + Android)'); hits++; }
+  if(picks.length===0) picks.push('React');
+  return {v:picks.join(' + '), why:'React for fastest ecosystem/hiring fit (Angular if already an enterprise Angular shop); Flutter when both iOS and Android are needed from one codebase.', conf: hits>=1?'high':'low'};
+}
+function pickLLM(s){
+  const picks=[];
+  if(s.compliance || s.enterprise || s.security){
+    picks.push({name:'Anthropic Claude (Sonnet tier)', tag:'Primary reasoning / user-facing — strong safety & instruction following for regulated use cases'});
+  } else {
+    picks.push({name:'OpenAI GPT (mid tier, e.g. GPT-4o class)', tag:'Primary reasoning / user-facing — broad tool ecosystem'});
+  }
+  if(s.agentic){
+    picks.push({name:'Anthropic Claude or OpenAI GPT (large/frontier tier)', tag:'Agentic tool-use & multi-step orchestration — pick the strongest tool-calling model available'});
+  }
+  if(s.highScale || s.startupMvp){
+    picks.push({name:'Open-weight small model — 4B–12B (Google Gemma, DeepSeek, or Llama class)', tag:'High-volume, low-cost tasks: classification, extraction, simple chat, routing'});
+  }
+  if(s.dataHeavy || s.ragNeed){
+    picks.push({name:'Mid-size open-weight — 12B–30B (DeepSeek-V/R series, Gemma 27B)', tag:'Cost-efficient RAG answer generation and summarization at scale'});
+  }
+  if(picks.length < 2){
+    picks.push({name:'Google Gemini (Flash tier) or Gemma 4B–12B', tag:'Cheap, fast fallback/secondary model for simple tasks'});
+  }
+  return picks;
+}
+function pickMCP(s){
+  const picks=[];
+  if(s.knowledgeBase || s.ragNeed) picks.push('Knowledge/RAG MCP server (exposes document search & retrieval as tools)');
+  if(s.agentic) picks.push('Multi-tool orchestration MCP server (Jira, email, calendar, internal APIs as callable tools)');
+  if(s.enterprise) picks.push('Internal data-source MCP servers (databases, CRMs, ticketing) with RBAC-scoped tool access');
+  if(picks.length===0) picks.push('Lightweight internal-tools MCP server exposing your core APIs as callable tools');
+  return picks;
+}
+const RAG_TYPES = [
+  'Naive RAG','Retrieve-and-Rerank RAG','Hybrid (keyword + vector) RAG','Hierarchical / Multi-level RAG',
+  'Graph RAG (knowledge-graph grounded)','Agentic RAG (agent decides when/what to retrieve)','Corrective RAG (CRAG, validates retrieved docs)',
+  'Self-RAG (model critiques its own retrieval)','Adaptive RAG (routes query to best retrieval strategy)','Multi-hop RAG (chained retrieval for complex questions)',
+  'Fusion RAG / RAG-Fusion (multiple query rewrites, merged results)','Modular RAG (composable retrieval/generation pipeline)',
+  'Structured/SQL RAG (retrieval over databases, not just documents)','Long-context (retrieval-free, full-document-in-context)'
+];
+function pickRAG(s){
+  if(!s.ragNeed && !s.chatbot && !s.knowledgeBase){
+    return {name:'RAG likely not required', why:'No knowledge-base / document-search need detected. If the assistant only needs general reasoning (no proprietary data lookup), skip RAG and rely on the base LLM, or add it later.', conf:'medium'};
+  }
+  if(s.structured && !s.unstructured) return {name:RAG_TYPES[12], why:'Data lives in structured/relational stores — retrieval should query the database (text-to-SQL or schema-aware retrieval) rather than chunked documents.', conf:'high'};
+  if(s.agentic) return {name:RAG_TYPES[5], why:'Agentic workflow — let the agent decide dynamically when to retrieve and from which source, rather than always retrieving.', conf:'high'};
+  if(s.enterprise && s.knowledgeBase) return {name:RAG_TYPES[4], why:'Enterprise knowledge spans many interlinked systems (Confluence, Jira, Drive) — a knowledge-graph layer improves cross-document reasoning over flat vector search.', conf:'high'};
+  if(s.compliance || s.healthcare) return {name:RAG_TYPES[6], why:'Compliance/clinical context demands high answer trust — Corrective RAG validates retrieved chunks before generation to reduce hallucination risk.', conf:'high'};
+  if(s.dataHeavy) return {name:RAG_TYPES[2], why:'Mixing keyword and vector search improves recall across large, heterogeneous document sets typical of data-heavy orgs.', conf:'medium'};
+  return {name:RAG_TYPES[1], why:'A solid general-purpose default: retrieve broadly, then rerank for relevance before feeding the LLM — better quality than naive top-k RAG with modest added complexity.', conf:'low'};
+}
+function pickGuardrails(s){
+  const g = ['Input/output content filtering (toxicity, PII leakage)'];
+  if(s.compliance||s.healthcare||s.finance) g.push('PII/PHI redaction & data-loss-prevention layer');
+  g.push('Prompt-injection & jailbreak defense');
+  if(s.ragNeed||s.chatbot) g.push('Hallucination / groundedness checking against retrieved sources');
+  if(s.voice) g.push('Voice-channel safety: ASR-misrecognition tolerance and re-confirmation before high-risk actions taken from spoken input');
+  if(s.agentic) g.push('Human-in-the-loop approval for high-risk agent actions');
+  if(s.agentic) g.push('Agent identity as a first-class RBAC concern: scope each agent to minimal permissions, make its access time-bound (JIT, not standing), log every action taken, and keep a revocation path — govern it with the same rigor as a human account (see IAM Options section)');
+  g.push('Rate limiting & abuse/cost-control monitoring');
+  if(s.compliance) g.push('Audit logging of all prompts/responses for compliance review');
+  return g;
+}
+function pickCICD(s){
+  if(s.onPrem) return {v:'Self-hosted GitLab CE or Jenkins with self-hosted runners, deploying via Terraform to your private infrastructure', why:'Cloud-hosted CI/CD (GitHub Actions cloud runners, Vercel) needs internet connectivity to reach your infrastructure — an air-gapped environment needs the entire pipeline, including runners, inside the network boundary.', conf:'high'};
+  if(s.startupMvp) return {v:'GitHub Actions → Vercel (frontend) + Cloud Run/Fargate (backend)', why:'Fastest path to production for a small team, minimal infra to manage.', conf:'high'};
+  if(s.enterprise) return {v:'GitHub Actions/GitLab CI → ArgoCD (GitOps) → Kubernetes, Terraform for infra-as-code', why:'GitOps gives auditable, repeatable deployments at enterprise scale with multiple environments/teams.', conf:'high'};
+  return {v:'GitHub Actions → Terraform + Kubernetes (or Vercel for frontend-only pieces)', why:'Balanced CI/CD with infra-as-code as the team and service count grow.', conf:'low'};
+}
+function pickDNS(s){
+  if(s.onPrem) return {v:'Internal DNS (BIND / Windows DNS / private zone) — no public DNS provider', conf:'high'};
+  if(s.awsShop) return {v:'Route 53 (AWS-native, integrates with ALB/CloudFront)', conf:'high'};
+  return {v:'Cloudflare DNS (fast propagation, built-in DDoS/WAF) — or Route 53 if fully AWS-native', conf:'low'};
+}
+function pickDocs(s){
+  return [
+    {label:'C4 Model', text:'Context & Container diagrams for stakeholder alignment; Component diagrams per service.'},
+    {label:'HLD', text:'High-level design: system boundaries, major components, data flow, tech choices & rationale (this page is a first draft input).'},
+    {label:'LLD', text:'Low-level design per service: API contracts, DB schemas, sequence diagrams, error handling.'},
+    {label:'ADRs', text:'Architecture Decision Records for each major choice above — capture context, decision, consequences.'}
+  ];
+}
+
+// ---------- AI model serving & integration architecture ----------
+function pickModelOrchestration(s){
+  const mapping = [
+    {task:'Architecture / system design & complex multi-step reasoning', model:'Frontier large model (Claude Opus/Sonnet, GPT-5/o-series, Gemini Pro)', why:'These calls are low-volume and high-stakes — the cost premium is trivial against the value of a correct design decision, and deep reasoning quality drops off fastest on smaller models.'},
+    {task:'Code generation, review & refactoring', model:'Mid-large code-tuned model (Claude Sonnet, GPT-4.1-class, DeepSeek-Coder-V2, Codestral)', why:'Strong code benchmarks at meaningfully lower cost/latency than reserving your top-tier reasoning model for every completion.'},
+    {task:'Classification, extraction, routing, simple chat', model:'Small open-weight model, 4B–12B (Gemma, Llama, DeepSeek-small, Phi)', why:'High call volume, low per-call complexity — this is where model cost dominates total spend, so the cheapest model that clears the quality bar wins. Also the tier most worth self-hosting.'},
+    {task:'RAG answer synthesis', model:'Mid-size model, 12B–30B', why:'Needs enough reasoning capacity to stay grounded in retrieved context without hallucinating, but doesn\'t need frontier-level general reasoning.'},
+    {task:'Agent orchestration / multi-step tool-use', model:'Frontier or a tool-use-specialized large model', why:'Reliability of tool-call formatting and multi-step planning degrades noticeably on smaller models — this is the task type least tolerant of downgrading.'}
+  ];
+  if(s.startupMvp && s.smallTeam && !s.agentic && !s.highScale){
+    return {strategy:'Single model to start', why:'A small team at low, unpredictable volume gets more value from operational simplicity (one API, one bill, no routing logic to build/maintain) than from cost optimization that doesn\'t matter yet at your call volume. Pick one capable mid/frontier-tier model and use it for everything.', when:'Split into multiple models the moment any one task type becomes high-volume enough that its API cost is visible on your bill, or you add an agentic/tool-use workflow that a general chat model handles unreliably.', mapping, conf:'high'};
+  }
+  return {strategy:'Multiple models, routed by task', why:'Your requirements span reasoning-heavy, code, and/or high-volume simple tasks — using one model (almost always the most expensive one, by default) for all of them means overpaying for the easy calls or underpowering the hard ones. Route by task using the mapping below.', when:'Consolidate back to a single model only if orchestration/routing complexity starts costing more engineering time than the routing saves in inference spend — this crossover mostly hits very small teams.', mapping, conf: s.agentic?'high':'medium'};
+}
+
+function pickHostingLocation(s){
+  if(s.onPrem){
+    return {rec:'Local / self-hosted only — no cloud API calls of any kind', why:'Air-gapped/on-prem means there is no path to the public internet at all, so cloud LLM APIs (Anthropic, OpenAI, etc.) are unreachable regardless of data sensitivity — every model has to run inside your network boundary.', budgetNote:'Budget for real GPU hardware and the staff to operate it — this is a fixed requirement at any data-sensitivity level once you\'re genuinely air-gapped, not an optional cost optimization.', securityNote:'', when:'', conf:'high'};
+  }
+  const sensitive = s.compliance || s.healthcare || (s.security && s.finance);
+  if(sensitive){
+    return {rec:'Local / self-hosted (VPC-isolated) for anything touching regulated or sensitive data; cloud API allowed for non-sensitive auxiliary tasks', why:'Compliance/healthcare/security signals mean data residency and auditability outweigh convenience — self-hosting an open-weight model inside your own VPC (or on-prem) means prompts and outputs never leave your security boundary. This is a hybrid posture, not all-or-nothing: low-risk tasks (e.g. formatting, non-PII classification) can still use cloud APIs.', budgetNote:'Upfront GPU cost is real, but for regulated workloads it\'s usually a compliance requirement, not a cost optimization — treat it as a fixed cost of being in this market, not an optional line item.', securityNote:'Confirm your cloud API providers\' data-retention and training-use policies even for the non-sensitive path — "enterprise" tiers from major LLM vendors typically opt out of training on your data, but verify per-vendor.', conf:'high'};
+  }
+  if(s.startupMvp && !s.highScale){
+    return {rec:'Cloud API (hosted, pay-per-token)', why:'No infra to operate or GPUs to amortize, and pay-per-use pricing matches a small team\'s unpredictable early-stage volume. Self-hosting only pays off once you have enough constant, predictable request volume to keep a GPU meaningfully utilized around the clock — below that threshold, idle GPU time makes self-hosting more expensive than API calls, not less.', when:'Revisit self-hosting once a specific high-volume, low-complexity task (e.g. classification/extraction) is running constantly enough that a single small-model GPU would sit near capacity — that\'s the crossover point, not overall company scale.', conf:'high'};
+  }
+  return {rec:'Hybrid: cloud API as the default, local/self-hosted for your highest-volume, most predictable small-model workload', why:'At real scale, a small fraction of your call volume (usually classification/extraction/routing) accounts for a large fraction of total request count. Self-hosting just that workload on a right-sized GPU, while keeping variable/bursty/complex-reasoning traffic on cloud APIs, captures most of the cost benefit without taking on full self-hosting operational risk for everything.', budgetNote:'Rule of thumb: self-hosting a 4B–12B model becomes cost-competitive with cloud API pricing once you\'re sustaining enough request volume to keep one GPU above roughly 40–50% utilization continuously — model this against your actual projected volume before committing capital.', securityNote:'', conf:'medium'};
+}
+
+const VRAM_TABLE = [
+  {tier:'4B (small)', fp16:'~8–10 GB', int4:'~4–6 GB', gpu:'Single consumer/edge GPU — RTX 4090 (24GB), L4 (24GB), or smaller', notes:'Comfortable single-GPU deployment even with room for concurrent requests and moderate context length.'},
+  {tier:'12B (small-mid)', fp16:'~24–28 GB', int4:'~10–14 GB', gpu:'L4 (24GB) or RTX 4090 (24GB) quantized; A10G (24GB) fp16 is tight', notes:'Int4 quantization is the practical default here to keep single-GPU deployment comfortable with headroom for KV-cache.'},
+  {tier:'30B (mid-large)', fp16:'~60–65 GB', int4:'~18–22 GB', gpu:'A100 40GB (quantized) or A100/H100 80GB (fp16) for headroom', notes:'This is where quantization stops being optional for single-GPU deployment — budget for it unless you have an 80GB card.'},
+  {tier:'70B+ (large)', fp16:'~140+ GB', int4:'~38–45 GB', gpu:'Multi-GPU (2–4× A100/H100) for fp16, or a single H100 80GB with aggressive quantization', notes:'Multi-GPU tensor-parallel serving adds real operational complexity — this tier is usually where "just use a cloud API for this size" wins on total cost of ownership unless you have a hard data-residency reason not to.'}
+];
+function pickVRAMTier(s){
+  if((s.compliance||s.healthcare||s.security) && (s.enterprise)) return {tier:'30B (mid-large)', why:'Fully local deployment for regulated data needs enough model capacity to approach cloud-frontier quality; 30B-class open-weight models are the current sweet spot for that trade-off before multi-GPU complexity kicks in at 70B+.'};
+  if(s.dataHeavy || s.ragNeed) return {tier:'12B (small-mid)', why:'RAG-heavy workloads benefit from a bit more reasoning capacity than the smallest tier for staying grounded in retrieved context, without paying 30B\'s VRAM/GPU cost.'};
+  return {tier:'4B (small)', why:'For routing/classification/extraction-style local workloads, the smallest tier that clears your quality bar minimizes both VRAM footprint and per-request latency — start here and size up only if evals show it\'s insufficient.'};
+}
+
+function pickInterfaceTopology(s){
+  const hosting = pickHostingLocation(s);
+  const glossary = 'Hybrid = one gateway routing requests across local + cloud models by cost/security/task. Distributed = multiple independent serving replicas (often regional) behind a load balancer, for scale/availability, not policy. Mesh = service-mesh-style interconnection (Istio-class) giving consistent routing, retries, and observability across many AI services/agents talking to each other and to models.';
+  let llm;
+  if(s.onPrem){
+    llm = {rec:'Local-only interface (single self-hosted model, no external routing)', why:'Air-gapped/no-public-cloud means there is no cloud model to route to at all — this isn\'t a hybrid or distributed topology decision, it\'s a single local serving endpoint inside your network boundary. A "hybrid" gateway implies routing to a cloud backend that, by requirement, doesn\'t exist here.'};
+  } else if((s.compliance||s.security) && (s.enterprise||s.highScale) && s.agentic){
+    llm = {rec:'Mesh interface', why:'Many services/agents, regulated data, and real scale together mean you need consistent mTLS, retry policy, and observability applied uniformly across every AI and non-AI service call — the same reasoning that justifies Istio for your general architecture applies to AI traffic specifically. Layer it on top of the service mesh you\'re already running, don\'t stand up a separate one.'};
+  } else if(hosting.rec.startsWith('Hybrid') || hosting.rec.startsWith('Local')){
+    llm = {rec:'Hybrid interface', why:'You\'re already routing between local and cloud models for cost/security reasons — put a unified LLM gateway (LiteLLM/OpenRouter-style abstraction) in front of both so application code calls one interface and the gateway handles which backend serves each request.'};
+  } else if(s.highScale || s.globalMultiRegion){
+    llm = {rec:'Distributed interface', why:'Your need is scale and regional latency, not policy routing between different model types — multiple regional serving replicas behind a load balancer solves that directly without the added complexity of a full gateway/mesh layer.'};
+  } else {
+    llm = {rec:'Direct integration (single provider SDK)', why:'At your current scope, a routing/mesh layer is complexity you don\'t need yet — call your chosen model provider\'s SDK directly and revisit once you add a second model, hosting location, or region.'};
+  }
+  let rag;
+  if(s.onPrem) rag = {rec:'Direct integration (single self-hosted retrieval service)', why:'No cloud connectivity exists in an air-gapped environment, so retrieval must be one self-hosted vector store/service entirely inside your network boundary — not a hybrid or distributed setup that assumes cloud reachability.'};
+  else if(s.enterprise && s.knowledgeBase) rag = {rec:'Hybrid interface (local + cloud vector search, or multiple source-specific retrievers behind one router)', why:'Enterprise knowledge usually spans multiple systems (Confluence, Drive, internal DBs) — a hybrid retrieval router lets each source use its best-fit storage/search while presenting one retrieval interface to the LLM layer.'};
+  else if(s.highScale && s.globalMultiRegion) rag = {rec:'Distributed interface (sharded/replicated vector index across regions)', why:'Query latency and index size at global scale usually force sharding or regional replication of the vector index well before any policy-routing need arises.'};
+  else if(s.agentic && s.enterprise) rag = {rec:'Mesh interface (multiple independent RAG services behind consistent mesh policy)', why:'Multiple agents each needing governed, observable access to different knowledge sources is the same problem service mesh solves for microservices generally — apply it to your retrieval services too.'};
+  else rag = {rec:'Direct integration (single retrieval service)', why:'One vector store, one retrieval service, called directly — no need for extra topology until you have multiple knowledge sources or regions to reconcile.'};
+  return {glossary, llm, rag};
+}
+
+function pickMCPvsAPI(s){
+  if(s.agentic || s.enterprise){
+    return {rec:'MCP (Model Context Protocol) server', why:'MCP standardizes tool discovery, schemas, and context handoff so any MCP-compatible client (Claude Desktop, Claude Code, other agents) can use the same tool without bespoke integration work per client. That reuse value compounds fast once more than one agent or team needs the same internal capability — which agentic and enterprise contexts both imply.', when:'A raw API call is still the right choice for a single, simple, one-off integration where no other agent/client will ever need to reuse it, or for ultra-low-latency internal calls where MCP\'s JSON-RPC layer adds overhead you can\'t afford.', conf:'high'};
+  }
+  return {rec:'Direct API calls are fine for now; wrap as MCP once a second consumer appears', why:'With a single application and no agentic tool-use pattern yet, a direct API integration is simpler to build and debug than standing up an MCP server for one caller.', when:'Move to MCP the moment a second AI agent, internal team, or client (e.g. Claude Desktop/Code) needs to call the same capability — that\'s the point where standardized discovery and reuse start paying for the extra layer.', conf:'medium'};
+}
+
+function pickGuardrailPipeline(s){
+  const stages = [
+    {stage:'1. Input', desc:'Validate and sanitize the raw user request: content filtering, prompt-injection pattern detection, PII/PHI detection, rate limiting before it ever reaches a model.'},
+    {stage:'2. Retrieval / tool-call', desc: (s.ragNeed||s.knowledgeBase) ? 'Check retrieved documents for relevance/groundedness before they\'re added to context (this is what Corrective/Self-RAG do); validate tool-call arguments against schema and permissions before execution.' : 'Validate any tool-call arguments against schema and permissions before execution — skip if no retrieval/tools are in play.'},
+    {stage:'3. Generation (in-flight)', desc:'Stream-time moderation on partial output where latency allows, so a policy-violating response can be halted before it fully renders to the user rather than only caught after the fact.'},
+    {stage:'4. Output', desc:'Final check on the complete response: toxicity/safety filtering, PII leakage scan, groundedness/citation check against retrieved sources, format/schema validation for structured outputs.'},
+    {stage:'5. Post-hoc evals & monitoring (offline)', desc: s.highScale ? 'You can\'t eval every request at your volume — run continuous sampled evals (LLM-as-judge plus periodic human review) on a statistically meaningful slice, track drift over time, and gate model/prompt changes behind regression evals before rollout.' : 'Run sampled evals (LLM-as-judge plus periodic human review) on a slice of production traffic, and gate any model/prompt change behind a regression eval suite before rollout.'}
+  ];
+  return {stages, verdict:'Guardrails belong at every stage above, not just input/output — IO-only filtering catches the obvious cases but misses retrieval-stage hallucination sources and mid-generation policy violations that only in-flight or retrieval-stage checks can catch.'};
+}
+
+function pickVectorDBPlacement(s, ragResult){
+  const noRagNeeded = ragResult.name === 'RAG likely not required';
+  const structuredRag = ragResult.name && ragResult.name.startsWith('Structured/SQL');
+  if(noRagNeeded){
+    return {needed:false, where:'', dbChoice:'', why:'No knowledge-base/document-retrieval need was detected, so there\'s nothing for a vector database to index — skip it. Add one later if you introduce a "search our docs/data" feature.'};
+  }
+  if(structuredRag){
+    return {needed:false, where:'', dbChoice:'', why:'Your retrieval need is over structured/relational data — that\'s served by querying your existing database (text-to-SQL or schema-aware retrieval), not a vector index. A vector DB would be the wrong tool here.'};
+  }
+  let dbChoice;
+  if(!s.dataHeavy && !s.enterprise && !s.highScale) dbChoice = 'pgvector extension on your existing PostgreSQL instance';
+  else if(s.unstructured && !s.structured) dbChoice = 'A dedicated vector database (Qdrant, Weaviate, or Milvus) — or Pinecone if you prefer fully managed';
+  else dbChoice = 'MongoDB Atlas Vector Search (if MongoDB is already your document store) or a dedicated vector DB (Qdrant/Weaviate/Milvus/Pinecone) if you need hybrid search and metadata filtering at scale';
+  const why = !s.dataHeavy && !s.enterprise && !s.highScale
+    ? 'At your current scale, adding pgvector to a database you already operate avoids introducing an entirely new system to run, back up, and monitor. Migrate to a dedicated vector DB once query volume or index size makes pgvector\'s performance a bottleneck.'
+    : 'At your scale, a purpose-built vector database gives you approximate-nearest-neighbor performance, hybrid (keyword + vector) search, and metadata filtering that general-purpose databases only support with real caveats.';
+  return {
+    needed:true,
+    where:'It sits in the retrieval path, parallel to (not instead of) your primary database: an offline ingestion pipeline chunks and embeds your source documents and upserts them into the vector store ahead of time; at query time, the user\'s query is embedded and matched against that store to retrieve relevant chunks, which are then injected into the LLM\'s context before generation.',
+    dbChoice, why
+  };
+}
+
+// ---------- Head-to-head trade-off decisions (why + when to switch) ----------
+function pickTradeoffs(s){
+  const t = [];
+
+  // 0. On-prem overrides the whole cloud-strategy question
+  if(s.onPrem){
+    t.push({d:'Public cloud vs. On-premises', rec:'On-premises / air-gapped private infrastructure', why:'An explicit no-public-cloud / air-gapped requirement overrides the usual cloud trade-off entirely — this isn\'t a single-vs-multi-cloud decision, it\'s a build-and-operate-your-own-infrastructure decision.', when:'Revisit only if the air-gap/no-public-cloud constraint is ever relaxed (e.g. a sovereign/government cloud region becomes an approved option).', conf:'high'});
+  }
+  // 1. Single-cloud vs multi-cloud
+  else if(s.enterprise && s.globalMultiRegion && s.compliance){
+    t.push({d:'Single-cloud vs. Multi-cloud', rec:'Primary cloud + a scoped secondary cloud (DR / regulatory only)', why:'Global, regulated, enterprise-scale profile — data-residency law or contractual disaster-recovery requirements often force a second cloud presence, but that\'s different from running everything active-active across two clouds.', when:'Go further into full multi-cloud only if you have multiple regions with hard data-sovereignty laws requiring in-country cloud presence, or a board-level mandate to avoid single-vendor concentration risk regardless of cost.', conf:'medium'});
+  } else {
+    t.push({d:'Single-cloud vs. Multi-cloud', rec:'Single cloud', why:'Multi-cloud roughly doubles operational complexity — two IAM models, two networking stacks, two sets of managed services to learn and monitor — for a benefit (vendor leverage, avoiding lock-in) that rarely pays off before significant scale.', when:'Reconsider if a single-vendor outage has caused a business-critical incident more than once, procurement specifically wants renewal leverage, or compliance mandates in-country presence your primary cloud can\'t offer.', conf:'high'});
+  }
+
+  // 2. IaC tool
+  if(s.pythonMentioned && !s.awsShop){
+    t.push({d:'Terraform vs. Pulumi vs. native IaC', rec:'Terraform, with Pulumi as a strong alternative given your Python usage', why:'Terraform remains the safest default — largest module ecosystem, cloud-agnostic, easiest to hire for. Pulumi is worth it specifically because it lets your existing Python team write infra in a real language (loops, conditionals, unit tests) instead of HCL.', when:'Pick Pulumi over Terraform if your team already writes Python/TypeScript daily and wants infra code reviewed and tested the same way as application code. Pick cloud-native IaC (CDK, Bicep, Deployment Manager) only if you are firmly single-cloud and want zero third-party tooling in the deploy path.', conf:'medium'});
+  } else if(s.awsShop && s.startupMvp){
+    t.push({d:'Terraform vs. AWS CDK vs. native IaC', rec:'Terraform as the default; AWS CDK is a reasonable alternative for an AWS-only small team', why:'Terraform is cloud-agnostic and keeps optionality if you ever add a second cloud or need to hire from the broader IaC talent pool. CDK gives tighter day-one AWS service coverage and lets you write infra in TypeScript/Python, at the cost of being AWS-only.', when:'Choose CDK specifically if you\'re confident you\'ll stay AWS-only long-term and want less HCL to learn. Move to Terraform (or add it) the moment a second cloud or a Terraform-experienced hire enters the picture.', conf:'medium'});
+  } else {
+    t.push({d:'Terraform vs. other IaC', rec:'Terraform', why:'Industry-standard, cloud-agnostic, declarative IaC with the largest module ecosystem and community support — the safest long-term default for hiring, documentation, and multi-cloud optionality.', when:'Reconsider only if your team is deeply invested in a general-purpose language (Python/TypeScript/Go) and wants Pulumi\'s programmatic style, or you are permanently single-cloud and want to drop third-party tooling in favor of native IaC (CloudFormation/Bicep/Deployment Manager).', conf:'medium'});
+  }
+
+  // 3. Kafka vs Pub/Sub vs managed queue
+  if(s.highScale || s.realtime || s.finance){
+    t.push({d:'Kafka vs. Pub/Sub vs. managed queue (SQS/SNS)', rec:'Kafka', why:'You need a durable, replayable log — required for audit trails, fraud/analytics pipelines, high sustained throughput, or multiple independent consumer groups reading the same stream at different speeds. Managed queues don\'t give you replay or that throughput ceiling.', when:'Downgrade to a managed queue (SQS/Pub/Sub) if it turns out you don\'t actually need replay/audit history and traffic is moderate — Kafka\'s operational cost (self-managed or Confluent/MSK bill) only pays off once you\'re using its durability and replay guarantees.', conf:'high'});
+  } else if(s.gcpShop){
+    t.push({d:'Kafka vs. Pub/Sub vs. managed queue (SQS/SNS)', rec:'Google Pub/Sub', why:'Fully managed, zero ops, integrates natively with the rest of a GCP stack. The right choice when you don\'t yet have Kafka-specific needs like event replay, ultra-high sustained throughput, or complex multi-consumer-group patterns.', when:'Move to Kafka (Confluent Cloud or self-managed on GKE) once you need event replay for audit, multiple independent consumer groups at different read speeds, or throughput/latency Pub/Sub can\'t guarantee at your scale.', conf:'high'});
+  } else {
+    t.push({d:'Kafka vs. Pub/Sub vs. managed queue (SQS/SNS)', rec:'Managed queue (SQS/Pub/Sub) first; adopt Kafka only when you outgrow it', why:'Start with the lowest-ops option. Introducing a Kafka cluster before you actually need its guarantees just adds infrastructure to operate for no measurable benefit.', when:'Move to Kafka when you need: event replay/audit trail, multiple consumer groups reading the same stream at different speeds, sustained throughput above roughly 10k messages/sec, or you\'re building a real event-sourcing/CDC pipeline.', conf:'medium'});
+  }
+
+  // 4. Kubernetes vs Serverless — mirrors pickCompute()'s branch order exactly so this trade-off
+  // card never contradicts the Compute Model card for the same signals (small team + high-scale/
+  // enterprise/realtime previously fell through to a flat "Kubernetes" recommendation here while
+  // the Compute Model card recommended serverless containers as a deliberate middle path).
+  if((s.startupMvp || s.smallTeam) && (s.highScale || s.enterprise || s.realtime)){
+    t.push({d:'Kubernetes vs. Serverless', rec:'Serverless containers (Cloud Run / Fargate) — middle path', why:'Small team and real-time/high-scale/enterprise needs pull in different directions: full self-managed Kubernetes is more operational overhead than your team can likely absorb, but plain serverless functions under-deliver on control at this scale. Managed serverless containers give autoscaling and container-level control without a Kubernetes control plane to operate.', when:'Move to full self-managed Kubernetes once you have dedicated platform engineering capacity; fall back to plain serverless functions if scale/latency needs turn out lighter than described.', conf:'medium'});
+  } else if(s.startupMvp || (s.smallTeam && !s.highScale)){
+    t.push({d:'Kubernetes vs. Serverless', rec:'Serverless (Cloud Run / Lambda / Cloud Functions)', why:'No cluster to operate, patch, or right-size; you pay only for what you use, which matches a small team\'s time budget and an early-stage product\'s unpredictable traffic.', when:'Move to Kubernetes once you have many services with complex inter-service networking needs, need fine-grained resource/cost control at steady high load, or serverless cold-start latency becomes a measurable user-facing problem.', conf:'high'});
+  } else if(s.highScale || s.enterprise || s.realtime){
+    t.push({d:'Kubernetes vs. Serverless', rec:'Kubernetes', why:'Predictable performance under sustained load, fine-grained resource control, and portability across clouds — worth the operational overhead once you\'re running many services at real scale or have strict latency SLAs serverless cold-starts would violate.', when:'Fall back to serverless for individual bursty/event-driven workloads even inside a Kubernetes-centric org (e.g. scheduled jobs, webhooks) — it\'s not all-or-nothing per service.', conf:'high'});
+  }
+
+  return t;
+}
+
+// ---------- Cost, throughput, and governance (Solution/Enterprise Architect + TPM + SDE lens) ----------
+function pickCostOptimization(s){
+  const items = [];
+  if(s.startupMvp){
+    items.push({t:'Serverless / pay-per-use compute with scale-to-zero', w:'Avoids paying for idle capacity — the single biggest cost lever for a small team with unpredictable early-stage traffic.'});
+  } else {
+    items.push({t:'Continuous right-sizing: review utilization weekly, tune autoscaling floor/ceiling', w:'Most infra waste comes from static sizing decisions made at launch and never revisited.'});
+  }
+  if(s.highScale || s.enterprise){
+    items.push({t:'Reserved/Savings Plans or Committed Use Discounts for steady-state baseline load; spot/preemptible instances for batch & non-prod', w:'Typically cuts 30–60% off compute spend for predictable baseline load without sacrificing burst headroom.'});
+  }
+  items.push({t:'Tiered storage lifecycle policies (hot → warm → cold/archive)', w:'Most data cools quickly; automatic tiering avoids paying hot-storage rates for rarely-accessed data.'});
+  items.push({t:'Route LLM calls by task complexity — small open-weight models (4B–12B) for high-volume/simple tasks, frontier models reserved for complex reasoning', w:'LLM inference is billed per token; routing cheap tasks to cheap models is the highest-leverage AI cost control available.'});
+  items.push({t:'Cache LLM responses and embeddings for repeated or near-duplicate queries', w:'Avoids re-paying inference cost for requests you\'ve effectively already answered.'});
+  if(s.ragNeed) items.push({t:'Batch embedding generation instead of real-time per-document embedding', w:'Batching cuts API overhead and often qualifies for lower batch-inference pricing.'});
+  items.push({t:'FinOps tagging with per-team/per-service showback or chargeback dashboards', w:'Visibility is the prerequisite for optimization — teams cut their own waste once they can see it.'});
+  return items;
+}
+function pickConcurrency(s){
+  const items = [];
+  items.push({t:'Async, non-blocking I/O throughout the request path', w:'Blocking calls (especially to LLMs or external APIs) are the most common throughput killer — async lets one instance serve many concurrent requests.'});
+  items.push({t:'Connection pooling for database and external API clients', w:'Avoids connection-setup overhead becoming the bottleneck under concurrent load.'});
+  if(s.realtime || s.highScale) items.push({t:'Horizontal autoscaling tuned on custom metrics (queue depth, P95 latency) rather than CPU alone', w:'CPU-based autoscaling reacts too late for bursty or latency-sensitive AI workloads.'});
+  if(s.highScale) items.push({t:'Read replicas, and sharding once a single primary can\'t serve combined read+write load', w:'Splitting read traffic to replicas is usually the cheapest scaling step before resharding is needed.'});
+  items.push({t:'CDN / edge caching for static and semi-static responses', w:'Removes repeat load from origin servers entirely for cacheable content.'});
+  items.push({t:'Queue-based load leveling with bounded queues and backpressure', w:'Protects downstream services from being overwhelmed during traffic spikes; unbounded queues just delay the failure.'});
+  if(s.chatbot || s.agentic) items.push({t:'Stream LLM responses (SSE/WebSocket) instead of waiting for full completion', w:'Improves perceived latency and lets clients start rendering before generation finishes — important under concurrent chat load.'});
+  if(s.agentic) items.push({t:'Circuit breakers and timeouts on every external tool call inside agent loops', w:'One slow tool call in a multi-step agent workflow shouldn\'t be able to hang the whole request.'});
+  return items;
+}
+function pickGovernance(s){
+  const kra = [
+    'System Reliability & Availability',
+    'Cost Efficiency & Resource Utilization',
+    'AI Output Quality & Safety',
+    'Delivery Velocity & Engineering Throughput'
+  ];
+  const kpi = [];
+  kpi.push(s.realtime ? 'P95 API latency < 200ms, P99 < 500ms' : 'P95 API latency < 800ms, P99 < 2s');
+  kpi.push('Error rate < 0.1% of requests (5xx)');
+  kpi.push('Cost per request / cost per active user, tracked weekly');
+  kpi.push('Deployment frequency & lead time for changes (DORA metrics)');
+  if(s.ragNeed || s.chatbot) kpi.push('RAG groundedness / hallucination rate on sampled responses');
+  if(s.agentic) kpi.push('Agent task success rate & average tool-calls per completed task');
+  const sla = [];
+  if(s.compliance || s.enterprise) sla.push('99.95% uptime (≈22 min downtime/month) — penalty-bearing external SLA');
+  else sla.push('99.5% uptime target (≈3.6 hrs downtime/month) — appropriate for pre-PMF/early-stage products');
+  sla.push('Support response time: P1 < 1hr, P2 < 4hrs, P3 < 1 business day');
+  const rci = [];
+  rci.push('MTTD (mean time to detect) target < 5 min, via SLO burn-rate alerting rather than hard thresholds alone');
+  rci.push(`MTTR (mean time to resolve) target: ${s.enterprise ? '< 1hr for P1 incidents' : '< 4hrs for P1 incidents'}`);
+  rci.push('Blameless postmortem within 48hrs of every P1/P2 incident, with tracked action items to closure');
+  rci.push('Error-budget policy: freeze non-essential releases when SLO burn exceeds budget for the period');
+  return {kra, kpi, sla, rci};
+}
+
+function analyze(){
+  const text = document.getElementById('input').value.trim();
+  if(!text){ alert('Please describe your business/product requirements first.'); return; }
+  const s = detectSignals(text);
+  const cloud = pickCloud(s), gw = pickGateway(s), iam = pickIAM(s), lang = pickLanguages(s),
+        arch = pickArchitecture(s), compute = pickCompute(s), msg = pickMessaging(s), mesh = pickMesh(s),
+        cache = pickCache(s), db = pickDatabase(s), containers = pickContainers(s), obs = pickObservability(s),
+        fe = pickFrontend(s), llm = pickLLM(s), mcp = pickMCP(s), rag = pickRAG(s), guardrails = pickGuardrails(s),
+        cicd = pickCICD(s), dns = pickDNS(s), docs = pickDocs(s);
+
+  const activeSignals = Object.entries(s).filter(([k,v])=>v).map(([k])=>k);
+
+  const stackCards = [
+    ['Cloud Provider', cloud.v, cloud.why, cloud.conf, 'Enterprise Architect'],
+    ['API Gateway / Edge', gw.v, gw.why, gw.conf, 'Solution Architect'],
+    ['Identity & Access (IAM)', iam.v, iam.why, iam.conf, 'Enterprise Architect'],
+    ['Backend Language(s)', lang.v, lang.why, lang.conf, 'Application Architect'],
+    ['Architecture Style', arch.v, arch.why, arch.conf, 'Solution Architect'],
+    ['Compute Model', compute.v, compute.why, compute.conf, 'Solution Architect'],
+    ['Messaging / Streaming', msg.v, msg.why, msg.conf, 'Application Architect'],
+    ['Service Mesh', mesh.v, mesh.why, mesh.conf, 'Enterprise Architect'],
+    ['Caching', cache.v, cache.why, cache.conf, 'SDE'],
+    ['Primary Database(s)', db.v, db.why, db.conf, 'Application Architect'],
+    ['Containers / Orchestration', containers.v, containers.why, containers.conf, 'SDE'],
+    ['Observability', obs.v, obs.why, obs.conf, 'SDE / TPM'],
+    ['Frontend', fe.v, fe.why, fe.conf, 'Application Architect'],
+    ['CI/CD & Deployment', cicd.v, cicd.why, cicd.conf, 'SDE'],
+    ['DNS', dns.v, 'DNS routing and edge protection for your domain.', dns.conf, 'Solution Architect'],
+  ];
+
+  const cost = pickCostOptimization(s), throughput = pickConcurrency(s), gov = pickGovernance(s), tradeoffs = pickTradeoffs(s);
+  const orchestration = pickModelOrchestration(s), hosting = pickHostingLocation(s), vramTier = pickVRAMTier(s),
+        topology = pickInterfaceTopology(s), mcpVsApi = pickMCPvsAPI(s), guardrailPipeline = pickGuardrailPipeline(s),
+        vectorDb = pickVectorDBPlacement(s, rag);
+
+  const confLabel = c => ({high:'High confidence', medium:'Medium confidence', low:'Low confidence (default)'}[c] || 'Low confidence (default)');
+
+  const signalsHtml = `<div class="card"><div class="signals">${activeSignals.length? activeSignals.map(x=>`<span class="sig">${x}</span>`).join('') : '<span class="sig">generic / no strong signals — defaults applied</span>'}</div></div>`;
+
+  const sections = [];
+  const sec = (id, navLabel, titleHtml, bodyHtml) => sections.push({id, navLabel, titleHtml, bodyHtml});
+
+  sec('stack', 'Stack', 'Core Technical Stack', `<div class="grid">${stackCards.map(([title, pick, why, conf, persona])=>
+    `<div class="stack-card"><div class="head"><h3>${title}</h3><span class="conf conf-${conf||'low'}">${confLabel(conf)}</span></div><div class="pick">${pick}</div><div class="why">${why}</div><div class="persona">${persona}</div></div>`
+  ).join('')}</div>`);
+
+  sec('iamcompare', 'IAM Options', 'Identity Provider Options <span style="color:var(--muted); text-transform:none; letter-spacing:0; font-weight:400;">— Okta vs. Entra ID vs. Ping/ForgeRock vs. OneLogin vs. JumpCloud, plus PAM/IGA</span>',
+    `<div class="card">
+      <div class="rag-pick"><div class="head" style="display:flex; justify-content:space-between; align-items:center;"><div class="name">Best bet: ${iam.v}</div><span class="conf conf-${iam.conf||'low'}">${confLabel(iam.conf)}</span></div><div class="why">${iam.why}</div></div>
+      <div class="subhead">Full comparison</div>
+      <div class="iam-vendor-list">
+        ${iam.alternatives.map(v=>`<div class="iam-vendor-card ${v.id===iam.primaryId?'recommended':''}">
+          <div class="ivc-head"><span class="ivc-name">${v.name}</span><span class="ivc-cat">${v.cat}</span>${v.id===iam.primaryId?'<span class="rec-star">★ best bet</span>':''}</div>
+          <div class="ivc-row"><b>Best for:</b> ${v.bestFor}</div>
+          <div class="ivc-row"><b>Strength:</b> ${v.strength}</div>
+          <div class="ivc-row"><b>Drawback:</b> ${v.drawback}</div>
+          <div class="ivc-row"><b>Pricing:</b> ${v.pricing}</div>
+        </div>`).join('')}
+      </div>
+      <div class="assumption">CyberArk, SailPoint, and Saviynt appear above for completeness but are <b>not</b> Okta-equivalent replacements — CyberArk is privileged-access management (vaulting/securing admin credentials), and SailPoint/Saviynt are identity governance (access certification for audit). All are typically layered on top of one of the SSO/IdP rows above, not chosen instead of one. Also worth knowing going into any vendor conversation: Thoma Bravo owns Ping, SailPoint, and the former ForgeRock, so cross-shopping those three specifically isn't the independent competitive pressure it looks like.</div>
+      ${iam.complementary.length ? iam.complementary.map(c=>`<div class="iam-complementary"><div class="cat-tag">Recommended add-on — ${c.cat}</div><div class="name">${c.vendor}</div><div class="why">${c.why}</div></div>`).join('') : ''}
+      <div class="subhead">IAM health metrics worth tracking</div>
+      ${IAM_METRICS.map(m=>`<div class="opt-item"><div class="t">${m.m}</div><div class="w">${m.target}</div></div>`).join('')}
+      <div class="subhead">RBAC / access-control best practices</div>
+      ${IAM_BEST_PRACTICES.map(b=>`<div class="opt-item"><div class="t">${b}</div></div>`).join('')}
+    </div>`);
+
+  sec('tradeoffs', 'Trade-offs', 'Key Trade-off Decisions <span style="color:var(--muted); text-transform:none; letter-spacing:0; font-weight:400;">— why, and when to switch</span>',
+    `<div class="card">${tradeoffs.map(x=>`<div class="tradeoff-card"><div class="head"><h3>${x.d}</h3><span class="conf conf-${x.conf||'low'}">${confLabel(x.conf)}</span></div><div class="rec">${x.rec}</div><div class="why">${x.why}</div><div class="when"><b>Switch when:</b> ${x.when}</div></div>`).join('')}</div>`);
+
+  sec('llm', 'LLM', 'AI / LLM Recommendation',
+    `<div class="card"><div class="llm-picks">${llm.map(p=>`<div class="llm-row"><div class="name">${p.name}</div><div class="tag">${p.tag}</div></div>`).join('')}</div>
+      <div class="why" style="margin-top:10px;">Size guidance: use 4B–12B open-weight models for high-volume/low-complexity tasks (classification, routing, extraction); 12B–30B for cost-efficient RAG generation and summarization; frontier-tier models (Claude Sonnet/Opus, GPT-4o/o-series, Gemini Pro) for complex reasoning, agentic tool-use, and user-facing conversations where quality matters most.</div></div>`);
+
+  sec('orchestration', 'Orchestration', 'Model Orchestration <span style="color:var(--muted); text-transform:none; letter-spacing:0; font-weight:400;">— one large model vs. several small ones</span>',
+    `<div class="card">
+      <div class="rag-pick"><div class="head" style="display:flex; justify-content:space-between; align-items:center;"><div class="name">${orchestration.strategy}</div><span class="conf conf-${orchestration.conf||'low'}">${confLabel(orchestration.conf)}</span></div><div class="why">${orchestration.why}</div>${orchestration.when?`<div class="when" style="margin-top:8px;"><b>Switch when:</b> ${orchestration.when}</div>`:''}</div>
+      <div class="subhead">Which model suits which requirement</div>
+      ${orchestration.mapping.map(m=>`<div class="opt-item"><div class="t">${m.task} → <span style="color:var(--good);">${m.model}</span></div><div class="w">${m.why}</div></div>`).join('')}
+    </div>`);
+
+  sec('hosting', 'Hosting', 'Local vs. Cloud Model Hosting <span style="color:var(--muted); text-transform:none; letter-spacing:0; font-weight:400;">— by budget &amp; security</span>',
+    `<div class="card">
+      <div class="rag-pick"><div class="head" style="display:flex; justify-content:space-between; align-items:center;"><div class="name">${hosting.rec}</div><span class="conf conf-${hosting.conf||'low'}">${confLabel(hosting.conf)}</span></div><div class="why">${hosting.why}</div>
+        ${hosting.budgetNote?`<div class="when" style="margin-top:8px;"><b>Budget:</b> ${hosting.budgetNote}</div>`:''}
+        ${hosting.securityNote?`<div class="when" style="margin-top:8px;"><b>Security:</b> ${hosting.securityNote}</div>`:''}
+        ${hosting.when?`<div class="when" style="margin-top:8px;"><b>Switch when:</b> ${hosting.when}</div>`:''}
+      </div>
+      <div class="subhead">If self-hosting: server VRAM needed per model size <span style="color:var(--muted); font-weight:400;">(recommended tier for you: <span style="color:var(--good); font-weight:700;">${vramTier.tier}</span>)</span></div>
+      <table class="vram-table"><thead><tr><th>Model size</th><th>VRAM (fp16)</th><th>VRAM (int4 quantized)</th><th>Typical GPU</th><th>Notes</th></tr></thead><tbody>
+        ${VRAM_TABLE.map(r=>`<tr class="${r.tier.startsWith(vramTier.tier.split(' ')[0])?'recommended':''}"><td class="tier">${r.tier}${r.tier.startsWith(vramTier.tier.split(' ')[0])?'<span class="rec-star">★ recommended</span>':''}</td><td>${r.fp16}</td><td>${r.int4}</td><td>${r.gpu}</td><td>${r.notes}</td></tr>`).join('')}
+      </tbody></table>
+      <div class="assumption">${vramTier.why} Add ~20–30% extra VRAM headroom per concurrent request stream when serving long-context requests — the KV-cache grows with both context length and concurrency, not just model size.</div>
+    </div>`);
+
+  sec('topology', 'Topology', 'Interface Topology <span style="color:var(--muted); text-transform:none; letter-spacing:0; font-weight:400;">— hybrid vs. distributed vs. mesh, for LLM serving &amp; RAG</span>',
+    `<div class="card">
+      <div class="glossary">${topology.glossary}</div>
+      <div class="subhead">LLM serving layer</div>
+      <div class="rag-pick"><div class="name">${topology.llm.rec}</div><div class="why">${topology.llm.why}</div></div>
+      <div class="subhead">RAG / retrieval layer</div>
+      <div class="rag-pick"><div class="name">${topology.rag.rec}</div><div class="why">${topology.rag.why}</div></div>
+    </div>`);
+
+  sec('mcpapi', 'MCP vs API', 'MCP vs. Direct API Integration',
+    `<div class="card"><div class="rag-pick"><div class="head" style="display:flex; justify-content:space-between; align-items:center;"><div class="name">${mcpVsApi.rec}</div><span class="conf conf-${mcpVsApi.conf||'low'}">${confLabel(mcpVsApi.conf)}</span></div><div class="why">${mcpVsApi.why}</div><div class="when" style="margin-top:8px;"><b>Use direct API instead when:</b> ${mcpVsApi.when}</div></div></div>`);
+
+  sec('mcpservers', 'MCP Servers', 'MCP Server(s) Needed',
+    `<div class="card"><div class="signals">${mcp.map(m=>`<span class="badge">${m}</span>`).join('')}</div></div>`);
+
+  sec('rag', 'RAG', 'RAG Architecture',
+    `<div class="card"><div class="rag-pick"><div class="head" style="display:flex; justify-content:space-between; align-items:center;"><div class="name">${rag.name}</div><span class="conf conf-${rag.conf||'low'}">${confLabel(rag.conf)}</span></div><div class="why">${rag.why}</div></div></div>`);
+
+  sec('vectordb', 'Vector DB', 'Where the Vector DB Fits',
+    `<div class="card"><div class="rag-pick"><div class="name">${vectorDb.needed ? 'Required: ' + vectorDb.dbChoice : 'Not required for this use case'}</div><div class="why">${vectorDb.why}</div>${vectorDb.needed?`<div class="when" style="margin-top:8px;"><b>Where it sits in the pipeline:</b> ${vectorDb.where}</div>`:''}</div></div>`);
+
+  sec('guardrails', 'Guardrails', 'Guardrails',
+    `<div class="card"><div class="guardrail-list">${guardrails.map(g=>`<span class="g-chip">${g}</span>`).join('')}</div>
+      <div class="subhead">Where in the pipeline — not input/output only</div>
+      ${guardrailPipeline.stages.map(st=>`<div class="opt-item"><div class="t">${st.stage}</div><div class="w">${st.desc}</div></div>`).join('')}
+      <div class="assumption">${guardrailPipeline.verdict}</div>
+    </div>`);
+
+  sec('cost', 'Cost', 'Cost &amp; Resource Optimization <span style="color:var(--muted); text-transform:none; letter-spacing:0; font-weight:400;">— Solution Architect / FinOps lens</span>',
+    `<div class="card">${cost.map(i=>`<div class="opt-item"><div class="t">${i.t}</div><div class="w">${i.w}</div></div>`).join('')}</div>`);
+
+  sec('throughput', 'Throughput', 'Concurrency &amp; Throughput <span style="color:var(--muted); text-transform:none; letter-spacing:0; font-weight:400;">— SDE / Application Architect lens</span>',
+    `<div class="card">${throughput.map(i=>`<div class="opt-item"><div class="t">${i.t}</div><div class="w">${i.w}</div></div>`).join('')}</div>`);
+
+  sec('governance', 'Governance', 'Governance: KRA / KPI / SLA / Reliability &amp; Continuous Improvement <span style="color:var(--muted); text-transform:none; letter-spacing:0; font-weight:400;">— TPM / Enterprise Architect lens</span>',
+    `<div class="card">
+      <div class="gov-grid">
+        <div class="gov-block"><h4>KRA — Key Result Areas</h4><ul>${gov.kra.map(x=>`<li>${x}</li>`).join('')}</ul></div>
+        <div class="gov-block"><h4>KPI — Key Performance Indicators</h4><ul>${gov.kpi.map(x=>`<li>${x}</li>`).join('')}</ul></div>
+        <div class="gov-block"><h4>SLA — Service Level Agreements</h4><ul>${gov.sla.map(x=>`<li>${x}</li>`).join('')}</ul></div>
+        <div class="gov-block"><h4>Reliability &amp; Continuous Improvement</h4><ul>${gov.rci.map(x=>`<li>${x}</li>`).join('')}</ul></div>
+      </div>
+      <div class="assumption">Note: all targets above are starting-point defaults based on your detected requirements (stricter for compliance/enterprise contexts, lighter for early-stage). Treat them as a first draft to negotiate with real stakeholders, not fixed commitments.</div>
+    </div>`);
+
+  sec('docs', 'Docs', 'Architecture Documentation',
+    `<div class="card"><div class="docs-row">${docs.map(d=>`<div class="doc-chip"><b>${d.label}</b>${d.text}</div>`).join('')}</div></div>`);
+
+  const navHtml = `<div class="toc">
+      <a href="#sig-anchor" onclick="return true;">Signals</a>
+      ${sections.map(x=>`<a href="#${x.id}">${x.navLabel}</a>`).join('')}
+      <button class="toc-toggle" onclick="toggleAll()" id="toggleAllBtn">Collapse all</button>
+    </div>`;
+
+  const accordionHtml = sections.map(x=>
+    `<details class="section-block" id="${x.id}" open><summary class="section-title">${x.titleHtml}</summary>${x.bodyHtml}</details>`
+  ).join('');
+
+  const html = `
+    <div id="sig-anchor"></div>
+    ${navHtml}
+    <div class="section-title">Detected Signals</div>
+    ${signalsHtml}
+    ${accordionHtml}
+  `;
+
+  document.getElementById('results').innerHTML = html;
+  document.getElementById('viewToggle').style.display = 'flex';
+  document.getElementById('results').scrollIntoView({behavior:'smooth', block:'start'});
+
+  const graph = buildFlowGraph({cloud,gw,iam,lang,arch,compute,msg,mesh,cache,db,containers,obs,fe,cicd,dns,llm,rag,mcp,guardrails,vectorDb});
+  renderFlow(graph);
+  setView(currentView); // preserve whichever view (Cards/Flow) the user had open across re-analysis
+}
+function setView(v){
+  currentView = v;
+  document.getElementById('viewCardsBtn').classList.toggle('active', v==='cards');
+  document.getElementById('viewFlowBtn').classList.toggle('active', v==='flow');
+  document.getElementById('results').style.display = v==='cards' ? 'block' : 'none';
+  document.getElementById('flowWrap').style.display = v==='flow' ? 'block' : 'none';
+  document.getElementById('flowPopover').style.display = 'none';
+  if(v==='flow' && flowState.graph){ requestAnimationFrame(flowFit); }
+}
+function toggleAll(){
+  const details = document.querySelectorAll('#results details.section-block');
+  const btn = document.getElementById('toggleAllBtn');
+  const shouldOpen = btn.textContent.trim() === 'Expand all';
+  details.forEach(d => d.open = shouldOpen);
+  btn.textContent = shouldOpen ? 'Collapse all' : 'Expand all';
+}
+
+// =====================================================================
+// Flow View — n8n / Voiceflow / VectorShift-style node canvas rendering
+// of the same recommendation data as the card view above.
+// =====================================================================
+let currentView = 'cards';
+const FLOW_CATS = {
+  client:  {label:'Client',  color:'#ef5b8d'},
+  edge:    {label:'Edge',    color:'#5b8def'},
+  compute: {label:'Compute', color:'#7c5bef'},
+  data:    {label:'Data',    color:'#34c98a'},
+  ai:      {label:'AI',      color:'#e0a23c'},
+  ops:     {label:'Ops',     color:'#2dd4bf'},
+};
+let flowState = { zoom:1, panX:40, panY:40, graph:null, dragNodeId:null, panning:false, moved:false };
+
+function buildFlowGraph(ctx){
+  const {cloud,gw,iam,lang,arch,compute,msg,mesh,cache,db,containers,obs,fe,cicd,dns,llm,rag,mcp,guardrails,vectorDb} = ctx;
+  const nodes = [], edges = [];
+  const N = (id,x,y,cat,title,sub,conf,why,persona,detail) => {
+    nodes.push({id,x,y,cat,color:FLOW_CATS[cat].color,title,sub:sub||'',conf:conf||null,why:why||'',persona:persona||'',detail:detail||null});
+    return id;
+  };
+
+  N('frontend',40,260,'client','Frontend', fe.v, fe.conf, fe.why, 'Application Architect');
+  N('gateway',300,40,'edge','API Gateway / Edge', gw.v, gw.conf, gw.why, 'Solution Architect');
+  N('iam',300,165,'edge','Identity & Access — '+iam.v, '', iam.conf, iam.why, 'Enterprise Architect',
+    [`<b>Best bet: ${iam.v}</b> — ${iam.why}`, ...iam.alternatives.map(v=>`<b>${v.name}</b> (${v.cat}) — ${v.bestFor}. ${v.pricing}`), ...iam.complementary.map(c=>`<b>+ ${c.vendor}</b> (${c.cat} add-on) — ${c.why}`)]);
+  N('dns',300,290,'edge','DNS', dns.v, dns.conf, 'DNS routing and edge protection for your domain.', 'Solution Architect');
+  N('cloud',560,30,'compute','Cloud Provider', cloud.v, cloud.conf, cloud.why, 'Enterprise Architect');
+  N('arch',560,155,'compute','Architecture Style', arch.v, arch.conf, arch.why, 'Solution Architect');
+  N('computemodel',560,280,'compute','Compute Model', compute.v, compute.conf, compute.why, 'Solution Architect');
+  N('containers',560,405,'compute','Containers / Orchestration', containers.v, containers.conf, containers.why, 'SDE');
+  N('lang',560,530,'compute','Backend Language(s)', lang.v, lang.conf, lang.why, 'Application Architect');
+  N('db',820,90,'data','Primary Database', db.v, db.conf, db.why, 'Application Architect');
+  N('cache',820,215,'data','Caching', cache.v, cache.conf, cache.why, 'SDE');
+  N('messaging',820,340,'data','Messaging / Streaming', msg.v, msg.conf, msg.why, 'Application Architect');
+  N('mesh',820,465,'data','Service Mesh', mesh.v, mesh.conf, mesh.why, 'Enterprise Architect');
+
+  N('llm',1080,30,'ai','LLM — '+llm[0].name, llm.length>1 ? `+${llm.length-1} more model(s)` : llm[0].tag, null, '', 'AI Architect', llm.map(p=>`<b>${p.name}</b> — ${p.tag}`));
+  let aiY = 155, ragId = null, vecId = null;
+  if(rag.name !== 'RAG likely not required'){ N('rag',1080,aiY,'ai','RAG — '+rag.name, '', rag.conf, rag.why, 'AI Architect'); ragId='rag'; aiY += 125; }
+  if(vectorDb.needed){ N('vectordb',1080,aiY,'ai','Vector DB', vectorDb.dbChoice, null, vectorDb.why, 'AI Architect'); vecId='vectordb'; aiY += 125; }
+  N('mcp',1080,aiY,'ai','MCP Server(s)', mcp.length+' server type(s)', null, '', 'AI Architect', mcp); aiY += 125;
+  N('guardrails',1080,aiY,'ai','Guardrails', guardrails.length+' layer(s)', null, '', 'AI Architect', guardrails);
+
+  N('observability',1340,180,'ops','Observability', obs.v, obs.conf, obs.why, 'SDE / TPM');
+  N('cicd',1340,305,'ops','CI/CD & Deployment', cicd.v, cicd.conf, cicd.why, 'SDE');
+
+  const E = (a,b) => edges.push({from:a,to:b});
+  E('frontend','gateway'); E('gateway','iam'); E('gateway','cloud');
+  E('cloud','arch'); E('arch','computemodel'); E('computemodel','containers'); E('computemodel','lang');
+  E('computemodel','db'); E('computemodel','cache'); E('computemodel','messaging'); E('computemodel','mesh');
+  E('computemodel','llm');
+  if(ragId) E('llm',ragId);
+  if(ragId && vecId) E(ragId,vecId);
+  E('llm','mcp'); E('guardrails','llm');
+  E('computemodel','observability'); E('computemodel','cicd');
+
+  return {nodes, edges};
+}
+
+function truncateFlowText(str, max){
+  if(!str || str.length<=max) return str;
+  return str.slice(0, max-1).trim()+'…';
+}
+
+function renderFlow(graph){
+  flowState.graph = graph;
+  flowState.zoom = 1; flowState.panX = 40; flowState.panY = 40;
+
+  const nodeHtml = graph.nodes.map(n=>{
+    const confColor = n.conf==='high' ? '#34c98a' : n.conf==='medium' ? '#e0a23c' : n.conf==='low' ? '#828a99' : null;
+    const confDot = confColor ? `<div class="fn-conf" style="background:${confColor}"></div>` : '';
+    // Long pick strings are truncated here to bound node height (fixed 125px row spacing) —
+    // the untruncated value is always shown in full in the click popover (showFlowPopover).
+    return `<div class="flow-node" id="fn-${n.id}" data-id="${n.id}" style="left:${n.x}px; top:${n.y}px; --cat-color:${n.color};">
+      ${confDot}
+      <div class="fn-cat">${FLOW_CATS[n.cat].label}</div>
+      <div class="fn-title">${n.title}</div>
+      ${n.sub?`<div class="fn-sub">${truncateFlowText(n.sub,80)}</div>`:''}
+    </div>`;
+  }).join('');
+  document.getElementById('flowNodes').innerHTML = nodeHtml;
+
+  const maxX = Math.max(...graph.nodes.map(n=>n.x)) + 260;
+  const maxY = Math.max(...graph.nodes.map(n=>n.y)) + 140;
+  const canvas = document.getElementById('flowCanvas');
+  canvas.style.width = maxX+'px';
+  canvas.style.height = maxY+'px';
+  canvas.style.backgroundImage = 'radial-gradient(circle, #232838 1px, transparent 1px)';
+  canvas.style.backgroundSize = '22px 22px';
+
+  drawFlowEdges();
+  attachFlowNodeHandlers();
+  updateFlowTransform();
+  renderFlowMinimap();
+  renderFlowLegend();
+}
+
+function flowNodeAnchor(id, side){
+  const n = flowState.graph.nodes.find(x=>x.id===id);
+  const h = 60;
+  return side==='out' ? {x:n.x+208, y:n.y+h/2} : {x:n.x, y:n.y+h/2};
+}
+
+function drawFlowEdges(){
+  const svg = document.getElementById('flowSvg');
+  const canvas = document.getElementById('flowCanvas');
+  svg.setAttribute('width', canvas.style.width);
+  svg.setAttribute('height', canvas.style.height);
+  const paths = flowState.graph.edges.map(e=>{
+    const s = flowNodeAnchor(e.from,'out'), t = flowNodeAnchor(e.to,'in');
+    const dx = Math.max(50, Math.abs(t.x-s.x)/2);
+    const d = `M${s.x},${s.y} C${s.x+dx},${s.y} ${t.x-dx},${t.y} ${t.x},${t.y}`;
+    return `<path d="${d}" stroke="#2c3342" stroke-width="1.6" fill="none"/>`;
+  }).join('');
+  svg.innerHTML = paths;
+}
+
+function attachFlowNodeHandlers(){
+  document.querySelectorAll('.flow-node').forEach(el=>{
+    el.addEventListener('pointerdown', (e)=>{
+      e.stopPropagation();
+      const id = el.dataset.id;
+      const n = flowState.graph.nodes.find(x=>x.id===id);
+      flowState.dragNodeId = id;
+      flowState.dragStartMouse = {x:e.clientX, y:e.clientY};
+      flowState.dragStartNode = {x:n.x, y:n.y};
+      flowState.moved = false;
+      el.setPointerCapture(e.pointerId);
+    });
+    el.addEventListener('click', ()=>{
+      if(flowState.moved){ flowState.moved = false; return; }
+      showFlowPopover(el.dataset.id);
+    });
+  });
+}
+
+document.addEventListener('pointermove', (e)=>{
+  if(flowState.dragNodeId){
+    const dx = (e.clientX - flowState.dragStartMouse.x)/flowState.zoom;
+    const dy = (e.clientY - flowState.dragStartMouse.y)/flowState.zoom;
+    if(Math.abs(dx)>3 || Math.abs(dy)>3) flowState.moved = true;
+    const n = flowState.graph.nodes.find(x=>x.id===flowState.dragNodeId);
+    n.x = flowState.dragStartNode.x + dx;
+    n.y = flowState.dragStartNode.y + dy;
+    const el = document.getElementById('fn-'+n.id);
+    el.style.left = n.x+'px'; el.style.top = n.y+'px';
+    drawFlowEdges();
+    renderFlowMinimap();
+  } else if(flowState.panning){
+    flowState.panX = flowState.panOrigX + (e.clientX - flowState.panStartX);
+    flowState.panY = flowState.panOrigY + (e.clientY - flowState.panStartY);
+    updateFlowTransform();
+    renderFlowMinimap();
+  }
+});
+document.addEventListener('pointerup', ()=>{
+  flowState.dragNodeId = null;
+  flowState.panning = false;
+  const vp = document.getElementById('flowViewport');
+  if(vp) vp.classList.remove('panning');
+});
+
+function initFlowViewport(){
+  const vp = document.getElementById('flowViewport');
+  vp.addEventListener('pointerdown', (e)=>{
+    if(e.target.closest('.flow-node')) return;
+    flowState.panning = true;
+    flowState.panStartX = e.clientX; flowState.panStartY = e.clientY;
+    flowState.panOrigX = flowState.panX; flowState.panOrigY = flowState.panY;
+    vp.classList.add('panning');
+    document.getElementById('flowPopover').style.display = 'none';
+  });
+  vp.addEventListener('wheel', (e)=>{
+    e.preventDefault();
+    const rect = vp.getBoundingClientRect();
+    const mx = e.clientX-rect.left, my = e.clientY-rect.top;
+    zoomFlowAt(e.deltaY<0 ? 1.1 : 0.9, mx, my);
+  }, {passive:false});
+}
+
+function zoomFlowAt(factor, mx, my){
+  const newZoom = Math.min(2, Math.max(0.25, flowState.zoom*factor));
+  const cx = (mx-flowState.panX)/flowState.zoom;
+  const cy = (my-flowState.panY)/flowState.zoom;
+  flowState.panX = mx - cx*newZoom;
+  flowState.panY = my - cy*newZoom;
+  flowState.zoom = newZoom;
+  updateFlowTransform();
+  renderFlowMinimap();
+}
+function flowZoom(factor){
+  const vp = document.getElementById('flowViewport');
+  zoomFlowAt(factor, vp.clientWidth/2, vp.clientHeight/2);
+}
+function updateFlowTransform(){
+  document.getElementById('flowCanvas').style.transform = `translate(${flowState.panX}px, ${flowState.panY}px) scale(${flowState.zoom})`;
+}
+function flowFit(){
+  if(!flowState.graph) return;
+  const vp = document.getElementById('flowViewport');
+  const xs = flowState.graph.nodes.map(n=>n.x), ys = flowState.graph.nodes.map(n=>n.y);
+  const minX=Math.min(...xs), maxX=Math.max(...xs)+208, minY=Math.min(...ys), maxY=Math.max(...ys)+70;
+  const w = maxX-minX, h = maxY-minY;
+  const zx = (vp.clientWidth-60)/w, zy = (vp.clientHeight-60)/h;
+  flowState.zoom = Math.max(0.25, Math.min(1, Math.min(zx,zy)));
+  flowState.panX = (vp.clientWidth - w*flowState.zoom)/2 - minX*flowState.zoom;
+  flowState.panY = (vp.clientHeight - h*flowState.zoom)/2 - minY*flowState.zoom;
+  updateFlowTransform();
+  renderFlowMinimap();
+}
+
+function renderFlowMinimap(){
+  if(!flowState.graph) return;
+  const mm = document.getElementById('flowMinimap');
+  const mmW=170, mmH=110;
+  const xs = flowState.graph.nodes.map(n=>n.x), ys = flowState.graph.nodes.map(n=>n.y);
+  const minX=Math.min(...xs), maxX=Math.max(...xs)+208, minY=Math.min(...ys), maxY=Math.max(...ys)+70;
+  const w = maxX-minX, h = maxY-minY;
+  const scale = Math.min(mmW/w, mmH/h)*0.9;
+  const offX = (mmW - w*scale)/2 - minX*scale;
+  const offY = (mmH - h*scale)/2 - minY*scale;
+  let html = flowState.graph.nodes.map(n=>
+    `<div class="mm-node" style="left:${n.x*scale+offX}px; top:${n.y*scale+offY}px; width:${208*scale}px; height:${60*scale}px; background:${n.color};"></div>`
+  ).join('');
+  const vp = document.getElementById('flowViewport');
+  if(vp && vp.clientWidth){
+    const vx = (-flowState.panX/flowState.zoom)*scale+offX;
+    const vy = (-flowState.panY/flowState.zoom)*scale+offY;
+    const vw = (vp.clientWidth/flowState.zoom)*scale;
+    const vh = (vp.clientHeight/flowState.zoom)*scale;
+    html += `<div class="mm-viewport" style="left:${vx}px; top:${vy}px; width:${vw}px; height:${vh}px;"></div>`;
+  }
+  mm.innerHTML = html;
+}
+
+function renderFlowLegend(){
+  document.getElementById('flowLegend').innerHTML = Object.values(FLOW_CATS)
+    .map(c=>`<div class="lg-row"><div class="lg-dot" style="background:${c.color}"></div>${c.label}</div>`).join('');
+}
+
+function showFlowPopover(id){
+  const n = flowState.graph.nodes.find(x=>x.id===id);
+  const pop = document.getElementById('flowPopover');
+  // Node cards truncate long sub-text for layout safety — always show the full untruncated
+  // value here so nothing shown-on-canvas is ever unavailable to the user.
+  const valueLine = (n.sub && !n.detail) ? `<div style="font-size:12px; color:var(--text); font-weight:600; margin-bottom:7px; line-height:1.45;">${n.sub}</div>` : '';
+  const body = n.detail
+    ? `<div class="fp-why"><ul>${n.detail.map(d=>`<li style="margin-bottom:4px;">${d}</li>`).join('')}</ul></div>`
+    : `${valueLine}<div class="fp-why">${n.why}</div>`;
+  const confBadge = n.conf ? `<span class="conf conf-${n.conf}" style="margin-left:6px;">${n.conf}</span>` : '';
+  pop.innerHTML = `<span class="fp-close" onclick="document.getElementById('flowPopover').style.display='none'">✕</span>
+    <div class="fp-cat">${FLOW_CATS[n.cat].label}</div>
+    <div class="fp-title">${n.title}${confBadge}</div>
+    ${body}
+    ${n.persona?`<div class="fp-persona">${n.persona}</div>`:''}`;
+  pop.style.display = 'block';
+  const el = document.getElementById('fn-'+id);
+  const rect = el.getBoundingClientRect();
+  let left = rect.right + 12, top = rect.top;
+  if(left+300 > window.innerWidth) left = rect.left - 296;
+  if(top+220 > window.innerHeight) top = Math.max(10, window.innerHeight-230);
+  pop.style.left = left+'px';
+  pop.style.top = top+'px';
+}
+
+initFlowViewport();
+</script>
+</body>
+</html>

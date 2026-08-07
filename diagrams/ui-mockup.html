@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Stack Advisor — UI Design Spec (Figma-style)</title>
+<style>
+  :root{
+    --dark-bg:#0b0e14; --dark-panel:#121722; --dark-panel2:#161d2b; --dark-border:#232b3a;
+    --dark-text:#e7ecf3; --dark-muted:#8b96a8; --accent:#5b8def; --accent2:#7c5bef;
+    --good:#3ecf8e; --warn:#f0a83c; --dark-chip:#1c2433;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:#e5e5e5; color:#1a1a1a;
+  }
+  /* --- Figma-style chrome --- */
+  .topbar{
+    position:sticky; top:0; z-index:100; background:#2c2c2c; color:#fff; padding:10px 20px;
+    font-size:13px; display:flex; align-items:center; gap:10px; box-shadow:0 1px 4px rgba(0,0,0,0.3);
+  }
+  .topbar .dot{width:8px; height:8px; border-radius:50%; background:#5b8def;}
+  .canvas{padding:60px 60px 140px; overflow-x:auto;}
+  .page-row{display:flex; gap:70px; align-items:flex-start; margin-bottom:90px;}
+  .frame-block{flex-shrink:0;}
+  .frame-label{
+    font-size:12px; color:#444; margin-bottom:10px; font-weight:600; display:flex; align-items:center; gap:8px;
+  }
+  .frame-label .tag{
+    background:#fff; border:1px solid #ccc; border-radius:4px; padding:1px 7px; font-size:10.5px; color:#888; font-weight:500;
+  }
+  .frame{
+    width:900px; background:var(--dark-bg); border-radius:4px; box-shadow:0 0 0 1px #ccc, 0 12px 32px rgba(0,0,0,0.18);
+    overflow:hidden; position:relative;
+  }
+  .frame-inner{padding:28px 32px; color:var(--dark-text);}
+  .fh1{font-size:22px; font-weight:700; margin:0 0 4px;}
+  .fsub{color:var(--dark-muted); font-size:12.5px; line-height:1.5; max-width:600px; margin-bottom:18px;}
+  .fcard{background:linear-gradient(180deg, var(--dark-panel), var(--dark-panel2)); border:1px solid var(--dark-border); border-radius:12px; padding:16px 18px; margin-bottom:14px;}
+  .ftextarea{background:#0d1420; border:1px solid var(--dark-border); border-radius:8px; padding:12px; color:#7d8aa0; font-size:12.5px; min-height:70px; margin-top:6px;}
+  .fexamples{display:flex; gap:6px; flex-wrap:wrap; margin-top:10px;}
+  .fchip{background:var(--dark-chip); border:1px solid var(--dark-border); color:var(--dark-muted); font-size:10.5px; padding:5px 9px; border-radius:999px;}
+  .fbtn-primary{background:linear-gradient(135deg, var(--accent), var(--accent2)); color:#fff; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:8px; display:inline-block; margin-top:12px;}
+  .fbtn-ghost{background:transparent; border:1px solid var(--dark-border); color:var(--dark-muted); font-size:12px; padding:9px 14px; border-radius:8px; display:inline-block; margin-top:12px; margin-left:8px;}
+  .fnav{display:flex; gap:5px; overflow:hidden; padding:8px 0; border-bottom:1px solid var(--dark-border); margin-bottom:14px;}
+  .fnav span{background:var(--dark-chip); border:1px solid var(--dark-border); color:var(--dark-muted); font-size:10px; padding:4px 9px; border-radius:999px; white-space:nowrap;}
+  .fnav span.active{background:var(--accent); color:#fff; border-color:var(--accent);}
+  .fgrid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  .fstack-card{background:var(--dark-panel2); border:1px solid var(--dark-border); border-radius:10px; padding:12px;}
+  .fstack-card h4{margin:0 0 3px; font-size:10px; color:var(--dark-muted); text-transform:uppercase;}
+  .fconf{float:right; font-size:8.5px; font-weight:700; padding:1px 6px; border-radius:5px; background:rgba(62,207,142,0.15); color:var(--good); border:1px solid rgba(62,207,142,0.4);}
+  .fpick{font-size:13px; font-weight:700; margin:4px 0 4px;}
+  .fwhy{font-size:10.5px; color:var(--dark-muted); line-height:1.4;}
+  .fpersona{font-size:8.5px; color:var(--accent2); text-transform:uppercase; font-weight:700; margin-top:5px;}
+  .frefine-btn{background:linear-gradient(135deg,#7c5bef,#5b8def); color:#fff; font-size:12px; font-weight:600; padding:8px 14px; border-radius:8px; display:inline-flex; align-items:center; gap:6px;}
+  .fask-box{background:#0d1420; border:1px solid var(--dark-border); border-radius:10px; padding:12px; margin-top:10px;}
+  .fmsg{font-size:11.5px; padding:8px 11px; border-radius:8px; margin-bottom:8px; max-width:80%;}
+  .fmsg.user{background:var(--accent); color:#fff; margin-left:auto;}
+  .fmsg.ai{background:var(--dark-panel2); border:1px solid var(--dark-border); color:var(--dark-text);}
+  .fbanner{background:rgba(91,141,239,0.12); border:1px solid rgba(91,141,239,0.3); border-radius:8px; padding:10px 14px; font-size:11.5px; color:#a9c3f5; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center;}
+  .fbanner .btn{background:var(--accent); color:#fff; font-size:10.5px; padding:5px 11px; border-radius:6px;}
+
+  /* Annotations */
+  .callout{
+    position:absolute; width:22px; height:22px; border-radius:50%; background:#ff5252; color:#fff;
+    font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center;
+    box-shadow:0 0 0 3px rgba(255,82,82,0.25); z-index:5;
+  }
+  .anno-list{width:280px; flex-shrink:0; padding-top:34px;}
+  .anno-item{display:flex; gap:10px; margin-bottom:14px; font-size:12px; line-height:1.5; color:#333;}
+  .anno-num{
+    flex-shrink:0; width:20px; height:20px; border-radius:50%; background:#ff5252; color:#fff;
+    font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center;
+  }
+  .section-header{font-size:20px; font-weight:700; color:#1a1a1a; margin:0 0 6px;}
+  .section-sub{color:#666; font-size:13px; margin-bottom:26px; max-width:680px; line-height:1.5;}
+
+  /* Component library frame */
+  .complib-row{display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin-bottom:16px;}
+  .complib-label{font-size:10px; color:var(--dark-muted); text-transform:uppercase; width:110px; flex-shrink:0;}
+</style>
+</head>
+<body>
+<div class="topbar"><span class="dot"></span> AI Stack Advisor — UI Design Spec <span style="color:#888;">/ v1 as-built + v2 concepts</span></div>
+
+<div class="canvas">
+
+  <div class="section-header">Page 1 — Existing Screens (v1, as built)</div>
+  <div class="section-sub">These two frames document the interface exactly as implemented today, annotated for handoff. Not a redesign — v1's visual design was validated by direct implementation and screenshot review during this build; this spec exists so a designer or new engineer can see the rationale without reading the source.</div>
+
+  <div class="page-row">
+    <div class="frame-block">
+      <div class="frame-label">01 — Landing / Input <span class="tag">Desktop, 900px</span></div>
+      <div class="frame" style="height:520px;">
+        <div class="callout" style="top:60px; left:5px;">1</div>
+        <div class="callout" style="top:220px; left:5px;">2</div>
+        <div class="callout" style="top:400px; left:5px;">3</div>
+        <div class="frame-inner">
+          <div class="fh1">🧭 AI Stack Advisor</div>
+          <div class="fsub">Describe your product or business requirement in plain language. This tool synthesizes the perspectives of a Solution Architect, Enterprise Architect, Application Architect, AI Architect, TPM, and senior SDE...</div>
+          <div class="fcard">
+            <div style="font-size:11px; color:var(--dark-muted); font-weight:600;">Business / Product Requirements</div>
+            <div class="ftextarea">e.g. We're a fintech startup building a mobile + web app for real-time fraud detection...</div>
+            <div class="fexamples">
+              <span class="fchip">Fintech fraud detection</span>
+              <span class="fchip">Healthcare patient chatbot</span>
+              <span class="fchip">E-commerce recommendation engine</span>
+              <span class="fchip">Internal enterprise assistant</span>
+              <span class="fchip">Early-stage MVP</span>
+            </div>
+            <div>
+              <span class="fbtn-primary">Analyze &amp; Recommend</span>
+              <span class="fbtn-ghost">Clear</span>
+            </div>
+          </div>
+          <div style="font-size:10.5px; color:var(--dark-muted); line-height:1.6; border-top:1px solid var(--dark-border); padding-top:12px; margin-top:20px;">
+            This is a heuristic advisor, not a substitute for architecture review. It runs entirely in your browser — no data leaves this page...
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="anno-list">
+      <div class="anno-item"><span class="anno-num">1</span> Single free-text field, no wizard — the zero-friction-input requirement (PRD FR-1) drives every layout decision on this screen.</div>
+      <div class="anno-item"><span class="anno-num">2</span> One-click example presets (FR-2) let a user see the product's value before writing anything — reduces blank-page hesitation.</div>
+      <div class="anno-item"><span class="anno-num">3</span> Privacy disclaimer is always visible, not buried in a footer link — reinforces the "nothing leaves your browser" claim (NFR-1) at the point of input, not after the fact.</div>
+    </div>
+  </div>
+
+  <div class="page-row">
+    <div class="frame-block">
+      <div class="frame-label">02 — Results, Core Stack section <span class="tag">Desktop, 900px, scrolled</span></div>
+      <div class="frame" style="height:560px;">
+        <div class="callout" style="top:52px; left:5px;">4</div>
+        <div class="callout" style="top:130px; left:5px;">5</div>
+        <div class="callout" style="top:130px; right:5px;">6</div>
+        <div class="callout" style="top:340px; left:5px;">7</div>
+        <div class="frame-inner">
+          <div class="fnav">
+            <span>Signals</span><span class="active">Stack</span><span>Trade-offs</span><span>LLM</span><span>Orchestration</span><span>Hosting</span><span>Topology</span><span>MCP vs API</span><span>...</span>
+          </div>
+          <div style="font-size:11px; color:var(--accent); text-transform:uppercase; font-weight:700; margin-bottom:10px;">Core Technical Stack</div>
+          <div class="fgrid">
+            <div class="fstack-card"><span class="fconf">HIGH CONFIDENCE</span><h4>Cloud Provider</h4><div class="fpick">AWS</div><div class="fwhy">Explicit AWS usage detected — build on existing footprint rather than introducing a second cloud.</div><div class="fpersona">Enterprise Architect</div></div>
+            <div class="fstack-card"><span class="fconf" style="background:rgba(240,168,60,0.15); color:var(--warn); border-color:rgba(240,168,60,0.4);">MEDIUM CONFIDENCE</span><h4>Compute Model</h4><div class="fpick">Serverless containers</div><div class="fwhy">Small team and real-time needs pull in different directions — managed serverless containers balance both.</div><div class="fpersona">Solution Architect</div></div>
+            <div class="fstack-card"><span class="fconf">HIGH CONFIDENCE</span><h4>Primary Database</h4><div class="fpick">PostgreSQL</div><div class="fwhy">Relational/transactional integrity for structured order and account data.</div><div class="fpersona">Application Architect</div></div>
+            <div class="fstack-card"><span class="fconf" style="background:rgba(139,150,168,0.15); color:var(--dark-muted); border-color:rgba(139,150,168,0.4);">LOW CONFIDENCE (DEFAULT)</span><h4>Service Mesh</h4><div class="fpick">Not needed yet</div><div class="fwhy">Skip until service count and cross-team policy needs justify the added complexity.</div><div class="fpersona">Enterprise Architect</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="anno-list">
+      <div class="anno-item"><span class="anno-num">4</span> Sticky nav bar (FR-24) — every one of the 16 sections is a jump-link, so the page never feels like a single unmanageable scroll despite its real length.</div>
+      <div class="anno-item"><span class="anno-num">5</span> Confidence badge is the first thing the eye hits on each card, before the pick itself — deliberate, since PRD NFR-4 requires the tool to never overstate certainty.</div>
+      <div class="anno-item"><span class="anno-num">6</span> Color coding (green/amber/gray) is redundant with the text label, not a replacement for it — accessibility consideration for color-blind users.</div>
+      <div class="anno-item"><span class="anno-num">7</span> Persona tag in accent purple, visually distinct from confidence (green/amber/gray) and from the pick itself (white/bold) — three independent pieces of metadata per card, each needs its own visual channel.</div>
+    </div>
+  </div>
+
+  <div class="section-header" style="margin-top:20px;">Page 2 — v2 Concepts (not yet built)</div>
+  <div class="section-sub">These frames are new — they don't exist in v1. They mock up the three committed v2 features (PRD FR-27–29) so the visual design question is answered before backend work starts, not during it.</div>
+
+  <div class="page-row">
+    <div class="frame-block">
+      <div class="frame-label">03 — "Refine with AI" panel <span class="tag">v2 concept</span></div>
+      <div class="frame" style="height:480px;">
+        <div class="callout" style="top:56px; left:5px;">8</div>
+        <div class="callout" style="top:180px; left:5px;">9</div>
+        <div class="callout" style="top:320px; left:5px;">10</div>
+        <div class="frame-inner">
+          <div style="font-size:11px; color:var(--accent); text-transform:uppercase; font-weight:700; margin-bottom:10px;">Primary Database(s)</div>
+          <div class="fstack-card" style="margin-bottom:16px;"><span class="fconf" style="background:rgba(240,168,60,0.15); color:var(--warn); border-color:rgba(240,168,60,0.4);">MEDIUM CONFIDENCE</span><h4>Primary Database(s)</h4><div class="fpick">PostgreSQL · MongoDB</div><div class="fwhy">Postgres for transactional integrity, MongoDB for flexible document data.</div></div>
+          <span class="frefine-btn">✨ Refine with AI</span>
+          <div class="fask-box">
+            <div style="font-size:10.5px; color:var(--dark-muted); margin-bottom:8px;">Ask a follow-up about this recommendation</div>
+            <div class="fmsg user">Why not just MongoDB for everything, since we're storing mostly JSON documents?</div>
+            <div class="fmsg ai">Your requirements text also mentions "order totals" and "payment records" — that's a case for relational integrity Postgres gives you and Mongo doesn't guarantee by default. If that's actually a small, non-critical part of your data, say so and I'll reconsider.</div>
+            <div style="background:#0d1420; border:1px solid var(--dark-border); border-radius:8px; padding:8px 10px; font-size:11px; color:#5b6472; margin-top:6px;">Type a follow-up question...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="anno-list">
+      <div class="anno-item"><span class="anno-num">8</span> "Refine with AI" is opt-in per section, not a global mode switch — keeps v1's instant, free rule-engine result as the default (PRD NFR-5: v2 must degrade gracefully if unavailable).</div>
+      <div class="anno-item"><span class="anno-num">9</span> Distinct purple-blue gradient (vs. the pure blue primary button elsewhere) signals "this calls an LLM and costs something," subtly different from the free instant actions.</div>
+      <div class="anno-item"><span class="anno-num">10</span> Follow-up Q&amp;A is scoped visually to one card, matching the ERD's ConversationMessage design — the model reasons about this recommendation only, never re-derives a new one.</div>
+    </div>
+  </div>
+
+  <div class="page-row">
+    <div class="frame-block">
+      <div class="frame-label">04 — Shared analysis (read-only view) <span class="tag">v2 concept</span></div>
+      <div class="frame" style="height:340px;">
+        <div class="callout" style="top:56px; left:5px;">11</div>
+        <div class="frame-inner">
+          <div class="fbanner">
+            <span>📎 You're viewing a shared analysis — <b>read-only</b>. Anyone with this link can view it.</span>
+            <span class="btn">Copy link</span>
+          </div>
+          <div class="fh1" style="font-size:18px;">🧭 Fintech fraud detection — fraud-detection-x7q2</div>
+          <div class="fsub">Analyzed Aug 6, 2026 · 15 recommendation sections</div>
+          <div class="fgrid" style="margin-top:14px;">
+            <div class="fstack-card"><h4>Cloud Provider</h4><div class="fpick" style="font-size:12px;">AWS</div></div>
+            <div class="fstack-card"><h4>Architecture</h4><div class="fpick" style="font-size:12px;">Modular monolith</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="anno-list">
+      <div class="anno-item"><span class="anno-num">11</span> No sign-in prompt anywhere on this screen — access model is "knowledge of the link," matching the ERD's explicit exclusion of a Users/Accounts table. Read-only badge sets the expectation before the user tries to edit anything.</div>
+    </div>
+  </div>
+
+  <div class="section-header" style="margin-top:20px;">Page 3 — Component Library</div>
+  <div class="section-sub">The reusable pieces every frame above is built from — for a designer picking this up, these are the primitives to keep consistent rather than reinvent per screen.</div>
+
+  <div class="page-row">
+    <div class="frame-block">
+      <div class="frame-label">05 — Components <span class="tag">Reference sheet</span></div>
+      <div class="frame" style="height:420px;">
+        <div class="frame-inner">
+          <div class="complib-row"><span class="complib-label">Confidence</span>
+            <span class="fconf" style="position:static;">HIGH CONFIDENCE</span>
+            <span class="fconf" style="position:static; background:rgba(240,168,60,0.15); color:var(--warn); border-color:rgba(240,168,60,0.4);">MEDIUM CONFIDENCE</span>
+            <span class="fconf" style="position:static; background:rgba(139,150,168,0.15); color:var(--dark-muted); border-color:rgba(139,150,168,0.4);">LOW CONFIDENCE</span>
+          </div>
+          <div class="complib-row"><span class="complib-label">Buttons</span>
+            <span class="fbtn-primary" style="margin:0;">Analyze &amp; Recommend</span>
+            <span class="fbtn-ghost" style="margin:0;">Clear</span>
+            <span class="frefine-btn">✨ Refine with AI</span>
+          </div>
+          <div class="complib-row"><span class="complib-label">Chips</span>
+            <span class="fchip">Example preset</span>
+            <span style="background:rgba(91,141,239,0.15); color:#8fb2f7; border:1px solid rgba(91,141,239,0.35); border-radius:6px; padding:2px 9px; font-size:10.5px; font-weight:600;">MCP server badge</span>
+          </div>
+          <div class="complib-row"><span class="complib-label">Persona tag</span>
+            <span class="fpersona" style="margin:0;">Enterprise Architect</span>
+          </div>
+          <div class="complib-row" style="align-items:flex-start;"><span class="complib-label">Card</span>
+            <div class="fstack-card" style="width:260px;"><span class="fconf">HIGH CONFIDENCE</span><h4>Category label</h4><div class="fpick">Recommendation</div><div class="fwhy">Rationale text in muted gray, 2–3 sentences.</div><div class="fpersona">Owner role</div></div>
+          </div>
+          <div class="complib-row"><span class="complib-label">Palette</span>
+            <span style="width:20px;height:20px;border-radius:4px;background:#0b0e14;border:1px solid #333;"></span>
+            <span style="width:20px;height:20px;border-radius:4px;background:#5b8def;"></span>
+            <span style="width:20px;height:20px;border-radius:4px;background:#7c5bef;"></span>
+            <span style="width:20px;height:20px;border-radius:4px;background:#3ecf8e;"></span>
+            <span style="width:20px;height:20px;border-radius:4px;background:#f0a83c;"></span>
+            <span style="width:20px;height:20px;border-radius:4px;background:#8b96a8;"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
