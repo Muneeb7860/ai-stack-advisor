@@ -67,9 +67,11 @@ def test_unknown_analysis_id_is_404_on_share():
     assert resp.status_code == 404
 
 
-def test_ask_is_still_a_stub():
-    """Should stay 501 until milestone 3 (/api/refine, milestone 2, is now implemented — see
-    tests/test_refine.py). This is a tripwire: if someone half-wires /api/ask (e.g. a route
-    that returns 200 with empty data) without actually implementing the spec, this fails
-    loudly instead of the stub silently looking done."""
-    assert client.post("/api/ask").status_code == 501
+def test_mcp_server_still_raises_on_import():
+    """The only remaining stub (v2 milestone 4) — app/mcp/server.py raises NotImplementedError
+    at import time, deliberately (see its module docstring). This is the tripwire for it: if
+    someone accidentally makes the module importable without actually building it, this test
+    fails loudly instead of the stub silently looking done. Both /api/refine and /api/ask are
+    now real — see tests/test_refine.py and tests/test_ask.py."""
+    with pytest.raises(NotImplementedError):
+        import app.mcp.server  # noqa: F401

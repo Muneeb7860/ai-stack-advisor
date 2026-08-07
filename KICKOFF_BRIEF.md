@@ -19,18 +19,17 @@ to read once, not every session.
   research, the v2 architecture design, and a log of bugs found/fixed during a validation
   pass on the rule engine (worth reading before touching `index.html`'s signal-detection
   logic — several non-obvious false-positive bugs were already found and fixed there).
-- **`backend/`** — FastAPI + Postgres + Alembic scaffold. Share-links milestone (PRD FR-28)
-  and `/api/refine` (PRD FR-27) are both built and tested (15 passing tests, verified
-  end-to-end against a real Postgres instance — not just unit-tested against mocks).
-  `/api/ask` is still a stub that 501s with the full spec in its own docstring. MCP tool
-  wrapper is a stub with the spec in its module docstring. **Read `backend/README.md`
-  first** — it has the quickstart, test instructions, and build-order detail this brief
-  doesn't repeat.
+- **`backend/`** — FastAPI + Postgres + Alembic scaffold. Share-links (PRD FR-28),
+  `/api/refine` (PRD FR-27), and `/api/ask` are all built and tested (24 passing tests,
+  verified end-to-end against a real Postgres instance — not just unit-tested against mocks).
+  The MCP tool wrapper is the only remaining stub, spec in its module docstring. **Read
+  `backend/README.md` first** — it has the quickstart, test instructions, and build-order
+  detail this brief doesn't repeat.
   <br>_Status as of this update: this brief's original "prompt to paste into Claude Code"
-  section (below) has already been acted on — share links and refine are done. It's kept
-  for the historical record of what was originally handed off; treat `backend/README.md`'s
-  "Build order" section as the current source of truth on what's left (`/api/ask`, then the
-  MCP tool wrapper)._
+  section (below) has already been acted on in full — share links, refine, and ask are all
+  done. It's kept for the historical record of what was originally handed off; treat
+  `backend/README.md`'s "Build order" section as the current source of truth — the only
+  thing left is the MCP tool wrapper._
 
 ## Decisions already made (don't re-litigate without a reason)
 
@@ -42,7 +41,7 @@ one, that's a real conversation to have with the user, not a silent implementati
    `refine.py`/`ask.py` for the full reasoning.
 2. **Database**: Postgres via Docker Compose for local dev, matching production — not SQLite.
    `backend/docker-compose.yml` is ready to go (`docker compose up --build`).
-3. **Build order**: share links (done) → `/api/refine` (done) → `/api/ask` → MCP tool
+3. **Build order**: share links (done) → `/api/refine` (done) → `/api/ask` (done) → MCP tool
    wrapper. Each milestone was chosen to be buildable and testable independently; don't skip ahead to MCP
    before refine/ask exist, since the MCP wrapper is supposed to expose the same recommend
    logic those endpoints will eventually also call.
@@ -71,8 +70,9 @@ one, that's a real conversation to have with the user, not a silent implementati
 ## Prompt to paste into Claude Code (historical — already acted on, kept for the record)
 
 _This was the original kickoff prompt for this repo's first Claude Code session. Share links
-and `/api/refine` are both done now (15 passing tests) — a new session picking this up should
-use `backend/README.md`'s "Build order" section instead, which starts at `/api/ask`._
+`/api/refine`, and `/api/ask` are all done now (24 passing tests) — a new session picking
+this up should use `backend/README.md`'s "Build order" section instead, which starts at
+the MCP tool wrapper, the only milestone left._
 
 ```
 I'm continuing work on AI Stack Advisor, an app that recommends AI/tech architecture from a

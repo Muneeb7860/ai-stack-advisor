@@ -52,9 +52,9 @@ class AdjustedPick(BaseModel):
 
 
 class RefineResponse(BaseModel):
-    """Returns adjusted picks AND the untouched original recommendations side by side (design
-    doc Section 9.2) so the frontend can render 'AI suggested changing X because Y' without
-    losing the original rule-engine reasoning."""
+    """Returns adjusted picks AND the untouched original recommendations side by side
+    (design-doc-v2.md Section 3.2 "Reasoning API") so the frontend can render 'AI suggested
+    changing X because Y' without losing the original rule-engine reasoning."""
 
     analysis_id: uuid.UUID
     original_recommendations: dict
@@ -62,3 +62,26 @@ class RefineResponse(BaseModel):
     rationale: str
     open_questions: list[str]
     llm_model_used: str
+
+
+class AskRequest(BaseModel):
+    """POST /api/ask body, per routers/ask.py's docstring."""
+
+    analysis_id: uuid.UUID
+    question: str = Field(..., min_length=1, max_length=4_000)
+    anthropic_api_key: str = Field(..., min_length=1)
+
+
+class ConversationMessageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    role: str
+    content: str
+    created_at: datetime
+
+
+class AskResponse(BaseModel):
+    analysis_id: uuid.UUID
+    answer: str
+    llm_model_used: str
+    conversation: list[ConversationMessageOut]
