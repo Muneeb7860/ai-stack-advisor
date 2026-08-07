@@ -1,0 +1,19 @@
+# Never let a real secret reach an image layer — this project's whole API-key posture is
+# "request-scoped, never persisted" (see .env.example); a Dockerfile `COPY . .` with no
+# .dockerignore would silently violate that the moment a developer creates a local .env.
+.env
+.env.*
+!.env.example
+
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+.git/
+.gitignore
+
+# Local test/dev artifacts that have no business in an image.
+*.egg-info/
+.DS_Store
