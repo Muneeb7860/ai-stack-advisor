@@ -264,14 +264,241 @@
   details[open] summary.section-title::after{transform:rotate(180deg);}
   summary.section-title:hover{color:#8fb2f7;}
   @media (max-width:600px){ h1{font-size:19px;} }
+
+  /* ================= Guided-mode + backend-wiring milestone (index.html decisions #1-13) ================= */
+  /* ---- Mode picker (decision #3: equal weight, no "Recommended" badge on either card) ---- */
+  #screenMode{max-width:640px; margin:40px auto 0; display:none;}
+  #screenMode.active{display:block;}
+  #screenFreetext{display:none;}
+  #screenFreetext.active{display:block;}
+  .mode-head h1{font-size:21px; margin:0 0 8px; font-weight:700;}
+  .mode-head p{color:var(--muted); font-size:13px; line-height:1.6; margin:0 0 24px;}
+  .mode-cards{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .mode-card{
+    background:linear-gradient(180deg, var(--panel), var(--panel2)); border:1px solid var(--border);
+    border-radius:var(--radius-lg); padding:20px 18px; cursor:pointer; transition:all .15s var(--ease); text-align:left;
+  }
+  .mode-card:hover{border-color:var(--accent); transform:translateY(-2px);}
+  .mode-card .mc-icon{font-size:22px; margin-bottom:9px;}
+  .mode-card .mc-title{font-size:15px; font-weight:700; margin-bottom:5px;}
+  .mode-card .mc-desc{font-size:12px; color:var(--muted); line-height:1.55;}
+  .mode-card .mc-time{font-size:10px; color:var(--accent2); font-weight:700; text-transform:uppercase; letter-spacing:0.04em; margin-top:11px;}
+  @media (max-width:560px){ .mode-cards{grid-template-columns:1fr;} }
+
+  /* ---- Wizard (decision #6/#7: 6 questions, one skip case) ---- */
+  #screenWizard{max-width:640px; margin:0 auto; padding:8px 0 20px; display:none;}
+  #screenWizard.active{display:block;}
+  .wiz-progress{display:flex; align-items:center; gap:10px; margin-bottom:26px;}
+  .wiz-track{flex:1; height:4px; background:var(--chip); border-radius:2px; overflow:hidden;}
+  .wiz-fill{height:100%; background:linear-gradient(90deg, var(--accent), var(--accent2)); border-radius:2px; transition:width .3s var(--ease);}
+  .wiz-step-label{font-size:11px; color:var(--muted); white-space:nowrap; font-variant-numeric:tabular-nums;}
+  .wiz-step{display:none;}
+  .wiz-step.active{display:block; animation:wizFadeIn .25s var(--ease);}
+  @keyframes wizFadeIn{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;}}
+  .wiz-q{font-size:18px; font-weight:700; margin:0 0 5px; letter-spacing:-0.01em;}
+  .wiz-sub{font-size:13px; color:var(--muted); margin:0 0 20px; line-height:1.5;}
+  .chip-grid{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:6px;}
+  .pick-chip{
+    background:#0a0e15; border:1.5px solid var(--border); color:var(--text); padding:10px 15px;
+    border-radius:10px; font-size:13px; cursor:pointer; transition:all .15s var(--ease); font-weight:500;
+    display:flex; align-items:center; gap:7px;
+  }
+  .pick-chip:hover{border-color:#3a4256;}
+  .pick-chip.selected{border-color:var(--accent); background:rgba(91,141,239,0.1); font-weight:600;}
+  .pick-chip.selected::after{content:'✓'; color:var(--accent); font-weight:700; margin-left:2px;}
+  .radio-list{display:flex; flex-direction:column; gap:7px;}
+  .pick-radio{
+    background:#0a0e15; border:1.5px solid var(--border); border-radius:10px; padding:12px 15px;
+    cursor:pointer; transition:all .15s var(--ease); display:flex; align-items:center; justify-content:space-between; gap:10px;
+  }
+  .pick-radio:hover{border-color:#3a4256;}
+  .pick-radio.selected{border-color:var(--accent); background:rgba(91,141,239,0.1);}
+  .pick-radio .pr-main{font-size:13px; font-weight:600;}
+  .pick-radio .pr-sub{font-size:11px; color:var(--muted); margin-top:2px;}
+  .pick-radio .pr-dot{width:15px; height:15px; border-radius:50%; border:1.5px solid var(--border); flex-shrink:0; position:relative;}
+  .pick-radio.selected .pr-dot{border-color:var(--accent);}
+  .pick-radio.selected .pr-dot::after{content:''; position:absolute; inset:3px; border-radius:50%; background:var(--accent);}
+  .skip-note{font-size:11px; color:var(--muted); margin-top:9px; font-style:italic;}
+  .wiz-nav{display:flex; justify-content:space-between; align-items:center; margin-top:26px;}
+  .infer-strip{
+    margin-top:22px; padding:10px 13px; background:rgba(124,91,239,0.07); border:1px solid rgba(124,91,239,0.22);
+    border-radius:var(--radius-sm); font-size:11px; color:var(--muted2); line-height:1.6; display:none;
+  }
+  .infer-strip.show{display:block;}
+  .infer-strip b{color:var(--accent2);}
+
+  /* ---- Backend wiring: refine button, ask box, API-key prompt (decisions #8-11) ---- */
+  .refine-zone{margin-top:11px; padding-top:11px; border-top:1px solid var(--border);}
+  .refine-btn{
+    background:linear-gradient(135deg, rgba(124,91,239,0.18), rgba(91,141,239,0.18)); border:1px solid rgba(124,91,239,0.4);
+    color:#c3b6f7; padding:6px 11px; border-radius:7px; font-size:11.5px; font-weight:600; cursor:pointer;
+    transition:filter .15s var(--ease);
+  }
+  .refine-btn:hover{filter:brightness(1.15);}
+  .refine-btn:disabled{opacity:0.5; cursor:default;}
+  .refine-result{margin-top:9px; font-size:11.5px; line-height:1.5;}
+  .refine-adjusted{background:rgba(52,201,138,0.07); border:1px solid rgba(52,201,138,0.25); border-radius:7px; padding:8px 10px; margin-bottom:6px;}
+  .refine-adjusted b{color:var(--good);}
+  .refine-nochange{color:var(--muted); font-style:italic;}
+  .refine-error{background:rgba(224,162,60,0.08); border:1px solid rgba(224,162,60,0.3); border-radius:7px; padding:8px 10px; color:#e8c07e;}
+  .refine-keyprompt{margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;}
+  .refine-keyprompt input{
+    flex:1; min-width:180px; background:#0a0e15; border:1px solid var(--border); border-radius:7px;
+    color:var(--text); padding:7px 9px; font-size:11.5px; font-family:inherit;
+  }
+  .refine-keyprompt input:focus{outline:none; border-color:var(--accent);}
+  .refine-keyprompt button{
+    background:var(--accent); border:none; color:#fff; padding:7px 12px; border-radius:7px;
+    font-size:11.5px; font-weight:600; cursor:pointer;
+  }
+  .ask-box{margin-top:10px; display:none;}
+  .ask-box.show{display:block;}
+  .ask-thread{display:flex; flex-direction:column; gap:6px; margin-bottom:7px;}
+  .ask-msg{padding:7px 10px; border-radius:8px; font-size:11.5px; line-height:1.5; max-width:92%;}
+  .ask-msg.user{background:rgba(91,141,239,0.14); border:1px solid rgba(91,141,239,0.3); align-self:flex-end;}
+  .ask-msg.answer{background:#0a0e15; border:1px solid var(--border); align-self:flex-start;}
+  .ask-input-row{display:flex; gap:6px;}
+  .ask-input-row input{
+    flex:1; background:#0a0e15; border:1px solid var(--border); border-radius:7px;
+    color:var(--text); padding:7px 9px; font-size:11.5px; font-family:inherit;
+  }
+  .ask-input-row input:focus{outline:none; border-color:var(--accent);}
+  .ask-input-row button{
+    background:var(--chip); border:1px solid var(--border); color:var(--text); padding:7px 11px;
+    border-radius:7px; font-size:11.5px; font-weight:600; cursor:pointer;
+  }
+
+  /* ---- Share button + shared read-only banner (decisions #12-13) ---- */
+  .results-header{display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:4px; flex-wrap:wrap;}
+  .share-btn{
+    background:var(--chip); border:1px solid var(--border); color:var(--text); padding:7px 13px;
+    border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; transition:border-color .15s var(--ease);
+    display:flex; align-items:center; gap:6px; white-space:nowrap;
+  }
+  .share-btn:hover{border-color:var(--accent);}
+  .shared-banner{
+    background:rgba(91,141,239,0.09); border:1px solid rgba(91,141,239,0.28); border-radius:var(--radius);
+    padding:10px 14px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center;
+    gap:10px; font-size:12.5px; color:#8fb2f7; flex-wrap:wrap;
+  }
+  .shared-banner button{
+    background:transparent; border:1px solid rgba(91,141,239,0.4); color:#8fb2f7; padding:5px 11px;
+    border-radius:7px; font-size:11.5px; cursor:pointer;
+  }
 </style>
 </head>
 <body>
-<div class="wrap">
+
+<!-- ================= Mode picker (decision #3: equal weight, no default) ================= -->
+<div id="screenMode">
+  <div class="mode-head">
+    <h1>🧭 AI Stack Advisor</h1>
+    <p>Tell us about what you're building — however's easiest for you.</p>
+  </div>
+  <div class="mode-cards">
+    <div class="mode-card" onclick="startWizard()">
+      <div class="mc-icon">💬</div>
+      <div class="mc-title">Answer a few questions</div>
+      <div class="mc-desc">6 short questions, skips what doesn't apply to you. No jargon required — good if you're not sure what to write in a paragraph.</div>
+      <div class="mc-time">~90 seconds</div>
+    </div>
+    <div class="mode-card" onclick="startFreetext()">
+      <div class="mc-icon">📝</div>
+      <div class="mc-title">Paste your own description</div>
+      <div class="mc-desc">Already have a PRD, brief, or a paragraph describing the product? Paste it in and skip the questions.</div>
+      <div class="mc-time">~20 seconds</div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= Guided wizard (decisions #6/#7) ================= -->
+<div id="screenWizard">
+  <div class="wiz-progress">
+    <div class="wiz-track"><div class="wiz-fill" id="wizFill" style="width:16.6%"></div></div>
+    <div class="wiz-step-label" id="wizStepLabel">Step 1 of 6</div>
+  </div>
+
+  <div class="wiz-step active" data-step="1">
+    <div class="wiz-q">What are you building?</div>
+    <div class="wiz-sub">Pick as many as apply.</div>
+    <div class="chip-grid" data-group="building">
+      <div class="pick-chip" data-val="web"><span>🖥️</span>Web app</div>
+      <div class="pick-chip" data-val="mobile"><span>📱</span>Mobile app</div>
+      <div class="pick-chip" data-val="api"><span>🔌</span>API / backend service</div>
+      <div class="pick-chip" data-val="chatbot"><span>💬</span>AI chatbot / assistant</div>
+      <div class="pick-chip" data-val="data"><span>📊</span>Data / analytics platform</div>
+      <div class="pick-chip" data-val="internal"><span>🛠️</span>Internal tool</div>
+    </div>
+  </div>
+
+  <div class="wiz-step" data-step="2">
+    <div class="wiz-q">Who's it for?</div>
+    <div class="wiz-sub">This changes a lot — an internal tool and a public product have very different defaults.</div>
+    <div class="radio-list" data-group="audience">
+      <div class="pick-radio" data-val="internal"><div><div class="pr-main">Internal team</div><div class="pr-sub">Employees only, not customer-facing</div></div><div class="pr-dot"></div></div>
+      <div class="pick-radio" data-val="smb"><div><div class="pr-main">Small business customers</div><div class="pr-sub">B2B, a manageable number of accounts</div></div><div class="pr-dot"></div></div>
+      <div class="pick-radio" data-val="enterprise"><div><div class="pr-main">Enterprise customers</div><div class="pr-sub">Large orgs, likely with their own compliance asks</div></div><div class="pr-dot"></div></div>
+      <div class="pick-radio" data-val="consumer"><div><div class="pr-main">Consumer / general public</div><div class="pr-sub">Anyone can sign up</div></div><div class="pr-dot"></div></div>
+    </div>
+  </div>
+
+  <div class="wiz-step" data-step="3">
+    <div class="wiz-q">Any compliance or data-sensitivity requirements?</div>
+    <div class="wiz-sub">If you're not sure, pick "None that I know of" — you can always add detail at the end.</div>
+    <div class="chip-grid" data-group="compliance">
+      <div class="pick-chip" data-val="none"><span>—</span>None that I know of</div>
+      <div class="pick-chip" data-val="hipaa"><span>🏥</span>Healthcare (HIPAA)</div>
+      <div class="pick-chip" data-val="pci"><span>💳</span>Payments (PCI)</div>
+      <div class="pick-chip" data-val="soc2"><span>🏢</span>Enterprise (SOC2)</div>
+      <div class="pick-chip" data-val="gov"><span>🏛️</span>Government</div>
+    </div>
+  </div>
+
+  <div class="wiz-step" data-step="4">
+    <div class="wiz-q">How big is your engineering team?</div>
+    <div class="wiz-sub">Small teams get recommendations biased toward managed services over self-hosted ops.</div>
+    <div class="radio-list" data-group="teamsize">
+      <div class="pick-radio" data-val="1-5"><div><div class="pr-main">1–5 engineers</div></div><div class="pr-dot"></div></div>
+      <div class="pick-radio" data-val="6-15"><div><div class="pr-main">6–15 engineers</div></div><div class="pr-dot"></div></div>
+      <div class="pick-radio" data-val="16-50"><div><div class="pr-main">16–50 engineers</div></div><div class="pr-dot"></div></div>
+      <div class="pick-radio" data-val="50+"><div><div class="pr-main">50+ engineers</div></div><div class="pr-dot"></div></div>
+    </div>
+  </div>
+
+  <div class="wiz-step" data-step="5">
+    <div class="wiz-q">Any AI or LLM component?</div>
+    <div class="wiz-sub">Pick as many as apply — or none, if this is a fairly traditional build.</div>
+    <div class="chip-grid" data-group="ai">
+      <div class="pick-chip" data-val="none"><span>—</span>No AI needed</div>
+      <div class="pick-chip" data-val="chatbot"><span>💬</span>Customer-facing chatbot</div>
+      <div class="pick-chip" data-val="internal-kb"><span>📚</span>Internal knowledge assistant</div>
+      <div class="pick-chip" data-val="reco"><span>🎯</span>Recommendations / personalization</div>
+      <div class="pick-chip" data-val="fraud"><span>🛡️</span>Fraud / anomaly detection</div>
+      <div class="pick-chip" data-val="unsure"><span>🤔</span>Not sure yet</div>
+    </div>
+  </div>
+
+  <div class="wiz-step" data-step="6">
+    <div class="wiz-q">Anything else worth knowing?</div>
+    <div class="wiz-sub">Optional — existing cloud provider, latency needs, budget constraints, anything the questions above didn't cover.</div>
+    <textarea id="wizFreetext" style="width:100%; min-height:90px; resize:vertical; background:#0a0e15; border:1px solid var(--border); border-radius:var(--radius); color:var(--text); padding:12px; font-size:13px; font-family:inherit;" placeholder="e.g. We're already on AWS, need to launch in 6 weeks, budget is tight..."></textarea>
+    <div class="skip-note">Skip this and we'll work from your answers above alone.</div>
+  </div>
+
+  <div class="infer-strip" id="wizInferStrip"></div>
+
+  <div class="wiz-nav">
+    <button class="ghost" id="wizBackBtn" onclick="wizBack()">Back</button>
+    <button class="primary" id="wizNextBtn" onclick="wizNext()" disabled>Continue</button>
+  </div>
+</div>
+
+<div class="wrap" id="screenFreetext">
  <div class="intro-col">
   <header>
     <h1>🧭 AI Stack Advisor</h1>
     <div class="sub">Describe your product or business requirement in plain language. This tool synthesizes the perspectives of a Solution Architect, Enterprise Architect, Application Architect, AI Architect, TPM, and senior SDE to recommend a full technical + AI architecture — stack, cost optimization, concurrency/throughput design, and governance (KRA/KPI/SLA/Reliability targets) — grounded in signals detected in your text.</div>
+    <div class="sub" id="wizBackToModeRow" style="margin-top:8px;"><a href="#" onclick="backToMode(); return false;" style="color:var(--accent); text-decoration:none;">← choose a different way to describe this</a></div>
   </header>
 
   <div class="card">
@@ -302,6 +529,11 @@
 <div class="results-shell" id="resultsShell">
   <nav class="toc" id="sideNav"></nav>
   <div class="results-col">
+    <div id="sharedBanner"></div>
+    <div class="results-header" id="resultsHeader" style="display:none;">
+      <div></div>
+      <button class="share-btn" id="shareBtn" onclick="onShareClick()">📎 Share this analysis</button>
+    </div>
     <div id="results"></div>
 
     <div id="flowWrap">
@@ -1529,17 +1761,15 @@ function pickGovernance(s){
   return {kra, kpi, sla, rci};
 }
 
-function analyze(){
-  const text = document.getElementById('input').value.trim();
-  if(!text){ alert('Please describe your business/product requirements first.'); return; }
-  const s = detectSignals(text);
+// Pure computation half of the old analyze() — split out so the ?shared=SLUG read-only view
+// (fetches an already-computed {signals, recommendations} pair from the backend) can skip
+// straight to renderRecommendations() below without re-deriving anything from free text.
+function computeRecommendations(s){
   const cloud = pickCloud(s), gw = pickGateway(s), iam = pickIAM(s), lang = pickLanguages(s),
         arch = pickArchitecture(s), compute = pickCompute(s), msg = pickMessaging(s), mesh = pickMesh(s),
         cache = pickCache(s), db = pickDatabase(s), containers = pickContainers(s), obs = pickObservability(s),
         fe = pickFrontend(s), llm = pickLLM(s), mcp = pickMCP(s), rag = pickRAG(s), guardrails = pickGuardrails(s),
         cicd = pickCICD(s), dns = pickDNS(s), docs = pickDocs(s);
-
-  const activeSignals = Object.entries(s).filter(([k,v])=>v).map(([k])=>k);
 
   const cost = pickCostOptimization(s), throughput = pickConcurrency(s), gov = pickGovernance(s), tradeoffs = pickTradeoffs(s);
   const orchestration = pickModelOrchestration(s), hosting = pickHostingLocation(s), computeTier = pickComputeTier(s),
@@ -1563,6 +1793,29 @@ function analyze(){
   const cicdVendorPick = pickCICDVendor(s, cicd);
   const obsVendorPick = pickObservabilityVendor(s, obs);
   const feVendorPick = pickFrontendVendor(s, fe);
+
+  return {cloud, gw, iam, lang, arch, compute, msg, mesh, cache, db, containers, obs, fe, llm, mcp, rag,
+    guardrails, cicd, dns, docs, cost, throughput, gov, tradeoffs, orchestration, hosting, computeTier,
+    topology, mcpVsApi, guardrailPipeline, vectorDb, runtime, costEstimate,
+    cloudVendorPick, computePlatformPick, orchestratorPick, gatewayVendorPick, dbVendorPick, msgVendorPick,
+    llmProviderPick, vectorDbVendorPick, guardrailsVendorPick, cicdVendorPick, obsVendorPick, feVendorPick};
+}
+
+// Render half of the old analyze() — takes a {signals, recommendations} pair (either just
+// computed by computeRecommendations(), or fetched verbatim from GET /api/analyses/shared/{slug})
+// and builds the exact same 14-section result view either way. Known, disclosed limitation: this
+// re-runs pickX() presentation logic against the STORED picks' own fields (cloud.v/.why/.conf etc,
+// already fixed at share time) — it does not re-derive picks from stored signals, so a shared link
+// always shows what was actually shared, not a re-analysis under whatever rule-engine version is
+// live when someone opens the link later.
+function renderRecommendations(s, rec){
+  const {cloud, gw, iam, lang, arch, compute, msg, mesh, cache, db, containers, obs, fe, llm, mcp, rag,
+    guardrails, cicd, dns, docs, cost, throughput, gov, tradeoffs, orchestration, hosting, computeTier,
+    topology, mcpVsApi, guardrailPipeline, vectorDb, runtime, costEstimate,
+    cloudVendorPick, computePlatformPick, orchestratorPick, gatewayVendorPick, dbVendorPick, msgVendorPick,
+    llmProviderPick, vectorDbVendorPick, guardrailsVendorPick, cicdVendorPick, obsVendorPick, feVendorPick} = rec;
+
+  const activeSignals = Object.entries(s).filter(([k,v])=>v).map(([k])=>k);
 
   // Each stack card: [title, pick, why, conf, persona, altToggleHtml]. altToggleHtml is '' for
   // categories with no vendor-comparison data researched (Backend Language(s), Architecture Style,
@@ -1742,6 +1995,21 @@ function analyze(){
   const graph = buildFlowGraph({cloud,gw,iam,lang,arch,compute,msg,mesh,cache,db,containers,obs,fe,cicd,dns,llm,rag,mcp,guardrails,vectorDb});
   renderFlow(graph);
   setView(currentView); // preserve whichever view (Cards/Flow) the user had open across re-analysis
+}
+
+let lastRequirementText = '', lastSignals = null, lastRecommendations = null;
+
+function analyze(){
+  const text = document.getElementById('input').value.trim();
+  if(!text){ alert('Please describe your business/product requirements first.'); return; }
+  const s = detectSignals(text);
+  const rec = computeRecommendations(s);
+  lastRequirementText = text; lastSignals = s; lastRecommendations = rec;
+  if (typeof resetRefineSession === 'function') resetRefineSession(); // forget any previous analysis_id/refine cache
+  renderRecommendations(s, rec);
+  if (typeof attachRefineUI === 'function') attachRefineUI();
+  const header = document.getElementById('resultsHeader');
+  if (header) header.style.display = 'flex'; // decision #12 — Share button, hidden on the read-only shared view
 }
 function setView(v){
   currentView = v;
@@ -2028,6 +2296,422 @@ function showFlowPopover(id){
 }
 
 initFlowViewport();
+
+/* ================================================================================
+   Guided mode + backend wiring milestone (decisions #1-13, see KICKOFF_BRIEF.md)
+   ================================================================================ */
+
+// ---------------- Mode picker + wizard (decisions #3, #5, #6, #7) ----------------
+const wizState = { building:[], audience:null, compliance:[], teamsize:null, ai:[] };
+let wizCurrentStep = 1;
+const WIZ_STEP_ORDER = [1,2,3,4,5,6];
+
+function wizVisibleSteps(){
+  // Decision #7: the ONLY skip case — compliance question skipped when audience=internal.
+  return WIZ_STEP_ORDER.filter(s => !(s===3 && wizState.audience==='internal'));
+}
+
+function wizUpdateNextEnabled(){
+  const btn = document.getElementById('wizNextBtn');
+  const step = wizCurrentStep;
+  let ok = true;
+  if (step===1) ok = wizState.building.length>0;
+  if (step===2) ok = !!wizState.audience;
+  if (step===3) ok = wizState.compliance.length>0;
+  if (step===4) ok = !!wizState.teamsize;
+  if (step===5) ok = wizState.ai.length>0;
+  if (step===6) ok = true;
+  btn.disabled = !ok;
+}
+
+function wizMaybeShowInference(){
+  const strip = document.getElementById('wizInferStrip');
+  if (wizCurrentStep===2 && wizState.audience==='internal'){
+    strip.innerHTML = '<b>Skipping the compliance question</b> — internal-only tools rarely carry the same regulatory scope, so we\'ll default to "none" and you can add detail at the end if that\'s wrong.';
+    strip.classList.add('show');
+  } else {
+    strip.classList.remove('show');
+  }
+}
+
+function wizRenderStep(){
+  document.querySelectorAll('#screenWizard .wiz-step').forEach(s => s.classList.remove('active'));
+  document.querySelector(`#screenWizard .wiz-step[data-step="${wizCurrentStep}"]`).classList.add('active');
+  const vis = wizVisibleSteps();
+  const pos = vis.indexOf(wizCurrentStep) + 1;
+  document.getElementById('wizFill').style.width = (pos/vis.length*100) + '%';
+  document.getElementById('wizStepLabel').textContent = `Step ${pos} of ${vis.length}`;
+  document.getElementById('wizBackBtn').style.visibility = pos===1 ? 'hidden' : 'visible';
+  document.getElementById('wizInferStrip').classList.remove('show');
+  wizUpdateNextEnabled();
+}
+
+function wizNext(){
+  const vis = wizVisibleSteps();
+  const idx = vis.indexOf(wizCurrentStep);
+  if (idx < vis.length-1){
+    wizCurrentStep = vis[idx+1];
+    wizRenderStep();
+  } else {
+    wizFinish();
+  }
+}
+function wizBack(){
+  const vis = wizVisibleSteps();
+  const idx = vis.indexOf(wizCurrentStep);
+  if (idx > 0){ wizCurrentStep = vis[idx-1]; wizRenderStep(); }
+  else { backToMode(); }
+}
+
+// Decision #5: synthesize a natural-language paragraph using the SAME keyword phrasings
+// detectSignals() already matches on (see that function's has([...]) lists) — deliberate, so
+// detectSignals() needs zero changes. Each mapping below is checked against the actual keyword
+// lists, not guessed.
+function synthesizeRequirementText(state){
+  const parts = [];
+  const buildingMap = {
+    web: 'a web application', mobile: 'a mobile app for iOS and Android',
+    api: 'an API / backend service', chatbot: 'an AI chatbot',
+    data: 'a data analytics platform with data pipelines',
+    internal: 'an internal tool for internal company employees',
+  };
+  const buildingPhrases = state.building.map(b => buildingMap[b]).filter(Boolean);
+  if (buildingPhrases.length) parts.push(`We're building ${buildingPhrases.join(' and ')}.`);
+
+  const audienceMap = {
+    internal: 'This is for internal team use only, not customer-facing.',
+    smb: 'It serves small business customers (B2B).',
+    enterprise: 'It serves enterprise customers at large organizations.',
+    consumer: 'It serves consumer / general public users, anyone can sign up.',
+  };
+  if (state.audience && audienceMap[state.audience]) parts.push(audienceMap[state.audience]);
+
+  const complianceMap = {
+    hipaa: 'Must be HIPAA compliant, handling clinical patient data.',
+    pci: 'Must be PCI compliant, handling payment transaction data.',
+    soc2: 'Must be SOC2 compliant, an enterprise compliance requirement.',
+    gov: 'This involves a government contract with regulated compliance requirements.',
+  };
+  const complianceSel = (state.compliance||[]).filter(c => c!=='none');
+  if (complianceSel.length) parts.push(complianceSel.map(c => complianceMap[c]).filter(Boolean).join(' '));
+
+  const teamMap = {
+    '1-5': 'The engineering team is small, about 5 engineers.',
+    '6-15': 'The engineering team has about 10 engineers.',
+    '16-50': 'The engineering team has about 30 engineers across multiple teams.',
+    '50+': 'This is a large engineering organization of 50+ people with multiple teams.',
+  };
+  if (state.teamsize && teamMap[state.teamsize]) parts.push(teamMap[state.teamsize]);
+
+  const aiMap = {
+    chatbot: 'It needs a customer-facing chatbot.',
+    'internal-kb': 'It needs an internal knowledge assistant that can search internal documents.',
+    reco: 'It needs personalized recommendations for users.',
+    fraud: 'It needs a fraud detection model.',
+  };
+  const aiSel = (state.ai||[]).filter(a => a!=='none' && a!=='unsure');
+  if (aiSel.length) parts.push(aiSel.map(a => aiMap[a]).filter(Boolean).join(' '));
+
+  const freetext = (document.getElementById('wizFreetext').value||'').trim();
+  if (freetext) parts.push(freetext);
+
+  return parts.join(' ');
+}
+
+function wizFinish(){
+  const text = synthesizeRequirementText(wizState);
+  document.getElementById('input').value = text;
+  showScreen('screenFreetext');
+  analyze();
+}
+
+function showScreen(id){
+  ['screenMode','screenWizard','screenFreetext'].forEach(s => {
+    document.getElementById(s).classList.toggle('active', s===id);
+  });
+}
+function startWizard(){
+  wizState.building=[]; wizState.audience=null; wizState.compliance=[]; wizState.teamsize=null; wizState.ai=[];
+  document.querySelectorAll('#screenWizard .pick-chip.selected, #screenWizard .pick-radio.selected').forEach(el => el.classList.remove('selected'));
+  document.getElementById('wizFreetext').value='';
+  wizCurrentStep=1;
+  wizRenderStep();
+  showScreen('screenWizard');
+}
+function startFreetext(){ showScreen('screenFreetext'); }
+function backToMode(){ showScreen('screenMode'); }
+
+document.querySelectorAll('#screenWizard .chip-grid').forEach(grid => {
+  grid.querySelectorAll('.pick-chip').forEach(el => {
+    el.addEventListener('click', () => {
+      const group = grid.dataset.group;
+      el.classList.toggle('selected');
+      const val = el.dataset.val;
+      const arr = wizState[group];
+      const idx = arr.indexOf(val);
+      if (idx>-1) arr.splice(idx,1); else arr.push(val);
+      wizUpdateNextEnabled();
+      wizMaybeShowInference();
+    });
+  });
+});
+document.querySelectorAll('#screenWizard .radio-list').forEach(list => {
+  list.querySelectorAll('.pick-radio').forEach(el => {
+    el.addEventListener('click', () => {
+      const group = list.dataset.group;
+      list.querySelectorAll('.pick-radio').forEach(x => x.classList.remove('selected'));
+      el.classList.add('selected');
+      wizState[group] = el.dataset.val;
+      wizUpdateNextEnabled();
+      wizMaybeShowInference();
+    });
+  });
+});
+
+// ---------------- Backend wiring: health, API key, analysis creation (decisions #9-11) ----------------
+const API_BASE = 'http://localhost:8000'; // local dev default — see backend/README.md Quickstart. Update for a real deployment.
+let backendAvailable = null; // null = not checked yet, true/false after the one-time /health probe
+
+async function probeBackendHealth(){
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 2000);
+    const resp = await fetch(`${API_BASE}/health`, {signal: ctrl.signal});
+    clearTimeout(t);
+    backendAvailable = resp.ok;
+  } catch(e) {
+    backendAvailable = false;
+  }
+}
+
+function getApiKey(){ return sessionStorage.getItem('anthropic_api_key') || ''; }
+function setApiKey(k){ sessionStorage.setItem('anthropic_api_key', k); }
+
+// Per-session cache of the lazily-created Analysis (decision #11) — reset whenever a fresh
+// analyze() runs so a new requirement doesn't get attached to a stale prior Analysis row.
+let currentAnalysisId = null;
+let refineResultCache = null; // full RefineResponse, once fetched, reused by every card
+function resetRefineSession(){
+  currentAnalysisId = null;
+  refineResultCache = null;
+}
+
+async function ensureAnalysisId(){
+  if (currentAnalysisId) return currentAnalysisId;
+  const resp = await fetch(`${API_BASE}/api/analyses`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({requirement_text: lastRequirementText, signals: lastSignals, recommendations: lastRecommendations}),
+  });
+  if (!resp.ok) throw new Error(`Failed to create analysis (${resp.status})`);
+  const data = await resp.json();
+  currentAnalysisId = data.id;
+  return currentAnalysisId;
+}
+
+// ---------------- Per-card Refine with AI + inline follow-up Q&A (decision #8) ----------------
+// Maps each of the 14 stack-card titles (rendered order in renderRecommendations' stackCards
+// array) to the recommendations-dict key the backend's refine model reasons over — used to
+// filter RefineResponse.adjusted_picks down to the one relevant to a given card.
+const STACK_CARD_CATEGORY = {
+  'Cloud Provider':'cloud', 'API Gateway / Edge':'gateway', 'Identity & Access (IAM)':'iam',
+  'Backend Language(s)':'languages', 'Architecture Style':'architecture', 'Compute Model':'compute',
+  'Messaging / Streaming':'messaging', 'Service Mesh':'mesh', 'Caching':'cache',
+  'Primary Database(s)':'database', 'Containers / Orchestration':'containers',
+  'Observability':'observability', 'Frontend':'frontend', 'CI/CD & Deployment':'cicd',
+};
+
+function attachRefineUI(){
+  if (isReadOnlyView) return; // decision #13 — no refine buttons on a shared read-only view
+  let idx = 0;
+  document.querySelectorAll('#stack .stack-card').forEach(card => {
+    const title = card.querySelector('h3')?.textContent?.trim();
+    const category = STACK_CARD_CATEGORY[title] || null;
+    attachRefineToCard(card, category, title, `stack-${idx++}`);
+  });
+  document.querySelectorAll('#tradeoffs .tradeoff-card').forEach((card, i) => {
+    attachRefineToCard(card, 'tradeoffs', card.querySelector('h3')?.textContent?.trim(), `tradeoff-${i}`);
+  });
+}
+
+function attachRefineToCard(card, category, label, cardKey){
+  const zone = document.createElement('div');
+  zone.className = 'refine-zone';
+  zone.dataset.cardKey = cardKey;
+  zone.dataset.category = category || '';
+  zone.innerHTML = `
+    <button class="refine-btn" onclick="onRefineClick('${cardKey}', this)">✨ Refine with AI</button>
+    <div class="refine-result" id="refineResult-${cardKey}"></div>
+    <div class="ask-box" id="askBox-${cardKey}">
+      <div class="ask-thread" id="askThread-${cardKey}"></div>
+      <div class="ask-input-row">
+        <input type="text" id="askInput-${cardKey}" placeholder="Ask a follow-up about this recommendation...">
+        <button onclick="onAskClick('${cardKey}')">Send</button>
+      </div>
+    </div>
+  `;
+  card.appendChild(zone);
+}
+
+function renderRefineKeyPrompt(cardKey){
+  const el = document.getElementById(`refineResult-${cardKey}`);
+  el.innerHTML = `
+    <div class="refine-keyprompt">
+      <input type="password" id="apiKeyInput-${cardKey}" placeholder="Paste your Anthropic API key (never stored on our server)">
+      <button onclick="onSaveKeyClick('${cardKey}')">Save &amp; Refine</button>
+    </div>`;
+}
+function onSaveKeyClick(cardKey){
+  const val = document.getElementById(`apiKeyInput-${cardKey}`).value.trim();
+  if (!val) return;
+  setApiKey(val);
+  onRefineClick(cardKey);
+}
+
+async function onRefineClick(cardKey, btnEl){
+  const zone = document.querySelector(`.refine-zone[data-card-key="${cardKey}"]`);
+  const category = zone.dataset.category;
+  const resultEl = document.getElementById(`refineResult-${cardKey}`);
+
+  if (backendAvailable === null) await probeBackendHealth();
+  if (!backendAvailable){
+    resultEl.innerHTML = `<div class="refine-error">Backend unavailable — run <code>docker compose up</code> in <code>/backend</code> to enable AI features.</div>`;
+    return;
+  }
+  if (!getApiKey()){
+    renderRefineKeyPrompt(cardKey);
+    return;
+  }
+
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Refining…'; }
+  try {
+    if (!refineResultCache){
+      await ensureAnalysisId();
+      const resp = await fetch(`${API_BASE}/api/refine`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          requirement_text: lastRequirementText, recommendations: lastRecommendations,
+          anthropic_api_key: getApiKey(), analysis_id: currentAnalysisId,
+        }),
+      });
+      if (!resp.ok){
+        const errBody = await resp.json().catch(()=>({detail:resp.statusText}));
+        throw new Error(errBody.detail || `Refine failed (${resp.status})`);
+      }
+      refineResultCache = await resp.json();
+      currentAnalysisId = refineResultCache.analysis_id;
+      applyRefinementToAllCards();
+    } else {
+      applyRefinementToCard(cardKey, category, resultEl);
+    }
+    document.getElementById(`askBox-${cardKey}`).classList.add('show');
+  } catch(e){
+    resultEl.innerHTML = `<div class="refine-error">${e.message}</div>`;
+  } finally {
+    if (btnEl) { btnEl.disabled = false; btnEl.textContent = '✨ Refine with AI'; }
+  }
+}
+
+function applyRefinementToCard(cardKey, category, resultEl){
+  if (!refineResultCache) return;
+  const match = (refineResultCache.adjusted_picks||[]).find(p =>
+    category && p.category && p.category.toLowerCase().includes(category.toLowerCase())
+  );
+  if (match){
+    resultEl.innerHTML = `<div class="refine-adjusted"><b>AI suggests: ${match.pick}</b><br>${match.reason}</div>`;
+  } else {
+    resultEl.innerHTML = `<div class="refine-nochange">✓ No change suggested for this pick.</div>`;
+  }
+}
+function applyRefinementToAllCards(){
+  document.querySelectorAll('.refine-zone').forEach(zone => {
+    const cardKey = zone.dataset.cardKey, category = zone.dataset.category;
+    applyRefinementToCard(cardKey, category, document.getElementById(`refineResult-${cardKey}`));
+    document.getElementById(`askBox-${cardKey}`).classList.add('show');
+  });
+}
+
+async function onAskClick(cardKey){
+  const input = document.getElementById(`askInput-${cardKey}`);
+  const question = input.value.trim();
+  if (!question) return;
+  if (!getApiKey()){ renderRefineKeyPrompt(cardKey); return; }
+
+  const thread = document.getElementById(`askThread-${cardKey}`);
+  thread.insertAdjacentHTML('beforeend', `<div class="ask-msg user">${question}</div>`);
+  input.value = '';
+  try {
+    await ensureAnalysisId();
+    const resp = await fetch(`${API_BASE}/api/ask`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({analysis_id: currentAnalysisId, question, anthropic_api_key: getApiKey()}),
+    });
+    if (!resp.ok){
+      const errBody = await resp.json().catch(()=>({detail:resp.statusText}));
+      throw new Error(errBody.detail || `Ask failed (${resp.status})`);
+    }
+    const data = await resp.json();
+    thread.insertAdjacentHTML('beforeend', `<div class="ask-msg answer">${data.answer}</div>`);
+  } catch(e){
+    thread.insertAdjacentHTML('beforeend', `<div class="ask-msg answer refine-error">${e.message}</div>`);
+  }
+}
+
+// ---------------- Share button + shared read-only view (decisions #12, #13) ----------------
+let isReadOnlyView = false;
+
+async function onShareClick(){
+  const btn = document.getElementById('shareBtn');
+  btn.disabled = true;
+  const original = btn.textContent;
+  btn.textContent = 'Sharing…';
+  try {
+    if (backendAvailable === null) await probeBackendHealth();
+    if (!backendAvailable) throw new Error('Backend unavailable');
+    await ensureAnalysisId();
+    const resp = await fetch(`${API_BASE}/api/analyses/${currentAnalysisId}/share`, {method:'POST'});
+    if (!resp.ok) throw new Error(`Share failed (${resp.status})`);
+    const data = await resp.json();
+    const url = `${window.location.origin}${window.location.pathname}?shared=${data.share_slug}`;
+    await navigator.clipboard.writeText(url).catch(()=>{});
+    btn.textContent = '✓ Link copied!';
+  } catch(e){
+    btn.textContent = 'Backend unavailable';
+  } finally {
+    setTimeout(() => { btn.disabled = false; btn.textContent = original; }, 2500);
+  }
+}
+
+async function loadSharedAnalysis(slug){
+  isReadOnlyView = true;
+  showScreen('__none__'); // hide mode picker / wizard / freetext screens entirely
+  try {
+    const resp = await fetch(`${API_BASE}/api/analyses/shared/${slug}`);
+    if (!resp.ok) throw new Error('This shared link is invalid or no longer exists.');
+    const data = await resp.json();
+    document.getElementById('sharedBanner').innerHTML = `
+      <div class="shared-banner">
+        <span>📎 You're viewing a shared analysis — <b>read-only</b>. Anyone with this link can view it.</span>
+        <button onclick="navigator.clipboard.writeText(window.location.href)">Copy link</button>
+      </div>`;
+    document.getElementById('resultsHeader').style.display = 'none';
+    renderRecommendations(data.signals, data.recommendations);
+  } catch(e){
+    document.getElementById('sharedBanner').innerHTML = `<div class="shared-banner">⚠️ ${e.message}</div>`;
+    document.getElementById('resultsShell').classList.add('active');
+  }
+}
+
+// ---------------- App init (routes to shared view, or shows the mode picker) ----------------
+(function initApp(){
+  probeBackendHealth();
+  const params = new URLSearchParams(window.location.search);
+  const slug = params.get('shared');
+  if (slug){
+    loadSharedAnalysis(slug);
+  } else {
+    showScreen('screenMode');
+  }
+})();
 </script>
 </body>
 </html>
