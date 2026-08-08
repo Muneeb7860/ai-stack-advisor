@@ -184,6 +184,27 @@ Wiring `index.html`'s "Refine with AI" button and follow-up box to the real endp
 `diagrams/ui-mockup.html`'s frame 03/04 annotations) is the concrete next step if the goal is a
 user-facing v2, not just a tested API.
 
+**Guided-input mode — decided, not yet built.** A parallel session built a click-through demo
+(not in this repo — a standalone prototype, never committed here) of a guided-questions flow:
+a mode picker (guided vs. paste-your-own free text) → ~6 chip/radio questions → a results screen
+that shows only a one-paragraph summary + 4-cell glance strip by default, with the full
+14-category stack/cost/trade-offs/governance sections collapsed behind "Show." The branching was
+real in the demo (e.g. answering "Internal team" skips the compliance question with a stated
+reason), but only one skip case exists — the questions and branches were hand-authored for that
+one demo path, not driving `detectSignals()`/the rule engine.
+**Decision made 2026-08-08: keep the mode picker as an equal-weight landing choice — guided mode
+is not the default, free text is not the default, both are offered up front with neither
+pre-selected.** Rationale: lowest-risk option, doesn't force proving guided-mode adoption before
+shipping it, and doesn't commit to fleshing out branching for most signals before it feels
+complete (only worth doing once the picker itself is real). If/when this gets scoped for real:
+map each guided question's answers onto existing `detectSignals()` fields (mostly straightforward
+— signals are already named things like `compliance`, `teamSize`, `enterprise`) and map the
+skip-logic onto combinations of earlier answers (more design work — only one skip case exists as
+proof of concept today). Also needs deciding whether guided mode replaces v1's blank textarea
+outright or lives alongside it (NFR-5's zero-backend-dependency constraint applies to guided mode
+too if it's meant to work without the backend — worth confirming before assuming client-side-only
+like the rest of v1).
+
 Both design threads (frontend expansion, backend build-out) are otherwise complete and merged. Per
 the design session's own note: **the next milestone is real users, not another architecture dimension or
 eval case.** Candidates from the BRD's own open items, none committed:
