@@ -184,26 +184,44 @@ Wiring `index.html`'s "Refine with AI" button and follow-up box to the real endp
 `diagrams/ui-mockup.html`'s frame 03/04 annotations) is the concrete next step if the goal is a
 user-facing v2, not just a tested API.
 
-**Guided-input mode — decided, not yet built.** A parallel session built a click-through demo
-(not in this repo — a standalone prototype, never committed here) of a guided-questions flow:
-a mode picker (guided vs. paste-your-own free text) → ~6 chip/radio questions → a results screen
-that shows only a one-paragraph summary + 4-cell glance strip by default, with the full
-14-category stack/cost/trade-offs/governance sections collapsed behind "Show." The branching was
-real in the demo (e.g. answering "Internal team" skips the compliance question with a stated
-reason), but only one skip case exists — the questions and branches were hand-authored for that
-one demo path, not driving `detectSignals()`/the rule engine.
-**Decision made 2026-08-08: keep the mode picker as an equal-weight landing choice — guided mode
-is not the default, free text is not the default, both are offered up front with neither
-pre-selected.** Rationale: lowest-risk option, doesn't force proving guided-mode adoption before
-shipping it, and doesn't commit to fleshing out branching for most signals before it feels
-complete (only worth doing once the picker itself is real). If/when this gets scoped for real:
-map each guided question's answers onto existing `detectSignals()` fields (mostly straightforward
-— signals are already named things like `compliance`, `teamSize`, `enterprise`) and map the
-skip-logic onto combinations of earlier answers (more design work — only one skip case exists as
-proof of concept today). Also needs deciding whether guided mode replaces v1's blank textarea
-outright or lives alongside it (NFR-5's zero-backend-dependency constraint applies to guided mode
-too if it's meant to work without the backend — worth confirming before assuming client-side-only
-like the rest of v1).
+**Guided-input mode + backend wiring — fully scoped 2026-08-08, now in implementation.** Builds
+on the standalone click-through demo referenced from `diagrams/ui-mockup.html` (mode picker,
+6-question wizard, one real skip case) and the backend API layer (already shipped — see below).
+Thirteen decisions locked before implementation started:
+
+1. **Scope**: both guided mode and backend wiring (refine/ask/share) land in one milestone.
+2. **Frontend architecture**: stays a single `index.html`, progressive enhancement — NFR-5
+   (zero backend dependency) stays intact for the free-text path.
+3. **Mode picker**: equal weight, no "Recommended" badge on either option (supersedes nothing —
+   this was already the landing-UX call from the previous decision round).
+4. **Results view — reversed from the standalone demo's own sketch**: both the guided and
+   free-text paths render through the *existing* 14-section full result view, not the demo's
+   progressive-reveal (summary + 4-cell glance strip, sections collapsed behind "Show"). The
+   demo file (`diagrams/design-sketch-v3-guided.html`) still shows progressive-reveal — that's
+   its own historical concept, not what got built; don't treat it as the current spec.
+5. **Signal mapping**: wizard answers synthesize a natural-language paragraph, fed through the
+   existing `detectSignals()` unchanged — no parallel signal-mapping code path.
+6. **Wizard questions**: 6, matching the demo's set exactly (building type, audience, compliance,
+   team size, AI use case, free-text catch-all).
+7. **Skip logic**: only the one case that already existed in the demo — compliance question
+   skipped when audience = internal. No speculative additional branching.
+8. **Refine button placement**: per-card "✨ Refine with AI" button (matches mockup frame 03),
+   not a single global refine action — inline follow-up Q&A box appears below the card.
+9. **API key UX**: lazy — a small inline prompt appears on the first refine/ask click, key
+   cached in `sessionStorage` only (cleared on tab close), never persisted to disk, never sent
+   anywhere but the backend's own `/api/refine`/`/api/ask` calls (per the existing per-request
+   API-key convention, see the "API key handling" note below).
+10. **Backend availability**: buttons always render; a single `/health` probe on page load
+    determines whether clicking one succeeds or shows a friendly inline message ("Backend
+    unavailable — run `docker compose up` to enable AI features") instead of a spinner-then-error.
+11. **Analysis creation**: lazy — the first refine or share click POSTs `/api/analyses` to create
+    the row and caches the returned `analysis_id` for the session; nothing hits the backend if
+    the user never clicks refine or share.
+12. **Share links**: in scope for this milestone — a "Share" button in the results header,
+    reusing the same lazily-created `analysis_id`.
+13. **Shared view**: renders in the same `index.html` via a `?shared=SLUG` query param — fetches
+    `GET /api/analyses/shared/{slug}` and renders read-only (no textarea, no refine buttons, a
+    read-only banner per mockup frame 04).
 
 Both design threads (frontend expansion, backend build-out) are otherwise complete and merged. Per
 the design session's own note: **the next milestone is real users, not another architecture dimension or
