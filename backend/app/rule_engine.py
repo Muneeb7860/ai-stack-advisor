@@ -1,29 +1,30 @@
 """Python port of the v1 rule engine (index.html's stripNegations()/detectSignals()/pickX()
 functions), for use by app/mcp/server.py's recommend_stack() tool.
 
-PORT DISCIPLINE (per the decision already made — see KICKOFF_BRIEF.md and this module's own
-kickoff Q&A): this is a faithful transliteration of index.html's JavaScript, not a
-re-derivation from first principles. index.html has already been through a validation pass
-(see ../validation-report.md) that found and fixed three real bugs — negation handling,
-missing on-prem/air-gapped support, and missing data-warehouse detection — plus tightened
-team-size and architecture-style conflict handling. index.html's CURRENT source already has
-all of those fixes baked in, so porting it as-is (rather than re-implementing the logic from
-the PRD/BRD's description of what it *should* do) carries those fixes over automatically.
-Do not "clean up" or "simplify" any branch below without checking it against index.html's
-actual current logic first — a plausible-looking simplification could silently reintroduce
-a bug that was already found and fixed once.
+PORT DISCIPLINE (per the decision already made — see KICKOFF_BRIEF.md and docs/adr/0001):
+this is a faithful transliteration of index.html's JavaScript, not a re-derivation from first
+principles. index.html went through two expansion/validation passes (see
+../validation-report.md and KICKOFF_BRIEF.md Section 0) that found and fixed real bugs —
+negation handling, on-prem/air-gapped support, warehouse detection, team-size conflicts, a
+live-quiz-app messaging/database bug, several category-card-contradiction audit fixes (see
+inline "AUDIT FIX" comments throughout index.html's vendor-comparison functions). index.html's
+CURRENT source has all of those fixes baked in, so porting it as-is carries them over
+automatically. Do not "clean up" or "simplify" any branch below without checking it against
+index.html's actual current logic first.
 
 Source of truth: index.html's <script> block, functions stripNegations() through
-pickGovernance() (roughly lines 293–830 as of this port). If index.html's rule engine
-changes, this file needs the equivalent change — they are two implementations of the same
-logic (JS for the zero-backend v1 product, Python for the MCP tool), not one importing the
-other, since v1 must stay a fully client-side, zero-backend product (PRD NFR-1/NFR-5).
+pickGovernance() (roughly lines 352–1180 as of this port, ~45 pickX functions across signal
+detection, core stack, vendor-alternatives comparisons, AI-serving architecture, trade-offs,
+and cost/governance). Two independent implementations of the same logic (JS for the
+zero-backend v1 product, Python for the MCP tool) — not one importing the other, since v1 must
+stay fully client-side (PRD NFR-1/NFR-5). Re-verified byte-for-byte against the live JS after
+each expansion pass — see docs/adr/0001-mcp-rule-engine-port.md for the verification method.
 
 Naming: JS object keys (camelCase, e.g. `s.onPrem`) are kept AS-IS in the `signals` dict
 returned by detect_signals() — not snake_cased — specifically so this stays a mechanical,
-diffable port against index.html rather than introducing a naming translation layer that
-could hide a transcription error. Function/module names are snake_case per Python
-convention; signal dict keys are not.
+diffable port against index.html. Function/module names are snake_case per Python convention;
+signal dict keys and vendor-table dict keys (id/name/cat/bestFor/strength/drawback/pricing)
+are not, for the same diffability reason.
 """
 import re
 
@@ -31,9 +32,7 @@ import re
 
 
 def strip_negations(text: str) -> str:
-    """Strip short negated clauses ("no document search", "don't have compliance requirements
-    yet") before keyword matching, so stated non-requirements don't get read as requirements.
-    Mirrors index.html's stripNegations() exactly, including the same 60-char clause cap."""
+    """Mirrors index.html's stripNegations() exactly."""
     return re.sub(
         r"\b(no|not|without|don't|doesn't|isn't|won't|never|excluding|except for|except)\b"
         r"[^.,;!?]{0,60}",
@@ -44,9 +43,8 @@ def strip_negations(text: str) -> str:
 
 
 def detect_signals(text: str) -> dict:
-    """Mirrors index.html's detectSignals() exactly. `raw` is used only for phrases that are
-    themselves phrased with "no"/"cannot" — the negation IS the requirement there (on-prem
-    detection), same comment as the JS source."""
+    """Mirrors index.html's detectSignals() exactly (65+ signal dimensions as of the
+    expansion pass — see KICKOFF_BRIEF.md Section 0)."""
     raw = text.lower()
     t = strip_negations(text).lower()
 
@@ -56,9 +54,6 @@ def detect_signals(text: str) -> dict:
     def has_raw(words):
         return any(w in raw for w in words)
 
-    # "on-prem" alone is ambiguous with a hybrid setup that explicitly also mentions cloud
-    # ("hybrid on-prem and cloud systems") — only the unambiguous air-gapped/no-cloud phrasings
-    # should override regardless of nearby "hybrid"/"cloud" wording.
     strong_on_prem = has_raw(
         [
             "air-gapped", "air gapped", "airgapped", "cannot use any public cloud",
@@ -72,35 +67,15 @@ def detect_signals(text: str) -> dict:
     return {
         "onPrem": strong_on_prem or soft_on_prem,
         "healthcare": has(["health", "hipaa", "patient", "clinical", "ehr", "medical"]),
-        "finance": has(
-            ["fintech", "bank", "payment", "fraud", "pci", "transaction", "trading", "ledger", "finance"]
-        ),
-        "ecommerce": has(
-            ["ecommerce", "e-commerce", "retail", "shopping", "product recommendation", "cart", "checkout"]
-        ),
-        "enterprise": has(
-            [
-                "enterprise", "large organization", "corporate", "multi-region",
-                "audit logging", "role-based access", "okta", "sso",
-            ]
-        ),
-        "startupMvp": has(
-            [
-                "startup", "mvp", "early-stage", "small team", "move fast",
-                "budget conscious", "budget-conscious", "bootstrapped",
-            ]
-        ),
-        "highScale": has(
-            ["high traffic", "high volume", "high transaction", "scale", "millions of users", "peak load", "sales event", "black friday"]
-        ),
+        "finance": has(["fintech", "bank", "payment", "fraud", "pci", "transaction", "trading", "ledger", "finance"]),
+        "ecommerce": has(["ecommerce", "e-commerce", "retail", "shopping", "product recommendation", "cart", "checkout"]),
+        "enterprise": has(["enterprise", "large organization", "corporate", "multi-region", "audit logging", "role-based access", "okta", "sso"]),
+        "startupMvp": has(["startup", "mvp", "early-stage", "small team", "move fast", "budget conscious", "budget-conscious", "bootstrapped"]),
+        "highScale": has(["high traffic", "high volume", "high transaction", "scale", "millions of users", "peak load", "sales event", "black friday"]),
         "realtime": has(["real-time", "real time", "low latency", "streaming", "live"]),
         "chatbot": has(["chatbot", "conversational", "customer support bot", "assistant", "virtual agent"]),
-        "knowledgeBase": has(
-            ["knowledge base", "internal documents", "policy documents", "confluence", "wiki", "document search", "faq"]
-        ),
-        "agentic": has(
-            ["agentic", "multi-agent", "take actions", "automate workflow", "autonomous", "tool use", "function calling"]
-        ),
+        "knowledgeBase": has(["knowledge base", "internal documents", "policy documents", "confluence", "wiki", "document search", "faq"]),
+        "agentic": has(["agentic", "multi-agent", "take actions", "automate workflow", "autonomous", "tool use", "function calling"]),
         "mobile": has(["mobile", "flutter", "ios", "android", "react native"]),
         "web": has(["web app", "website", "web application", "react", "angular", "vue"]),
         "voice": has(["voice", "speech", "call center", "ivr"]),
@@ -110,6 +85,26 @@ def detect_signals(text: str) -> dict:
         "structured": has(["structured data", "relational", "transactional", "sql", "ledger", "orders"]),
         "unstructured": has(["unstructured", "documents", "pdf", "images", "logs", "text data"]),
         "iot": has(["iot", "sensor", "device telemetry", "edge device"]),
+        "tablet": has(["tablet", "ipad"]),
+        "liveMultiplayer": has(["leaderboard", "multiplayer", "game room", "live quiz", "trivia", "live poll", "live voting", "live session", "concurrent players", "battle royale", "live game", "live scoring"]),
+        "fixedScope": has(["fixed-price", "fixed price", "fixed-scope", "fixed scope", "contractual delivery", "waterfall", "gated delivery", "fixed-bid", "government contract", "defense contract", "rfp", "statement of work"]),
+        "togafMentioned": has(["togaf"]),
+        "safeMentioned": has(["scaled agile", "safe framework", "safe (scaled agile)"]),
+        "cobitMentioned": has(["cobit"]),
+        "itilMentioned": has(["itil"]),
+        "mtlsMentioned": has(["mtls", "mutual tls", "spiffe", "spire", "workload identity", "zero trust", "zero-trust"]),
+        "feedFanout": has(["news feed", "social feed", "fan out", "fan-out", "fanout", "followers", "timeline", "activity feed"]),
+        "geospatial": has(["location tracking", "geolocation", "geo-location", "geospatial", "nearby drivers", "nearby", "gps", "driver location", "delivery tracking", "fleet tracking", "live map", "route optimization", "vehicle tracking", "asset tracking", "last-mile delivery", "fleet management"]),
+        "collabEditing": has(["collaborative editing", "real-time collaboration", "multiplayer document", "concurrent editing", "shared whiteboard", "real-time cursors", "live cursors", "co-editing", "simultaneous editing", "crdt", "operational transformation", "google-docs-like", "google docs like", "figma-like", "figma like", "notion-like", "notion like", "sync engine", "multi-user document", "shared canvas"]),
+        "videoConferencing": has(["video call", "video conferencing", "video chat", "voice chat", "voice channel", "screen sharing", "screen share", "webinar", "live video", "virtual meeting", "group call", "webrtc", "audio conferencing", "multi-party call", "virtual event", "video consultation", "video consultations", "virtual consultation", "telehealth", "telemedicine", "video appointment", "virtual visit", "video visit"]),
+        "microFrontend": has(["micro-frontend", "microfrontend", "micro frontend", "module federation", "single-spa", "shell app", "multiple frontend apps", "independent team deployment", "independently deployable ui"]),
+        "sagaWorkflow": has(["saga", "distributed transaction", "compensating transaction", "order processing", "order fulfillment", "checkout", "multi-step workflow across services", "eventual consistency", "workflow engine", "temporal workflow", "step functions"]),
+        "multiTenant": has(["multi-tenant", "multitenant", "multi-tenancy", "white-label", "white label", "per-customer data isolation", "tenant isolation", "saas for multiple companies", "saas for multiple organizations", "b2b saas platform"]),
+        "marketplace": has(["marketplace", "two-sided platform", "buyers and sellers", "gig platform", "booking platform", "on-demand platform", "escrow", "split payment", "seller onboarding", "host/guest", "driver/rider", "multi-vendor"]),
+        "mlFeatureStore": has(["recommendation model", "recommender system", "fraud scoring", "fraud detection model", "risk scoring model", "ranking model", "forecasting model", "demand forecasting", "churn model", "propensity model", "custom ml model", "feature store", "model training pipeline", "model registry"]),
+        "searchRecommendation": has(["search bar", "product search", "site search", "search relevance", "autocomplete", "instant search", "faceted search", "recommendations", "recommended for you", "you may also like", "personalized feed", "for you page", "discovery feed", "similar items", "related products"]),
+        "routingGuardrailService": has(["route between models", "multiple llm providers", "cost-optimize llm calls", "model selection per task", "different models per task", "llm gateway", "llm proxy", "ai gateway", "centralized guardrails", "prompt injection", "jailbreak", "pii redaction", "content policy enforcement", "semantic router", "model router", "fall back to a stronger model"]),
+        "selfHostInfra": has(["docker", "kubernetes", "k8s", "self-hosted", "self hosted", "own gpu", "own gpus", "own servers", "own infrastructure", "own hardware", "on our own hardware", "ollama"]),
         "awsShop": has(["aws", "amazon web services"]),
         "azureShop": has(["azure", "microsoft"]),
         "gcpShop": has(["gcp", "google cloud"]),
@@ -123,30 +118,18 @@ def detect_signals(text: str) -> dict:
         "sailpointMentioned": has(["sailpoint"]),
         "oracleIamMentioned": has(["oracle identity", "oracle iam", "oracle access manager"]),
         "saviyntMentioned": has(["saviynt"]),
-        "privilegedAccess": has(
-            ["privileged access", "pam ", "vaulting", "session recording", "admin credential", "privileged account"]
-        ),
-        "identityGovernance": has(
-            ["identity governance", "access certification", "access review", "segregation of duties", "sod ", "iga "]
-        ),
+        "privilegedAccess": has(["privileged access", "pam ", "vaulting", "session recording", "admin credential", "privileged account"]),
+        "identityGovernance": has(["identity governance", "access certification", "access review", "segregation of duties", "sod ", "iga "]),
         "deviceMgmt": has(["device management", "mdm", "mac-heavy", "mostly macs", "byod", "endpoint management"]),
-        # Word-boundary + negative-lookahead: plain " java" would also match inside " javascript".
         "javaMentioned": bool(re.search(r"\bjava\b(?!script)", t, re.IGNORECASE)),
         "pythonMentioned": has(["python"]),
-        # Avoid matching the common English word "go" (e.g. "go live", "let's go fast") —
-        # only count it when phrased as the language (golang, "go lang", "written/using in Go").
         "goMentioned": (
             has(["golang"])
             or bool(re.search(r"\bgo\s*(lang|language)\b", t))
             or bool(re.search(r"\b(written in|using|in)\s+go\b", t))
         ),
         "smallTeam": (
-            has(
-                [
-                    "small team", "2 engineers", "3 engineers", "4 engineers", "5 engineers",
-                    "6 engineers", "solo founder", "few engineers",
-                ]
-            )
+            has(["small team", "2 engineers", "3 engineers", "4 engineers", "5 engineers", "6 engineers", "solo founder", "few engineers"])
             or bool(re.search(r"\b([1-9]|1[0-2])[- ]?(person|people)\b", t))
             or bool(re.search(r"team of\s*([1-9]|1[0-2])\b", t))
         ),
@@ -154,12 +137,7 @@ def detect_signals(text: str) -> dict:
         "globalMultiRegion": has(["global", "multi-region", "worldwide", "international"]),
         "search": has(["search engine", "semantic search", "recommendation"]),
         "email": has(["email drafting", "email assistant", "draft email"]),
-        "ragNeed": has(
-            [
-                "knowledge base", "document search", "internal documents", "confluence",
-                "faq", "clinical knowledge", "policy documents", "search across",
-            ]
-        ),
+        "ragNeed": has(["knowledge base", "document search", "internal documents", "confluence", "faq", "clinical knowledge", "policy documents", "search across"]),
     }
 
 
@@ -168,49 +146,21 @@ def detect_signals(text: str) -> dict:
 
 def pick_cloud(s):
     if s["onPrem"]:
-        return {
-            "v": "On-premises / private infrastructure — no public cloud",
-            "why": "An air-gapped or explicit no-public-cloud requirement rules out AWS/Azure/GCP entirely. You need a private data center, bare-metal, or air-gapped virtualization stack (VMware, OpenStack, or a vetted sovereign/government enclave) instead.",
-            "conf": "high",
-        }
+        return {"v": "On-premises / private infrastructure — no public cloud", "why": "An air-gapped or explicit no-public-cloud requirement rules out AWS/Azure/GCP entirely. You need a private data center, bare-metal, or air-gapped virtualization stack (VMware, OpenStack, or a vetted sovereign/government enclave) instead.", "conf": "high"}
     if s["awsShop"]:
-        return {
-            "v": "AWS",
-            "why": "Explicit AWS usage detected — build on existing footprint (IAM, VPC, billing) rather than introducing a second cloud.",
-            "conf": "high",
-        }
+        return {"v": "AWS", "why": "Explicit AWS usage detected — build on existing footprint (IAM, VPC, billing) rather than introducing a second cloud.", "conf": "high"}
     if s["gcpShop"] or s["agentic"]:
-        return {
-            "v": "Google Cloud (GCP)",
-            "why": "GCP mentioned, or agentic/data-heavy workload — GCP pairs well with Vertex AI, BigQuery, and Gemini models.",
-            "conf": "high" if s["gcpShop"] else "medium",
-        }
+        return {"v": "Google Cloud (GCP)", "why": "GCP mentioned, or agentic/data-heavy workload — GCP pairs well with Vertex AI, BigQuery, and Gemini models.", "conf": "high" if s["gcpShop"] else "medium"}
     if s["azureShop"] or s["enterprise"]:
-        return {
-            "v": "Microsoft Azure",
-            "why": "Azure mentioned, or enterprise context with likely existing Microsoft 365/AD investment.",
-            "conf": "high" if s["azureShop"] else "medium",
-        }
+        return {"v": "Microsoft Azure", "why": "Azure mentioned, or enterprise context with likely existing Microsoft 365/AD investment.", "conf": "high" if s["azureShop"] else "medium"}
     if s["startupMvp"]:
-        return {
-            "v": "AWS (or GCP)",
-            "why": "Broadest managed-service catalog and hiring pool for a small team moving fast; GCP is a fine alternative if the team is more data/ML-leaning.",
-            "conf": "medium",
-        }
-    return {
-        "v": "AWS",
-        "why": "Default choice given broadest ecosystem maturity; revisit if there is an existing cloud commitment.",
-        "conf": "low",
-    }
+        return {"v": "AWS (or GCP)", "why": "Broadest managed-service catalog and hiring pool for a small team moving fast; GCP is a fine alternative if the team is more data/ML-leaning.", "conf": "medium"}
+    return {"v": "AWS", "why": "Default choice given broadest ecosystem maturity; revisit if there is an existing cloud commitment.", "conf": "low"}
 
 
 def pick_gateway(s):
     if s["onPrem"]:
-        return {
-            "v": "Internal API gateway (Kong or Apigee Edge on-prem, or NGINX/Envoy) — no public CDN/edge service",
-            "why": "Cloudflare and similar public edge services require internet egress, which an air-gapped environment doesn't have. Run your gateway entirely inside the isolated network boundary.",
-            "conf": "high",
-        }
+        return {"v": "Internal API gateway (Kong or Apigee Edge on-prem, or NGINX/Envoy) — no public CDN/edge service", "why": "Cloudflare and similar public edge services require internet egress, which an air-gapped environment doesn't have. Run your gateway entirely inside the isolated network boundary.", "conf": "high"}
     picks = []
     hits = 0
     if s["security"] or s["compliance"] or s["highScale"]:
@@ -221,21 +171,9 @@ def pick_gateway(s):
         hits += 1
     if not picks:
         picks.append("Cloud-native gateway (AWS API Gateway / GCP API Gateway) + Cloudflare in front for DNS & DDoS protection")
-    return {
-        "v": " + ".join(picks),
-        "why": "Cloudflare handles edge security/performance; Apigee (if present) adds API productization and governance for many external consumers.",
-        "conf": "high" if hits >= 2 else "medium" if hits == 1 else "low",
-    }
+    return {"v": " + ".join(picks), "why": "Cloudflare handles edge security/performance; Apigee (if present) adds API productization and governance for many external consumers.", "conf": "high" if hits >= 2 else "medium" if hits == 1 else "low"}
 
 
-# Identity-provider landscape beyond Okta. Sourced/grounded against published vendor
-# comparisons (lumos.com/identity-matters) as of mid-2026 — pricing moves fast in this
-# market, so treat $ figures as directional, not quoted. IMPORTANT categorization note baked
-# into the logic below: CyberArk (PAM), SailPoint/Saviynt (IGA) are NOT drop-in Okta
-# replacements — they solve different problems and are usually layered ON TOP of an IdP, not
-# instead of one — pick_iam() returns them as a separate "complementary" list. OWNERSHIP
-# NOTE: Thoma Bravo owns Ping, SailPoint, and the former ForgeRock — cross-shopping those
-# three specifically doesn't create the independent competitive pressure it looks like.
 IAM_VENDORS = [
     {"id": "okta", "name": "Okta", "cat": "SSO / IdP", "bestFor": "General default — broadest app-integration catalog, no strong ecosystem pull elsewhere", "strength": "Largest pre-built app/SSO integration library; mature admin & developer APIs", "drawback": "2025–26 repricing bundled SSO+MFA with a ~$1,500/yr minimum, raising the entry bar for very small teams; per-seat cost scales quickly; governance (OIG) is a costly add-on with less delta-review depth than purpose-built IGA tools", "pricing": "~$6/user/mo (Starter, SSO+MFA) · ~$17/user/mo (Enterprise/Essentials) · Auth0 (CIAM) from ~$3,000/mo enterprise"},
     {"id": "entra", "name": "Microsoft Entra ID", "cat": "SSO / IdP", "bestFor": "Organizations already on Microsoft 365 / Azure AD", "strength": "Bundled into M365 E3/E5 — often close to free marginal cost; native Azure/Windows/Intune integration", "drawback": "Governance feels bolted-on rather than purpose-built; advanced conditional access needs the pricier P2 tier; weaker for non-Microsoft SaaS sprawl and non-human identity coverage", "pricing": "Free tier w/ M365 · P1 ~$6/user/mo · P2 ~$9/user/mo · Governance add-on ~$7/user/mo"},
@@ -248,8 +186,6 @@ IAM_VENDORS = [
     {"id": "saviynt", "name": "Saviynt", "cat": "IGA + PAM (not an IdP)", "bestFor": "Cloud-forward enterprises wanting one converged platform instead of separate IGA + PAM tools", "strength": "Cloud-native architecture; strong AWS/Azure/GCP/Snowflake coverage; converges IGA, PAM, and application governance in one platform; covers human, non-human, and AI-agent identities", "drawback": "Steep learning curve and UI friction reported; still needs professional services for most real deployments; pricing reflects enterprise positioning", "pricing": "Custom, demo-led pricing — typically low-to-mid six figures/yr plus services"},
 ]
 
-# Curated from lumos.com/identity-matters "Identity and access management metrics" — full
-# source article lists ~19; these 8 are the highest-signal set for a first-draft target sheet.
 IAM_METRICS = [
     {"m": "Orphaned account rate", "target": "Target: 0% (~1% tolerance during transitions) — active accounts with no valid owner/justification"},
     {"m": "Dormant account rate", "target": "Auto-disable at 90 days no sign-in (human accounts), 180 days (service accounts)"},
@@ -261,7 +197,6 @@ IAM_METRICS = [
     {"m": "JIT privileged access coverage", "target": "90%+ of admin access granted just-in-time with approval + expiry, not standing"},
 ]
 
-# Curated from lumos.com/identity-matters "IAM/RBAC best practices" (12 in the source article).
 IAM_BEST_PRACTICES = [
     "Discover everything first — you can't govern apps, identities, and permissions you don't have a full inventory of, including shadow IT and non-human identities.",
     "Default to zero trust — verify every access request independently rather than trusting anything inside the network boundary.",
@@ -335,6 +270,338 @@ def pick_iam(s):
     return result
 
 
+# =====================================================================
+# Vendor/alternatives comparison data — Groups 1-4 of the alternatives research
+# project (see ../docs/alternatives-research/*.md for full sourcing/pricing/audit
+# notes). Same shape as IAM_VENDORS: id/name/cat/bestFor/strength/drawback/pricing.
+# index.html renders these via renderAltToggle() as an inline "See alternatives"
+# toggle; this backend port omits that HTML-rendering helper (and confLabelStr(),
+# also pure presentation) since the MCP tool returns structured data, not HTML —
+# the vendor tables and pick*Vendor() selection logic themselves are ported in
+# full, since primaryId selection is real recommendation logic, not rendering.
+# =====================================================================
+
+
+# --- Group 1: Infra ---
+
+
+def pick_cloud_vendor(cloud):
+    v = cloud["v"]
+    primary_id = "aws" if "AWS" in v else "azure" if "Azure" in v else "gcp" if "GCP" in v else None if "On-premises" in v else "aws"
+    return {"v": cloud["v"], "why": cloud["why"], "primaryId": primary_id, "conf": cloud["conf"]}
+
+
+CLOUD_VENDORS = [
+    {"id": "aws", "name": "AWS", "cat": "Hyperscaler", "bestFor": "Enterprise scale, broadest managed-service catalog, regulated industries", "strength": "Deepest service breadth (ML/data/compute), largest talent pool, most third-party integrations", "drawback": "Most expensive at small-to-mid scale; steep learning curve; pricing complexity", "pricing": "Baseline for comparison — usually the priciest per category"},
+    {"id": "azure", "name": "Microsoft Azure", "cat": "Hyperscaler", "bestFor": "Microsoft-shop orgs (AD/Entra, .NET, M365 integration)", "strength": "Best-in-class enterprise identity/compliance tooling, hybrid on-prem story (Arc/Stack)", "drawback": "Still hyperscaler-tier pricing overall", "pricing": "Cheaper than AWS EC2 in ~64% of tracked categories (609/948)"},
+    {"id": "gcp", "name": "Google Cloud (GCP)", "cat": "Hyperscaler", "bestFor": "Data/ML-heavy workloads, Kubernetes-native teams", "strength": "Strong data/analytics stack (BigQuery), best free tier for serverless", "drawback": "Smaller enterprise support org than AWS/Azure; deprecation reputation", "pricing": "Cheaper than AWS EC2 in ~96% of tracked categories (47/49)"},
+    {"id": "digitalocean", "name": "DigitalOcean", "cat": "Simplified IaaS", "bestFor": "Small teams, startups, side projects wanting predictable flat pricing", "strength": "Radically simpler UX than hyperscalers, flat droplet pricing", "drawback": "Smaller service catalog (no deep ML/data stack), fewer regions", "pricing": "Cheaper than AWS EC2 in all 15 tracked categories"},
+    {"id": "hetzner", "name": "Hetzner", "cat": "Budget IaaS (EU)", "bestFor": "Cost-sensitive workloads, EU data-residency requirements", "strength": "Lowest raw compute $/vCPU in the market by a wide margin", "drawback": "EU-only data centers; thinner enterprise SLA tier", "pricing": "Cheaper than AWS EC2 in all 15 tracked categories — often the cheapest overall"},
+    {"id": "oracle", "name": "Oracle Cloud (OCI)", "cat": "Hyperscaler (DB-focused)", "bestFor": "Oracle DB workloads, orgs wanting an aggressive free tier", "strength": "Strong \"Always Free\" tier, competitive high-memory/bare-metal pricing", "drawback": "Smaller ecosystem/community than the big 3", "pricing": "Cheaper than AWS EC2 in all 24 tracked categories"},
+    {"id": "linode", "name": "Linode (Akamai)", "cat": "Simplified IaaS", "bestFor": "Developers wanting simple VPS + CDN (Akamai edge) combo", "strength": "Simple pricing, Akamai edge/CDN network bundled", "drawback": "Smaller platform breadth post-acquisition still settling", "pricing": "Cheaper than AWS EC2 in ~83% of tracked categories (49/59)"},
+    {"id": "vultr", "name": "Vultr", "cat": "Budget IaaS", "bestFor": "High-frequency compute/GPU rental, global points-of-presence", "strength": "Wide global region footprint for a budget provider, GPU availability", "drawback": "Smaller managed-service ecosystem, support tier below hyperscalers", "pricing": "Competitive with Hetzner/DO on raw compute"},
+]
+CLOUD_NOTE = "DigitalOcean/Hetzner/Oracle/Linode/Vultr are not drop-in hyperscaler replacements for workloads needing deep managed-service catalogs (managed Kafka, ML platforms, broad compliance certs) — they're the better bet specifically when a small/cost-sensitive team is paying a \"hyperscaler tax\" for infrastructure that's fundamentally just VMs + block storage + a load balancer. Source: docs/alternatives-research/01-infra-cloud-compute-containers-gateway.md."
+
+COMPUTE_VENDORS = [
+    {"id": "vercel", "name": "Vercel", "cat": "PaaS (frontend)", "bestFor": "Next.js apps", "strength": "Built by the Next.js team — automatic ISR, edge middleware, image optimization", "drawback": "Hobby plan prohibits commercial use; Pro's \"Turbo\" compute runs ~9x the standard per-minute rate", "pricing": "Free (non-commercial) · $20/seat/mo Pro"},
+    {"id": "netlify", "name": "Netlify", "cat": "PaaS (frontend)", "bestFor": "General frontend deployment, JAMstack", "strength": "Commercial use allowed on free tier; mature build pipeline", "drawback": "Credit-based free tier less predictable than flat limits", "pricing": "300 credits/mo free · $19/seat/mo Pro"},
+    {"id": "cfpages", "name": "Cloudflare Pages", "cat": "PaaS (edge/static)", "bestFor": "Static sites, JAMstack, edge-first apps", "strength": "Unlimited bandwidth, no cold starts", "drawback": "Static/edge-function only — not a fit for stateful backend compute", "pricing": "Free, unlimited bandwidth"},
+    {"id": "render", "name": "Render", "cat": "PaaS (full-stack)", "bestFor": "Backend APIs and full-stack apps needing a bundled DB", "strength": "Free tier bundles a real Postgres + Redis, not just app hosting", "drawback": "Free services spin down after 15min idle — 30-60s cold start on next request", "pricing": "Free tier · $7/mo Starter"},
+    {"id": "railway", "name": "Railway", "cat": "PaaS (full-stack)", "bestFor": "Startups, Docker-based apps, teams wanting no per-seat pricing", "strength": "Usage-based (no per-seat tax), strong DX, instant deploys", "drawback": "Not a real recurring free tier — $5 one-time trial credit, then billing starts", "pricing": "$5 trial credit · $1/mo minimum"},
+    {"id": "flyio", "name": "Fly.io", "cat": "PaaS (containers)", "bestFor": "Container deployments needing always-on VMs", "strength": "Always-on VMs, no cold starts, global anycast", "drawback": "No free tier for new accounts since Oct 2024 — budget it as paid-from-day-one", "pricing": "Pay-as-you-go, no free minimum"},
+    {"id": "lambda", "name": "AWS Lambda", "cat": "FaaS", "bestFor": "AWS-native event-driven backends", "strength": "1M free invocations/mo, deep AWS integration", "drawback": "API Gateway exposure billed separately ($3.50/M requests) — real HTTP cost is higher than headline free tier suggests", "pricing": "1M invocations + 400K GB-sec free/mo"},
+    {"id": "cloudfn", "name": "Google Cloud Functions", "cat": "FaaS", "bestFor": "GCP/Firebase-integrated projects", "strength": "2M free invocations/mo (highest of the FaaS options), HTTP triggers included free", "drawback": "200-800ms cold start", "pricing": "2M invocations free/mo"},
+    {"id": "azurefn", "name": "Azure Functions", "cat": "FaaS", "bestFor": "Microsoft/.NET shops, enterprise Azure integration", "strength": "1M free invocations/mo, native Azure AD/VNet integration", "drawback": "Lowest per-function memory ceiling (1.5GB) on the Consumption tier", "pricing": "1M invocations free/mo"},
+    {"id": "cfworkers", "name": "Cloudflare Workers", "cat": "FaaS (edge)", "bestFor": "Edge computing, globally distributed APIs, I/O-heavy workloads", "strength": "<5ms cold start (V8 isolates); CPU-time-only billing makes I/O-heavy workloads reportedly 10-50x cheaper than wall-clock-billed platforms", "drawback": "10ms CPU cap per invocation on free tier (30s on paid)", "pricing": "100K requests/day free"},
+]
+
+
+def pick_compute_platform(s, compute):
+    if s["onPrem"]:
+        return {"v": "N/A — self-hosted only, see Compute Model card above", "why": "Serverless/PaaS platforms are public-cloud managed services and aren't available air-gapped — this comparison doesn't apply once on-prem is a hard requirement.", "primaryId": None, "conf": "high"}
+    v = compute["v"]
+    if v.startswith("Kubernetes") or v.startswith("Serverless containers"):
+        return {"v": v + " — see Orchestrator Options below for the container-platform vendor comparison", "why": "Your Compute Model above is container/orchestrator-tier, not a plain FaaS/PaaS pick — the vendor comparison for that decision lives in the Orchestrator Options section below, not here.", "primaryId": None, "conf": compute["conf"]}
+    if s["awsShop"]:
+        return {"v": "AWS Lambda", "why": "Explicit AWS usage — Lambda keeps you on your existing IAM/VPC/billing footprint rather than introducing a second platform.", "primaryId": "lambda", "conf": "high"}
+    if s["gcpShop"] or s["agentic"]:
+        return {"v": "Google Cloud Functions (or Cloud Run for containers)", "why": "GCP usage or agentic/data-heavy workload — stays consistent with a GCP-centric stack and has the most generous FaaS free tier of the researched options.", "primaryId": "cloudfn", "conf": "medium"}
+    if s["azureShop"]:
+        return {"v": "Azure Functions", "why": "Azure usage detected — native Azure AD/VNet integration keeps this consistent with the rest of a Microsoft-centric stack.", "primaryId": "azurefn", "conf": "high"}
+    if s["realtime"] or s["highScale"]:
+        return {"v": "Cloudflare Workers (edge) for I/O-heavy paths, cloud-native FaaS for the rest", "why": "Workers' CPU-time billing model is a genuinely different cost shape for I/O-heavy (mostly-waiting-on-a-database) workloads at real scale — worth evaluating specifically for latency-sensitive/high-volume paths.", "primaryId": "cfworkers", "conf": "medium"}
+    if s["startupMvp"] and (s["web"] or not s["mobile"]):
+        return {"v": "Vercel or Netlify (frontend) + Render/Railway (backend)", "why": "Fastest path to production for a small team — PaaS platforms with bundled DBs/CI need the least glue infrastructure to stand up.", "primaryId": "render", "conf": "medium"}
+    return {"v": "AWS Lambda (or your cloud's native FaaS equivalent)", "why": "Reasonable platform-neutral default absent a specific cloud commitment.", "primaryId": "lambda", "conf": "low"}
+
+
+COMPUTE_NOTE = "PaaS products (Vercel/Netlify/Render/Railway/Fly.io) and FaaS primitives (Lambda/Cloud Functions/Azure Functions/Workers) answer different questions — PaaS trades cost/control for less glue infrastructure to stand up, FaaS is a lower-level building block you compose yourself. Pricing here moves fast (Netlify's Apr 2026 credit-model shift, Vercel's Turbo-compute repricing, Fly.io's Oct 2024 free-tier removal, Railway's Oct 2025 trial-credit change) — treat as directional. Source: docs/alternatives-research/01-infra-cloud-compute-containers-gateway.md."
+
+ORCHESTRATOR_VENDORS = [
+    {"id": "kubernetes", "name": "Kubernetes", "cat": "Orchestrator (baseline)", "bestFor": "Teams at real multi-service scale needing the ecosystem", "strength": "Largest ecosystem, cloud-portable, industry-standard", "drawback": "High operational complexity — overkill below a certain scale", "pricing": "Free (OSS) — cost is the cluster + ops time"},
+    {"id": "openshift", "name": "OpenShift (Red Hat)", "cat": "Enterprise K8s distro", "bestFor": "Regulated enterprises wanting a supported, opinionated K8s", "strength": "Built-in CI/CD and security defaults, RH support contracts", "drawback": "Heavier, more opinionated, licensing cost", "pricing": "Subscription, enterprise-tier"},
+    {"id": "nomad", "name": "Nomad (HashiCorp)", "cat": "Lightweight orchestrator", "bestFor": "Simpler scheduling without full K8s surface area, mixed container + non-container workloads", "strength": "Much simpler operational model than K8s; can schedule non-container workloads too", "drawback": "Smaller ecosystem, fewer managed offerings, smaller talent pool", "pricing": "Free (OSS)"},
+    {"id": "ecs", "name": "AWS ECS", "cat": "Managed orchestrator (AWS-native)", "bestFor": "AWS-committed teams wanting less operational overhead than self-managed K8s", "strength": "Deep AWS integration, simpler mental model than K8s, Fargate serverless mode", "drawback": "AWS lock-in; smaller ecosystem than K8s", "pricing": "Pay for underlying compute (EC2/Fargate)"},
+    {"id": "cloudrun", "name": "Google Cloud Run", "cat": "Serverless container platform", "bestFor": "Stateless containerized services wanting zero infra management", "strength": "True serverless container model — scales to zero, pay-per-request", "drawback": "Not a general orchestrator — no stateful-workload story, GCP-only", "pricing": "Pay-per-request"},
+    {"id": "rancher", "name": "Rancher (SUSE)", "cat": "K8s management layer", "bestFor": "Multi-cluster K8s management across clouds", "strength": "Strong multi-cluster/multi-cloud K8s UI and governance", "drawback": "Adds a management layer on top of K8s, not a K8s replacement", "pricing": "OSS free · enterprise support available"},
+    {"id": "dockerswarm", "name": "Docker Swarm", "cat": "Lightweight orchestrator", "bestFor": "Small teams wanting native Docker-tooling orchestration", "strength": "Simplicity, native Docker CLI integration", "drawback": "Limited feature set vs K8s; declining ecosystem momentum", "pricing": "Free (OSS)"},
+]
+
+
+def pick_orchestrator(s, containers):
+    if s["onPrem"]:
+        return {"v": "Self-managed Kubernetes (Rancher/RKE2) or Nomad", "why": "Managed orchestrator offerings (ECS, Cloud Run) are public-cloud services unavailable air-gapped — a self-managed distribution inside your network boundary is the realistic option.", "primaryId": "kubernetes", "conf": "high"}
+    if s["startupMvp"]:
+        return {"v": "Google Cloud Run (or AWS ECS/Fargate)", "why": "Serverless container platform gives container benefits without a Kubernetes control plane to operate — right-sized for a small team.", "primaryId": "cloudrun", "conf": "medium"}
+    if s["enterprise"] or s["highScale"]:
+        why = "Standard for portable, scalable container orchestration once team/scale justify the operational overhead."
+        if s["enterprise"] and s["compliance"]:
+            why += " If you want a more opinionated, supported distribution for a regulated environment specifically, OpenShift (see comparison below) wraps Kubernetes with built-in security defaults and a support contract — same underlying orchestrator, more guardrails."
+        return {"v": "Kubernetes (EKS/GKE/AKS)", "why": why, "primaryId": "kubernetes", "conf": "high"}
+    return {"v": "Kubernetes (or Nomad if you want a simpler operational model)", "why": "Default absent a strong scale/team-size signal either way.", "primaryId": "kubernetes", "conf": "low"}
+
+
+ORCHESTRATOR_NOTE = "Cloud Run, ECS, and standalone Docker are single-container/serverless primitives, not general orchestrators, and Rancher is a management layer FOR Kubernetes rather than a competitor to it — presenting all of these as equivalent \"Kubernetes alternatives\" would be a categorization error. Apache Mesos/Marathon was retired Oct 17, 2025 (Apache committer vote, moved to the Apache Attic) and is intentionally excluded here. Source: docs/alternatives-research/01-infra-cloud-compute-containers-gateway.md."
+
+GATEWAY_VENDORS = [
+    {"id": "kong", "name": "Kong", "cat": "Open-source / Commercial (Konnect)", "bestFor": "Microservices environments, largest plugin ecosystem", "strength": "Established ecosystem, enterprise support tier available", "drawback": "PostgreSQL-based config storage adds overhead vs etcd-based alternatives; many billing dimensions", "pricing": "OSS free · Konnect ~$105/mo/gateway service + ~$20-34/million requests (tier-dependent)"},
+    {"id": "apisix", "name": "Apache APISIX", "cat": "Open-source", "bestFor": "High-performance, multi-cloud/hybrid deployments", "strength": "Sub-millisecond proxy latency (NGINX + LuaJIT + etcd)", "drawback": "Requires operational management by your team", "pricing": "Free (OSS)"},
+    {"id": "tyk", "name": "Tyk", "cat": "Open-source / Commercial (Tyk Cloud)", "bestFor": "Self-hosted or managed deployments needing full flexibility", "strength": "Full deployment flexibility, consumption-based option", "drawback": "SSO/SAML restricted to higher paid tiers", "pricing": "OSS free · Professional ~$0-3,800/mo · Enterprise custom"},
+    {"id": "gravitee", "name": "Gravitee", "cat": "Open-source, event-native", "bestFor": "Async/event-driven architectures (WebSockets, WebHooks, Kafka streams)", "strength": "First-class async-API support — a genuinely different strength than REST-centric gateways", "drawback": "Smaller ecosystem than Kong/Tyk; self-hosting needs JVM + MongoDB + Elasticsearch", "pricing": "Community free · Cloud per-gateway · Enterprise custom"},
+    {"id": "wso2", "name": "WSO2 API Manager", "cat": "Open-source, full-lifecycle", "bestFor": "Enterprises wanting complete self-hostable governance without vendor lock-in", "strength": "End-to-end platform (gateway + dev portal + analytics + monetization), 100% OSS", "drawback": "Self-hosting operational overhead; smaller market visibility", "pricing": "Free (OSS) · Enterprise subscription"},
+    {"id": "awsgw", "name": "AWS API Gateway", "cat": "Cloud-managed", "bestFor": "AWS-native deployments wanting zero-ops", "strength": "Auto-scaling, zero-ops convenience", "drawback": "Vendor lock-in; no built-in developer portal", "pricing": "HTTP APIs $1/M requests · REST APIs $3.50/M requests · 1M free/mo for 12mo"},
+    {"id": "apim", "name": "Azure API Management", "cat": "Cloud-managed", "bestFor": "Microsoft/Azure ecosystems", "strength": "Native Azure integration", "drawback": "8 pricing tiers total — genuinely complex to reason about; multi-region multiplies cost", "pricing": "Consumption ~$3.50/M calls · Developer ~$36/mo · Premium v2 ~$2,800/mo/unit"},
+    {"id": "apigee", "name": "Apigee (Google)", "cat": "Cloud-managed", "bestFor": "GCP-integrated enterprise API programs", "strength": "Deep GCP ecosystem integration, managed service", "drawback": "Vendor lock-in; no hybrid/multi-cloud support; hidden add-on costs", "pricing": "$20/M standard calls · environment tiers $365-3,431/mo · enterprise $8K-25K/mo"},
+]
+
+
+def pick_gateway_vendor(s):
+    if s["onPrem"]:
+        return {"v": "Kong or APISIX, self-hosted", "why": "Public API-gateway SaaS services require internet egress an air-gapped environment doesn't have — a self-hosted open-source gateway inside the boundary is the realistic option.", "primaryId": "kong", "conf": "high"}
+    if s["gcpShop"]:
+        return {"v": "Apigee", "why": "GCP-native context — Apigee integrates most deeply with the rest of a Google Cloud stack.", "primaryId": "apigee", "conf": "medium"}
+    if s["azureShop"]:
+        return {"v": "Azure API Management", "why": "Azure-native context — APIM integrates natively with the rest of the Microsoft stack.", "primaryId": "apim", "conf": "medium"}
+    if s["awsShop"]:
+        return {"v": "AWS API Gateway", "why": "AWS-native context — stays on existing IAM/billing footprint.", "primaryId": "awsgw", "conf": "medium"}
+    if s["enterprise"] and s["largeTeam"]:
+        return {"v": "Kong (or WSO2 if you want a fully self-hostable, vendor-neutral platform)", "why": "Enterprise scale with multiple consumers benefits from Kong's ecosystem and plugin depth; WSO2 is the pick if avoiding any cloud/vendor lock-in matters more than ecosystem size.", "primaryId": "kong", "conf": "medium"}
+    return {"v": "Cloud-native gateway matching your primary cloud, or Kong/APISIX if you want to stay cloud-agnostic", "why": "Default absent a strong cloud or enterprise signal.", "primaryId": "kong", "conf": "low"}
+
+
+GATEWAY_NOTE = "MuleSoft (not listed above) is a full iPaaS platform, not a pure API gateway, and would misrepresent its scope if presented as a like-for-like Kong/Tyk swap. This table is a dedicated-gateway-product comparison, separate from the \"API Gateway / Edge\" stack card above, which also factors in edge/WAF/DDoS needs (Cloudflare) that these products don't all address. Source: docs/alternatives-research/01-infra-cloud-compute-containers-gateway.md."
+
+
+# --- Group 2: Data layer ---
+
+DATABASE_VENDORS = [
+    {"id": "postgres", "name": "PostgreSQL", "cat": "Relational (SQL)", "bestFor": "SaaS platforms, AI/ML workloads (pgvector), analytics, fintech, geospatial", "strength": "JSONB native + indexed, 300+ extension ecosystem (PostGIS/pgvector/Citus/TimescaleDB), native row-level security", "drawback": "Requires connection pooling at high concurrency; steeper learning curve than MySQL", "pricing": "Free OSS · managed from ~$0.036/hr on-demand"},
+    {"id": "mysql", "name": "MySQL", "cat": "Relational (SQL)", "bestFor": "WordPress/CMS, high-read simple CRUD, legacy PHP apps", "strength": "20-30% faster on simple SELECTs, native Group Replication, universal CMS support", "drawback": "GPL licensing complicates commercial redistribution; 65,535-byte row limit; weaker JSON support than Postgres", "pricing": "GPL free or Oracle commercial · managed ~$0.034/hr"},
+    {"id": "cockroachdb", "name": "CockroachDB", "cat": "Distributed SQL", "bestFor": "Startups needing horizontal scale + Postgres compatibility without re-architecting", "strength": "Postgres-wire-compatible, distributed by default, automatic failover, most generous free-tier storage (10GiB)", "drawback": "Operational complexity for teams that don't actually need distribution", "pricing": "Free tier: 10GiB storage, 50M request units/mo"},
+    {"id": "mongodb", "name": "MongoDB", "cat": "Document store", "bestFor": "Flexible-schema CMS, e-commerce catalogs", "strength": "Atlas Vector Search built in, queryable encryption, time-series collections", "drawback": "Schema flexibility can become a data-integrity liability without discipline", "pricing": "Atlas managed: consumption-based"},
+    {"id": "dynamodb", "name": "DynamoDB (AWS)", "cat": "Key-value / serverless", "bestFor": "Gaming leaderboards, shopping carts, AWS-native serverless apps", "strength": "Fully managed, automatic scaling, single-digit ms latency, global tables", "drawback": "AWS lock-in; limited query flexibility (no ad-hoc joins)", "pricing": "On-demand pay-per-request or provisioned capacity"},
+    {"id": "cassandra", "name": "Cassandra", "cat": "Wide-column", "bestFor": "Time-series/IoT, transaction logs, high-availability multi-DC", "strength": "Linear scalability via masterless ring architecture, tunable consistency", "drawback": "Operational complexity; eventual-consistency model needs app-level awareness", "pricing": "OSS free · managed via DataStax Astra"},
+    {"id": "warehouse", "name": "Cloud data warehouse (BigQuery/Snowflake/Redshift)", "cat": "Analytics/OLAP", "bestFor": "Analytics/ETL/reporting-centric workloads, not transactional apps", "strength": "Built for large scans, aggregations, BI-tool integration — Postgres/Mongo/Cassandra aren't optimized for this", "drawback": "Wrong tool for OLTP/transactional workloads", "pricing": "Usage-based (per-query or per-slot)"},
+]
+
+
+def pick_database_vendor(db):
+    v = db["v"].lower()
+    if "warehouse" in v:
+        primary_id = "warehouse"
+    elif "Cassandra" in db["v"]:
+        primary_id = "cassandra"
+    elif "MongoDB" in db["v"]:
+        primary_id = "mongodb"
+    else:
+        primary_id = "postgres"
+    return {"v": db["v"], "why": db["why"], "primaryId": primary_id, "conf": db["conf"]}
+
+
+DATABASE_NOTE = "CockroachDB and DynamoDB aren't drop-in swaps for Postgres/MongoDB — CockroachDB trades operational simplicity for horizontal-scale-by-default, and DynamoDB trades query flexibility for AWS-native zero-ops. Source: docs/alternatives-research/02-data-layer-database-cache-messaging.md."
+
+CACHE_VENDORS = [
+    {"id": "redis", "name": "Redis", "cat": "Single-threaded", "bestFor": "Shared state, pub/sub, rich data structures, Lua scripting", "strength": "15+ years production-proven, massive ecosystem, richest data-type support", "drawback": "Single-threaded throughput ceiling; license moved to SSPL/RSALv2 (not OSI-approved open source)", "pricing": "Free self-hosted under SSPL/RSALv2"},
+    {"id": "valkey", "name": "Valkey", "cat": "Single-threaded", "bestFor": "Drop-in Redis replacement for teams avoiding the licensing change", "strength": "BSD-3 licensed, Linux Foundation-backed, performance parity with Redis", "drawback": "Fewer bundled modules than Redis Stack; younger community", "pricing": "Free, BSD-3"},
+    {"id": "dragonfly", "name": "DragonflyDB", "cat": "Multi-threaded", "bestFor": "Maximum single-node throughput, Redis-protocol-compatible workloads", "strength": "Reports 1-4M ops/sec (3-25x Redis) via shared-nothing multi-threaded architecture", "drawback": "Smaller community; BSL 1.1 license is source-available, not fully open source", "pricing": "Free self-hosted under BSL 1.1"},
+    {"id": "keydb", "name": "KeyDB", "cat": "Multi-threaded", "bestFor": "Multi-threaded Redis with active-active replication", "strength": "Active replication support, 300K-1M ops/sec", "drawback": "Smaller community; slower development pace than Redis", "pricing": "Free, BSD-3"},
+    {"id": "memcached", "name": "Memcached", "cat": "Multi-threaded", "bestFor": "Simple key-value caching, session stores, lowest protocol overhead", "strength": "Simplest protocol, lowest per-key overhead", "drawback": "No data structures beyond strings, no persistence, no pub/sub/scripting", "pricing": "Free, BSD"},
+]
+CACHE_NOTE = "Redis' SSPL/RSALv2 license is a compliance-relevant fact, not just technical — orgs with strict open-source-license policies may need to route to Valkey/KeyDB/Memcached (permissive BSD-3) instead. Source: docs/alternatives-research/02-data-layer-database-cache-messaging.md."
+
+MESSAGING_VENDORS = [
+    {"id": "kafka", "name": "Kafka", "cat": "Distributed event log", "bestFor": "Ordered event streams needing replay", "strength": "Per-partition ordering, offset-based replay, 1M+ msgs/sec, rich ecosystem (Connect, Schema Registry)", "drawback": "Operationally heavy; overkill for simple task queues", "pricing": "Self-hosted ~$1,500-5,000/mo (3-node) or Confluent Cloud"},
+    {"id": "rabbitmq", "name": "RabbitMQ", "cat": "AMQP broker, flexible routing", "bestFor": "Task queues with competing consumers; complex routing patterns", "strength": "Purpose-built for many-workers-pulling-from-one-queue; lower p99 latency (1-50ms) than Kafka", "drawback": "No replay — messages gone after consumption; per-queue-only ordering", "pricing": "Self-hosted ~$500-1,500/mo (3-node)"},
+    {"id": "nats", "name": "NATS (Core + JetStream)", "cat": "Lightweight pub/sub", "bestFor": "Service-to-service RPC, lightweight multi-tenant streaming", "strength": "Sub-millisecond latency, built-in request-reply, cheap per-tenant streams (good SaaS fit)", "drawback": "Core NATS has no persistence; JetStream throughput trails Kafka", "pricing": "Self-hosted ~$300-800/mo (3-node) — cheapest researched option"},
+    {"id": "sqs", "name": "Amazon SQS", "cat": "Managed queue (AWS-native)", "bestFor": "Fire-and-forget task queues inside AWS, zero-ops teams", "strength": "Fully managed, automatic scaling, high-throughput FIFO up to 70K msg/sec", "drawback": "No replay; Standard queues offer best-effort ordering only; AWS-only", "pricing": "Pay-per-request, no fixed infra cost"},
+    {"id": "pubsub", "name": "Google Pub/Sub", "cat": "Managed queue (GCP-native)", "bestFor": "Fully managed, zero-ops pub/sub inside a GCP-native stack", "strength": "Native GCP integration, zero ops, at-least-once delivery guarantees", "drawback": "No event-replay/audit-trail model the way Kafka provides; GCP-only", "pricing": "Pay-per-use, no fixed infra cost"},
+    {"id": "pulsar", "name": "Apache Pulsar", "cat": "Multi-region geo-replicated streaming", "bestFor": "Compliance-driven multi-region deployments, tenant-per-topic topologies", "strength": "Built-in geo-replication, independently scalable broker/storage layers", "drawback": "Smaller community than Kafka; multi-region ops needs specialized expertise", "pricing": "Self-hosted, complex; commercial support available"},
+    {"id": "redpanda", "name": "Redpanda", "cat": "Kafka-wire-compatible", "bestFor": "Sub-10ms tail-latency workloads — trading, real-time fraud detection", "strength": "Drop-in Kafka client compatibility, deterministic latency via thread-per-core design", "drawback": "No Kafka Streams support; smaller ecosystem", "pricing": "Self-hosted; commercial/cloud options available"},
+]
+
+
+def pick_messaging_vendor(s, msg):
+    v = msg["v"]
+    if "Kafka" in v and "RabbitMQ" not in v:
+        primary_id = "kafka"
+    elif "RabbitMQ" in v:
+        primary_id = "rabbitmq"
+    elif "Pub/Sub" in v:
+        primary_id = "pubsub"
+    elif "Managed queue" in v:
+        primary_id = "sqs"
+    else:
+        primary_id = "kafka"
+    return {"v": msg["v"], "why": msg["why"], "primaryId": primary_id, "conf": msg["conf"]}
+
+
+MESSAGING_NOTE = "Kafka and SQS solve genuinely different problems (ordered replayable log vs. fire-and-forget task queue) — treating one as a strict substitute for the other is a modeling error. The zero-signal default recommends RabbitMQ rather than Kafka (fixed after this research flagged the previous Kafka-first fallback as over-provisioning the generic case). Source: docs/alternatives-research/02-data-layer-database-cache-messaging.md."
+
+# --- Group 3: AI/LLM layer ---
+
+LLM_PROVIDER_VENDORS = [
+    {"id": "openai", "name": "OpenAI", "cat": "Frontier, broadest ecosystem", "bestFor": "Deepest third-party tooling ecosystem, strongest general reasoning", "strength": "Broadest library/integration support, mature fine-tuning + batch API, input caching", "drawback": "Often highest sticker price; enterprise compliance requires routing through Azure OpenAI instead", "pricing": "Per-token, caching/batch discounts"},
+    {"id": "anthropic", "name": "Anthropic Claude", "cat": "Agentic workflows, code reasoning", "bestFor": "Code assistants, multi-step agents, complex instruction-following", "strength": "Strong multi-file code understanding, production-grade computer-use, effective long-context caching", "drawback": "No public API fine-tuning; enterprise procurement often via AWS Bedrock", "pricing": "Per-token, caching at scale"},
+    {"id": "gemini", "name": "Google Gemini", "cat": "Multimodal, long-context", "bestFor": "Video/audio/large-document workloads at scale", "strength": "Native 1M+ token context with multimodal input, Flash variants optimize cost/token", "drawback": "Vertex AI adds operational overhead off-GCP", "pricing": "Per-token, Flash tier for volume"},
+    {"id": "azureopenai", "name": "Azure OpenAI", "cat": "Enterprise compliance wrapper", "bestFor": "Enterprises needing private networking, compliance certs, auditability", "strength": "SOC2/HIPAA/GDPR/data-residency certs, Provisioned Throughput Units for latency SLAs", "drawback": "Region-quota management overhead; throttling can occur earlier than raw OpenAI", "pricing": "Per-token + PTU"},
+    {"id": "bedrock", "name": "AWS Bedrock", "cat": "Multi-model AWS-native platform", "bestFor": "AWS-committed teams wanting one API across model families", "strength": "Unified interface across Claude/Llama/Mistral/Titan, deep IAM/CloudWatch/VPC integration", "drawback": "Model availability varies by region", "pricing": "Per-token + provisioned capacity"},
+    {"id": "mistral", "name": "Mistral AI", "cat": "Cost-efficient, EU-friendly, open-weight path", "bestFor": "Cost efficiency, multilingual strength, an eventual self-hosting exit ramp", "strength": "Competitive per-token pricing, open-weight models reduce lock-in, Codestral for code", "drawback": "Less mature reasoning/agentic feature set than frontier labs", "pricing": "Per-token, competitive"},
+    {"id": "deepseek", "name": "DeepSeek", "cat": "Ultra-low-cost, high-volume", "bestFor": "Price-sensitive, high-volume workloads", "strength": "Reported 5-10x cheaper than frontier alternatives, OpenAI-API-compatible (easy swap-in)", "drawback": "Limited enterprise certifications; more variable reasoning consistency", "pricing": "Lowest per-token tier researched"},
+    {"id": "selfhosted", "name": "Self-hosted open-weight (Llama, Mistral)", "cat": "Self-hosted", "bestFor": "Data-residency-strict requirements, or genuinely sustained high-volume/high-utilization usage", "strength": "No per-token vendor cost at scale, full data control, predictable latency", "drawback": "Break-even is steep: 160M-256M tokens/mo just to beat frontier API pricing; GPU cost multiplies fast below ~60% utilization", "pricing": "GPU rental $1,000+/mo, realistic total cost 1.3-5x raw GPU price"},
+]
+
+
+def pick_llm_provider(s, llm):
+    if s["compliance"] or s["enterprise"] or s["security"]:
+        primary_id, conf = "anthropic", "high"
+    else:
+        primary_id, conf = "openai", "medium"
+    v = llm[0]["name"] if llm else ("Anthropic Claude" if primary_id == "anthropic" else "OpenAI GPT")
+    why = "Mirrors the AI/LLM Recommendation card above — Claude for regulated/security-sensitive contexts (strong safety & instruction-following), OpenAI for the broadest general-purpose default otherwise. See that card for the full task-by-task model mapping."
+    return {"v": v, "why": why, "primaryId": primary_id, "conf": conf}
+
+
+LLM_PROVIDER_NOTE = "Azure OpenAI and AWS Bedrock are compliance/procurement wrappers around the same underlying models (OpenAI's, and Claude/Llama/Mistral's respectively) — not independent model choices; ideally a compliance+cloud-shop combination would route the \"best bet\" to the wrapper rather than the raw provider. AUDIT NOTE: the best-bet logic above intentionally mirrors the AI/LLM Recommendation card's existing compliance/enterprise/security → Claude-vs-OpenAI split exactly (to avoid contradicting that card, the same fix applied elsewhere in this pass) and does not yet add that cloud-wrapper or cost-tier (DeepSeek/self-hosted) routing — Azure OpenAI/Bedrock/Mistral/DeepSeek/self-hosted are fully documented as comparison rows below but never selected as the \"best bet\" today. That's a disclosed scope gap, not a hidden one — a good next refinement, best done alongside the AI/LLM Recommendation card so the two don't diverge. Self-hosting only beats API pricing at volumes most single products never reach — see the AI/LLM Recommendation and Hosting cards for the full break-even math. Source: docs/alternatives-research/03-ai-llm-layer-models-vectordb-rag-guardrails.md."
+
+VECTORDB_VENDORS = [
+    {"id": "pgvector", "name": "pgvector", "cat": "PostgreSQL extension", "bestFor": "Teams already on Postgres with <10M vectors", "strength": "Zero additional infrastructure, full ACID compliance, vectors + relational data in one transaction", "drawback": "HNSW index build time/memory pressure grows at scale", "pricing": "Free (OSS) — cost is your existing Postgres"},
+    {"id": "pinecone", "name": "Pinecone", "cat": "Fully managed SaaS", "bestFor": "Startups/enterprises prioritizing speed-to-market over cost control", "strength": "Zero-ops serverless, billions-of-vectors scale, built-in inference/reranking", "drawback": "Cost predictability issues at scale — pricing climbs steeply on higher tiers", "pricing": "Free · $20+/mo (Builder) · $50+/mo (Standard) · $500+/mo (Enterprise)"},
+    {"id": "qdrant", "name": "Qdrant", "cat": "Open-source + managed", "bestFor": "Budget-conscious teams still wanting production-grade performance", "strength": "Composable search (dense + sparse + filters), Rust-native, low self-hosting cost", "drawback": "Practical ceiling around ~50M vectors", "pricing": "Free tier (1GB RAM/4GB disk); self-hosted ~$30-50/mo"},
+    {"id": "weaviate", "name": "Weaviate", "cat": "Open-source + managed", "bestFor": "Apps needing hybrid search (keyword + vector) in one query", "strength": "Native BM25 + vector + metadata filtering, built-in vectorization, multi-modal", "drawback": "GraphQL API has a real learning curve; JVM runtime is resource-heavy", "pricing": "$45/mo minimum up to $400+/mo (Premium)"},
+    {"id": "milvus", "name": "Milvus / Zilliz Cloud", "cat": "Open-source + managed", "bestFor": "Billion-scale datasets", "strength": "Reports up to 10x query throughput improvement, GPU acceleration, distributed querying", "drawback": "Self-hosted mode needs its own metadata store, object storage, and messaging system", "pricing": "OSS free; Zilliz managed pricing available"},
+    {"id": "mongoatlas", "name": "MongoDB Atlas Vector Search", "cat": "Fully managed SaaS", "bestFor": "Full-stack apps that already have operational data in MongoDB", "strength": "Eliminates data-sprawl/sync-lag between app DB and vector store", "drawback": "Only pays off if already on MongoDB; capped at 4,096-dim embeddings", "pricing": "M0 free (512MB); Flex $0-30/mo; Dedicated ~$57+/mo"},
+]
+
+
+def pick_vector_db_vendor(s, vector_db):
+    if not vector_db["needed"]:
+        return {"v": "Not required", "why": vector_db["why"], "primaryId": None, "conf": "medium"}
+    db_choice = vector_db["dbChoice"]
+    if "pgvector" in db_choice:
+        primary_id = "pgvector"
+    elif "MongoDB" in db_choice:
+        primary_id = "mongoatlas"
+    else:
+        primary_id = "qdrant"
+    return {"v": db_choice, "why": vector_db["why"], "primaryId": primary_id, "conf": "medium"}
+
+
+VECTORDB_NOTE = "pgvector and MongoDB Atlas Vector Search are \"already have this database, add vectors to it\" choices, not general-purpose vector-database picks — route to these specifically when the existing-database signal already matches, not as a first-class option alongside Pinecone/Weaviate for a from-scratch build. Source: docs/alternatives-research/03-ai-llm-layer-models-vectordb-rag-guardrails.md."
+
+GUARDRAILS_VENDORS = [
+    {"id": "nemo", "name": "NVIDIA NeMo Guardrails", "cat": "Open-source, programmable middleware", "bestFor": "Engineering teams wanting deep customization, vendor-neutral across LLM providers", "strength": "Apache 2.0 (no vendor lock-in), GPU-accelerated sub-100ms latency, Colang DSL for business logic", "drawback": "Colang DSL has a real learning curve; needs your own operational infra", "pricing": "Free (OSS)"},
+    {"id": "guardrailsai", "name": "Guardrails AI", "cat": "Open-source Python framework", "bestFor": "Python teams needing strict, structured output validation", "strength": "50+ pre-built composable validators, Pydantic integration, self-hosted", "drawback": "Chained-validator configs get complex; streaming support has real limitations", "pricing": "Free (OSS)"},
+    {"id": "llamaguard", "name": "Llama Guard (3, 8B)", "cat": "Open-weight safety classifier (Meta)", "bestFor": "Teams wanting a dedicated input/output safety classifier model", "strength": "De facto open-source content classifier; competitive F1 on standard benchmarks", "drawback": "Uneven recall on hate speech/obfuscated requests; high false-positive rate on benign-but-sensitive content; ~50ms p99 on A100, 500ms+ on CPU", "pricing": "Free (open weights) — but real compute cost to run"},
+    {"id": "lakera", "name": "Lakera Guard", "cat": "Commercial, API-based security firewall", "bestFor": "Security teams in regulated industries focused on prompt-injection/data-leakage prevention", "strength": "Single API integration, no code changes, horizontally scalable", "drawback": "Limited built-in observability; gateway becomes a potential single point of failure", "pricing": "Not publicly listed"},
+    {"id": "azurecontentsafety", "name": "Azure AI Content Safety", "cat": "Cloud-managed content moderation", "bestFor": "Azure-native teams running conversational AI / RAG", "strength": "Native Azure OpenAI integration, multi-layer coverage", "drawback": "Microsoft's own docs acknowledge accuracy limitations on context-sensitive cases", "pricing": "Not publicly listed"},
+    {"id": "galileo", "name": "Galileo", "cat": "Commercial, enterprise observability + runtime protection", "bestFor": "Enterprise teams running production agents needing eval + observability + runtime protection together", "strength": "Luna-2 small models reportedly hit 0.95 F1 at 98% lower cost than GPT-4o-based checking; SaaS/VPC/on-prem deploy flexibility", "drawback": "Likely overkill/over-budget for a single-LLM-app use case", "pricing": "Not publicly listed"},
+    {"id": "bedrockguardrails", "name": "AWS Bedrock Guardrails", "cat": "Cloud-managed, AWS-native", "bestFor": "AWS/Bedrock-committed teams wanting guardrails as a platform feature", "strength": "Native Bedrock integration, granular per-check pricing, word/PII-regex filters free", "drawback": "AWS-only", "pricing": "Content filters $0.15/1K text units · Sensitive-info $0.10/1K · Word filters free"},
+]
+
+
+def pick_guardrails_vendor(s):
+    if s["enterprise"] and (s["security"] or s["compliance"]):
+        return {"v": "Lakera Guard (or Galileo if you need full eval + observability, not just runtime filtering)", "why": "Regulated enterprise context favors a commercial, zero-integration-effort security layer over a DIY open-source framework.", "primaryId": "lakera", "conf": "medium"}
+    if s["awsShop"]:
+        return {"v": "AWS Bedrock Guardrails", "why": "AWS-native context — guardrails as a Bedrock platform feature avoids standing up a separate service.", "primaryId": "bedrockguardrails", "conf": "medium"}
+    if s["azureShop"]:
+        return {"v": "Azure AI Content Safety", "why": "Azure-native context — integrates directly with Azure OpenAI.", "primaryId": "azurecontentsafety", "conf": "medium"}
+    if s["startupMvp"] or s["smallTeam"]:
+        return {"v": "NeMo Guardrails or Guardrails AI (open-source)", "why": "No dedicated security engineering budget yet — open-source frameworks avoid recurring commercial-platform cost while covering the core input/output validation needs.", "primaryId": "nemo", "conf": "medium"}
+    return {"v": "NVIDIA NeMo Guardrails", "why": "Vendor-neutral, deeply customizable default absent a strong cloud or budget signal.", "primaryId": "nemo", "conf": "low"}
+
+
+GUARDRAILS_NOTE = "The open-source-framework tier (NeMo, Guardrails AI, Llama Guard) and commercial-platform tier (Lakera, Galileo, Azure Content Safety, Bedrock Guardrails) answer different build-vs-buy questions — a small team with no dedicated security engineer should route toward the commercial tier's zero-integration-effort products; a team with ML engineering capacity wanting deep customization should route toward OSS. Source: docs/alternatives-research/03-ai-llm-layer-models-vectordb-rag-guardrails.md."
+
+
+# --- Group 4: DevOps + Frontend ---
+
+CICD_VENDORS = [
+    {"id": "githubactions", "name": "GitHub Actions", "cat": "SaaS CI/CD", "bestFor": "Open-source projects, teams already on GitHub", "strength": "Unlimited minutes for public repos, massive Actions marketplace, tightest GitHub integration", "drawback": "macOS runner minutes cost 10x Linux rate; self-hosted runners for private repos now bill per-minute (Mar 2026 change)", "pricing": "2,000 min/mo free (private) · $4/seat + usage overages"},
+    {"id": "gitlabci", "name": "GitLab CI", "cat": "SaaS + self-hosted CI/CD", "bestFor": "Enterprise teams wanting CI/CD + full DevOps platform in one product", "strength": "Free unlimited self-hosted runner execution; bundles container registry + security scanning", "drawback": "400 shared-runner minutes exhausts fast for an active team", "pricing": "400 min/mo free (shared runners) · $29/user/mo Premium"},
+    {"id": "circleci", "name": "CircleCI", "cat": "SaaS CI/CD", "bestFor": "Teams wanting the most generous hosted free allowance", "strength": "30x concurrency, flexible resource classes, test splitting included", "drawback": "macOS builds burn credits 20x faster than Linux", "pricing": "6,000 min/mo free (~30,000 credits) · $15/seat Performance"},
+    {"id": "jenkins", "name": "Jenkins", "cat": "Self-hosted, fully OSS", "bestFor": "Teams wanting zero vendor lock-in and full infra control", "strength": "100% free, 1,800+ plugins, runs anywhere", "drawback": "You own server admin, security patching, plugin maintenance", "pricing": "Free (MIT) — realistic infra cost ~$20-100/mo"},
+    {"id": "buildkite", "name": "Buildkite", "cat": "Hybrid hosted-control-plane/self-hosted-agent", "bestFor": "Teams with existing compute infra wanting a hybrid model", "strength": "Unlimited self-hosted agents at no software cost, built-in test analytics", "drawback": "Hosted free tier capped at 3 concurrent jobs", "pricing": "500 hosted min/mo free · $15/user/mo Teams"},
+]
+
+
+def pick_cicd_vendor(s, cicd):
+    if s["onPrem"]:
+        primary_id = "jenkins"
+    elif s["enterprise"]:
+        primary_id = "gitlabci"
+    else:
+        primary_id = "githubactions"
+    return {"v": cicd["v"], "why": cicd["why"], "primaryId": primary_id, "conf": cicd["conf"]}
+
+
+CICD_NOTE = "Jenkins and Buildkite's self-hosted-agent model is a fundamentally different cost shape than the SaaS-runner tools — cost trades from \"per-minute usage\" to \"infra you already run.\" Route by ops-capacity signal (has existing infra vs. wants zero infra to manage), not brand familiarity. Source: docs/alternatives-research/04-devops-frontend-cicd-observability-frameworks.md."
+
+OBSERVABILITY_VENDORS = [
+    {"id": "datadog", "name": "Datadog", "cat": "Enterprise SaaS", "bestFor": "Orgs prioritizing breadth + correlation depth across metrics/traces/logs", "strength": "One-click metric-anomaly → trace → log correlation, AI-assisted analysis, 15+ integrated sub-products", "drawback": "High cost trajectory — mid-size enterprises commonly report $500K-2M+/yr; no self-hosted option", "pricing": "Usage-based, scales with data volume"},
+    {"id": "grafanastack", "name": "Grafana Stack (Prometheus/Mimir + Loki + Tempo)", "cat": "Open-source, composable", "bestFor": "Cost-sensitive teams and regulated enterprises needing data residency", "strength": "Apache 2.0, native OpenTelemetry support, composable, runs anywhere", "drawback": "Real operational overhead if self-hosted; correlation needs manual configuration", "pricing": "Free/OSS core + optional Grafana Cloud SaaS tiers"},
+    {"id": "newrelic", "name": "New Relic", "cat": "Enterprise APM platform", "bestFor": "Orgs with existing APM investment or prioritizing deep application-performance monitoring", "strength": "Mature APM heritage, strong language-agent support", "drawback": "Correlation UX less polished than Datadog; enterprise deployments still commonly reach $500K+/yr", "pricing": "Per-user + per-GB ingested"},
+    {"id": "honeycomb", "name": "Honeycomb", "cat": "Distributed tracing specialist", "bestFor": "Teams needing high-cardinality debugging and exploratory trace analysis", "strength": "Strongest trace-based exploratory query model researched, OpenTelemetry-native", "drawback": "Narrow scope — not a full standalone platform, typically paired with something else", "pricing": "~$130/mo starting"},
+    {"id": "signoz", "name": "SigNoz", "cat": "Open-source, OTel-first", "bestFor": "Teams wanting a single OSS product covering metrics+logs+traces as a Datadog alternative", "strength": "Most OpenTelemetry-centric of the researched platforms, self-hosted or cloud", "drawback": "Smaller ecosystem than established players; younger product", "pricing": "Free (OSS) + competitive cloud pricing"},
+    {"id": "splunk", "name": "Splunk", "cat": "Enterprise SIEM/log platform", "bestFor": "Heavy compliance/audit log-management needs, usually paired with a dedicated APM tool", "strength": "Deep log search/analysis and compliance-reporting maturity many APM-only tools lack", "drawback": "Log-ingestion cost scales steeply at volume; not a full APM replacement on its own — not independently sourced/priced in this research pass", "pricing": "Usage-based, ingestion-volume-driven — not sourced in this research pass"},
+    {"id": "dynatrace", "name": "Dynatrace", "cat": "Enterprise APM (AI-assisted)", "bestFor": "Large, complex enterprise scale wanting automatic root-cause analysis", "strength": "Strong AI-assisted automatic root-cause analysis (Davis AI)", "drawback": "Premium enterprise pricing; steep to adopt for smaller teams — not independently sourced/priced in this research pass", "pricing": "Usage-based, enterprise-tier — not sourced in this research pass"},
+]
+
+
+def pick_observability_vendor(s, obs):
+    v = obs["v"]
+    if "Splunk" in v:
+        primary_id = "splunk"
+    elif "Dynatrace" in v:
+        primary_id = "dynatrace"
+    elif "Grafana" in v:
+        primary_id = "grafanastack"
+    else:
+        primary_id = "datadog"
+    return {"v": obs["v"], "why": obs["why"], "primaryId": primary_id, "conf": obs["conf"]}
+
+
+OBSERVABILITY_NOTE = "Honeycomb and the Grafana Stack answer different questions than Datadog/New Relic — Honeycomb is a specialist meant to be paired with something else, and the Grafana Stack is a build-your-own-platform choice, not a single-vendor drop-in. Route \"small team, wants one thing that works\" to all-in-one products; \"has platform-engineering capacity, cost-sensitive, needs data residency\" to self-hosted Grafana Stack. Source: docs/alternatives-research/04-devops-frontend-cicd-observability-frameworks.md."
+
+FRONTEND_VENDORS = [
+    {"id": "react", "name": "React", "cat": "Component library", "bestFor": "Complex apps needing the largest ecosystem and talent pool", "strength": "~40% of professional developers use it regularly — largest talent pool of any option here; mature ecosystem", "drawback": "Requires assembling routing/state/UI from separate libraries — no batteries-included default", "pricing": "Free (OSS)"},
+    {"id": "nextjs", "name": "Next.js", "cat": "React meta-framework", "bestFor": "Production React deployments needing SSR/SSG/full-stack in one framework", "strength": "SSR + static generation + file routing + API routes bundled; Server Components cut client JS", "drawback": "De facto default for React — worth naming explicitly since React alone doesn't include this layer", "pricing": "Free (OSS); deployable on Vercel, AWS, Railway, Render, self-hosted"},
+    {"id": "vue", "name": "Vue 3", "cat": "Progressive framework", "bestFor": "Teams wanting a gentler learning curve, or incremental adoption", "strength": "Template-based syntax lowers the learning curve, genuinely progressive adoption model", "drawback": "Smaller talent pool than React or Angular", "pricing": "Free (OSS)"},
+    {"id": "angular", "name": "Angular", "cat": "Full-stack enterprise framework", "bestFor": "Large enterprise teams wanting enforced architectural consistency across many contributors", "strength": "TypeScript mandatory, comprehensive built-ins (DI, routing, forms, HTTP client, i18n)", "drawback": "Steeper learning curve; more opinionated/rigid structure", "pricing": "Free (OSS)"},
+    {"id": "svelte", "name": "Svelte / SvelteKit", "cat": "Compile-time framework", "bestFor": "Apps prioritizing minimal bundle size and fast initial load", "strength": "No virtual DOM — compiles to optimized vanilla JS, dramatically smaller bundles", "drawback": "Smaller ecosystem and talent pool than React/Vue/Angular", "pricing": "Free (OSS)"},
+    {"id": "astro", "name": "Astro", "cat": "Framework-agnostic static-site generator", "bestFor": "Content-focused sites — docs, blogs, marketing pages", "strength": "Framework-agnostic, Islands architecture ships JS only for interactive components", "drawback": "Not a fit for highly interactive, app-like experiences", "pricing": "Free (OSS)"},
+]
+
+
+def pick_frontend_vendor(s, fe):
+    primary_id = "angular" if "Angular" in fe["v"] else "react"
+    return {"v": fe["v"], "why": fe["why"], "primaryId": primary_id, "conf": fe["conf"]}
+
+
+FRONTEND_NOTE = "React and Next.js are not competing siblings — Next.js is the meta-framework layer that gives React the SSR/routing/API capabilities Vue/Angular/SvelteKit ship natively. index.html's current pickFrontend() only returns React/Angular/Flutter (no Next.js opinion) — pairing React with a meta-framework choice is a reasonable next refinement, not an urgent fix. Source: docs/alternatives-research/04-devops-frontend-cicd-observability-frameworks.md."
+
+
 def pick_languages(s):
     picks = []
     hits = 0
@@ -352,40 +619,46 @@ def pick_languages(s):
             hits += 1
     if not picks:
         picks.append("Python (FastAPI) for AI-heavy services, Java (Spring Boot) or Go for core backend")
-    return {
-        "v": " · ".join(picks),
-        "why": "Split by workload: Java/Go for performance-critical transactional paths, Python for AI/ML and RAG pipelines where the ecosystem (LangChain, LlamaIndex, etc.) lives.",
-        "conf": "high" if hits >= 1 else "medium" if picks else "low",
-    }
+    return {"v": " · ".join(picks), "why": "Split by workload: Java/Go for performance-critical transactional paths, Python for AI/ML and RAG pipelines where the ecosystem (LangChain, LlamaIndex, etc.) lives.", "conf": "high" if hits >= 1 else "medium" if picks else "low"}
 
 
 def pick_architecture(s):
-    # Team size is the primary driver of monolith-vs-microservices (Conway's law) — a 3-person
-    # team shouldn't run real microservices even if compliance/enterprise needs are also
-    # present; those needs are served by governance practices, not service-decomposition granularity.
+    hexagonal_note = " In code, hexagonal means: a domain/core layer with zero framework imports (no ORM decorators, no HTTP framework types leaking in), a ports layer of interfaces the domain defines (e.g. a repository interface), and an adapters layer of concrete implementations (the actual Postgres repository, the actual REST controller) that depend inward on the domain — never the reverse. The test that catches violations: your domain layer should compile/type-check with your web framework and database driver both uninstalled."
     if s["startupMvp"] or s["smallTeam"]:
         why = "Small teams move faster with one deployable unit; hexagonal internal layering keeps a future microservices split cheap."
         if s["enterprise"] or s["compliance"]:
             why += " Compliance/enterprise requirements are met through governance practices (audit logging, strict domain boundaries, IAM) inside this monolith, not by splitting into services your team is too small to operate."
+        why += hexagonal_note
         return {"v": "Modular monolith (hexagonal internal structure), split into microservices later", "why": why, "conf": "high"}
     if s["enterprise"] or s["largeTeam"]:
-        return {"v": "Microservices with Hexagonal (Ports & Adapters) architecture", "why": "Enterprise scale and multiple teams benefit from independent deployability and clean domain boundaries isolated from infrastructure concerns.", "conf": "high"}
-    return {"v": "Microservices, hexagonal per bounded context", "why": "Balances scalability with maintainability for a mid-size team and domain.", "conf": "low"}
+        return {"v": "Microservices with Hexagonal (Ports & Adapters) architecture", "why": "Enterprise scale and multiple teams benefit from independent deployability and clean domain boundaries isolated from infrastructure concerns." + hexagonal_note, "conf": "high"}
+    return {"v": "Microservices, hexagonal per bounded context", "why": "Balances scalability with maintainability for a mid-size team and domain." + hexagonal_note, "conf": "low"}
 
 
 def pick_compute(s):
+    ws_note = ""
+    if s["liveMultiplayer"]:
+        ws_note = " This is a live multiplayer/broadcast workload specifically — confirm your platform holds persistent WebSocket connections correctly: on Cloud Run that means session affinity enabled and min-instances above zero so an active game room's connections don't drop on a cold start; a plain request/response FaaS setup (Lambda without API Gateway WebSocket routes configured) is the wrong default here."
+    video_note = ""
+    if s["videoConferencing"]:
+        video_note = " Video/voice conferencing needs a dedicated media-server tier (SFU) alongside this — see the \"Media server topology\" trade-off card — don't size your general app compute for it; the SFU has its own CPU/bandwidth profile driven by concurrent participant count, not request volume."
+
     if s["onPrem"]:
         return {"v": "Self-managed Kubernetes on bare metal/VMware — no public-cloud serverless", "why": "Serverless compute (Lambda/Cloud Run) is a public-cloud managed service and isn't available air-gapped/on-prem — self-managed Kubernetes (or a simpler container orchestrator) inside your isolated network is the realistic option.", "conf": "high"}
     if (s["startupMvp"] or s["smallTeam"]) and (s["highScale"] or s["enterprise"] or s["realtime"]):
-        return {"v": "Serverless containers (Cloud Run / Fargate) with autoscaling", "why": "Small team and real-time/high-scale/enterprise needs pull in different directions here — managed serverless containers give real autoscaling and container-level control without the ops burden of running your own Kubernetes cluster. Move to full self-managed Kubernetes only once you have dedicated platform engineering capacity.", "conf": "medium"}
+        return {"v": "Serverless containers (Cloud Run / Fargate) with autoscaling", "why": "Small team and real-time/high-scale/enterprise needs pull in different directions here — managed serverless containers give real autoscaling and container-level control without the ops burden of running your own Kubernetes cluster. Move to full self-managed Kubernetes only once you have dedicated platform engineering capacity." + ws_note + video_note, "conf": "medium"}
     if s["startupMvp"] or (s["smallTeam"] and not s["highScale"]):
-        return {"v": "Serverless (Cloud Run / Lambda / Cloud Functions)", "why": "Minimal ops overhead, pay-per-use, ideal for small teams and unpredictable early-stage traffic.", "conf": "high"}
+        return {"v": "Serverless (Cloud Run / Lambda / Cloud Functions)", "why": "Minimal ops overhead, pay-per-use, ideal for small teams and unpredictable early-stage traffic." + ws_note + video_note, "conf": "high"}
     if s["highScale"] or s["enterprise"] or s["realtime"]:
-        return {"v": "Kubernetes (containers) with autoscaling", "why": "Predictable performance, fine-grained resource control, and portability needed at scale or for latency-sensitive workloads.", "conf": "high"}
-    return {"v": "Hybrid: serverless for bursty/event-driven work, Kubernetes for core always-on services", "why": "Use the right compute per workload rather than one-size-fits-all.", "conf": "low"}
+        return {"v": "Kubernetes (containers) with autoscaling", "why": "Predictable performance, fine-grained resource control, and portability needed at scale or for latency-sensitive workloads." + ws_note + video_note, "conf": "high"}
+    return {"v": "Hybrid: serverless for bursty/event-driven work, Kubernetes for core always-on services", "why": "Use the right compute per workload rather than one-size-fits-all." + ws_note + video_note, "conf": "low"}
 
 
 def pick_messaging(s):
+    if s["liveMultiplayer"]:
+        return {"v": "Redis Pub/Sub (or a managed realtime service — Ably/Pusher/PubNub) for room broadcast/fan-out — not Kafka", "why": "This is a low-latency broadcast-to-a-room problem (push live scores/state to however many players are in a session right now), not a durable-log problem — Kafka is built for replayable, ordered event history, which adds latency and operational cost this pattern doesn't need and doesn't use. Redis Pub/Sub (already in your stack for caching) or a managed realtime service handles many-subscriber fan-out with much lower latency. Add Kafka separately, later, only if you also want a durable analytics stream of every game event — that's a different, additive need, not a replacement for the broadcast layer.", "conf": "high"}
+    if s["collabEditing"]:
+        return {"v": "CRDT sync relay (Yjs + y-websocket/Hocuspocus self-hosted, or a managed provider — Liveblocks/PartyKit) — not Kafka, not a generic pub/sub broker", "why": "Concurrent multi-user document edits need conflict-free merge semantics, not just message delivery — a CRDT library (Yjs is the most mature; Automerge and Loro are newer Rust/WASM alternatives with strong JSON/history semantics) does the actual conflict resolution client-side, and the server is a \"dumb\" relay forwarding binary update packets plus periodic snapshot persistence. Presence/cursor data (who's online, cursor position) should ride a separate ephemeral, non-persisted broadcast channel (Yjs Awareness protocol) — never the durable document-update path or a transactional database, since it's high-frequency and disposable. Self-host (y-websocket/Hocuspocus) for control and no per-seat cost, or use a managed provider (Liveblocks, PartyKit) to skip building the relay/persistence layer yourself.", "conf": "high"}
     picks = []
     hits = 0
     if s["highScale"] or s["realtime"] or s["finance"]:
@@ -398,15 +671,13 @@ def pick_messaging(s):
         picks.append("Managed queue (SQS/Pub/Sub) rather than self-managed Kafka")
         hits += 1
     if not picks:
-        picks.append("Kafka for event streaming, Redis for pub/sub-style ephemeral messaging")
-    return {
-        "v": " · ".join(picks),
-        "why": "Kafka for durable, replayable event streams (audit, fraud, analytics); lighter managed queues when volume/ops budget don't justify Kafka yet.",
-        "conf": "high" if hits >= 2 else "medium" if hits == 1 else "low",
-    }
+        picks.append("RabbitMQ (task queue / flexible routing) for now — move to Kafka if you need durable replay or multiple independent consumer groups")
+    return {"v": " · ".join(picks), "why": "Kafka for durable, replayable event streams (audit, fraud, analytics); lighter managed queues/RabbitMQ when volume/ops budget don't justify Kafka yet.", "conf": "high" if hits >= 2 else "medium" if hits == 1 else "low"}
 
 
 def pick_mesh(s):
+    if (s["mtlsMentioned"] or s["compliance"]) and (s["enterprise"] or s["largeTeam"]):
+        return {"v": "Istio with SPIFFE/SPIRE-issued workload identity (not just mTLS certs Istio manages internally)", "why": "Istio's built-in mTLS secures the transport, but its default self-managed certificate identity is Istio-internal — it doesn't give you a portable, verifiable workload identity standard auditors or a zero-trust program can reason about independently of your mesh vendor. SPIFFE/SPIRE issues short-lived, cryptographically verifiable identity documents (SVIDs) per workload that Istio can consume, which is the difference between \"traffic between our services happens to be encrypted\" and \"every service call carries a verifiable identity you can write a policy against.\" Worth the added SPIRE-server operational piece specifically because compliance/audit and multi-team trust boundaries are both in play here.", "conf": "high"}
     if s["enterprise"] or s["largeTeam"]:
         return {"v": "Istio", "why": "Multiple services/teams benefit from mTLS, traffic shaping, and observability at the mesh layer.", "conf": "medium"}
     return {"v": "Not needed yet (revisit past ~10-15 services)", "why": "Service mesh adds operational complexity; skip until service count and cross-team traffic policy needs justify it.", "conf": "medium"}
@@ -417,10 +688,13 @@ def pick_cache(s):
 
 
 def pick_database(s):
+    if s["liveMultiplayer"]:
+        return {"v": "Redis (in-memory, sorted sets) as the primary store for live session/leaderboard state · PostgreSQL or a NoSQL document store for post-session history only", "why": "Live leaderboard/game-room state is read and written by every participant multiple times per second — that's an in-memory-data-structure problem, not a transactional (Postgres) or flexible-document (Firestore-style NoSQL) problem. Redis sorted sets (ZADD/ZRANGE) give O(log N) rank updates and reads, which is what a real-time leaderboard actually needs. A document database used the \"obvious\" way here — one shared leaderboard document updated by every player — hits real per-document write-contention limits (roughly 1-10 sustained writes/sec/document is the safe range before Firestore-class stores need a distributed-counter sharding workaround) well before a live session's write rate. Once a session ends, write the final results to a normal persisted store (Postgres for relational history/analytics, or a NoSQL document store if the shape is simpler) — that's a completely different access pattern (low-frequency, durable) from the live path, so it's fine for it to use a completely different store.", "conf": "high"}
+    if s["feedFanout"] and s["highScale"]:
+        return {"v": "Cassandra or DynamoDB (wide-column, precomputed per-user feed) as the primary feed store · PostgreSQL for user/social-graph relational data", "why": "A news feed at real scale is a fan-out problem, not a relational-query problem: one post from a followed account needs to land in every follower's feed. Precomputing each user's feed as a wide-column partition (fan-out-on-write) at post time is what Cassandra/ScyllaDB/DynamoDB are built for, and is how this is actually done at scale (this is the standard Twitter/Instagram-class pattern) — a relational store would need an expensive real-time join/aggregation per feed load instead. Keep the social graph itself (who-follows-whom, profile data) in Postgres — that part is genuinely relational and doesn't have the fan-out write-amplification problem.", "conf": "high"}
+
     picks = []
     hits = 0
-    # Analytics/ETL/reporting-centric workload with no transactional/chat/RAG signal = a
-    # warehouse question, not an OLTP-database question.
     warehouse_need = s["dataHeavy"] and not s["structured"] and not s["chatbot"] and not s["ragNeed"]
     if warehouse_need:
         picks.append("Cloud data warehouse (BigQuery / Snowflake / Redshift) as the analytics store")
@@ -443,6 +717,8 @@ def pick_database(s):
         if warehouse_need
         else "Postgres for relational/transactional integrity, MongoDB for flexible document data, Cassandra only when write volume and multi-region needs exceed what Postgres/Mongo comfortably handle."
     )
+    if s["geospatial"]:
+        why += " Geospatial note: enable the PostGIS extension on Postgres for indexed nearest-neighbor/radius queries (e.g. \"drivers within 2km\") — plain Postgres without PostGIS will do this with slow full-table scans. For a live, constantly-updating position feed specifically (a driver's current location, not trip history), treat that as ephemeral state in Redis (GEOADD/GEOSEARCH) rather than writing every position update to Postgres — same reasoning as the live-leaderboard pattern: high-frequency writes to a shared/near-shared key belong in an in-memory store, with Postgres holding the durable trip/ride record instead."
     return {"v": " · ".join(picks), "why": why, "conf": "high" if hits >= 1 else "medium"}
 
 
@@ -461,17 +737,11 @@ def pick_observability(s):
     why = "Best all-around breadth (APM, logs, infra, RUM) with fastest time-to-value."
     conf = "low"
     if s["enterprise"] and s["compliance"]:
-        apm = "Splunk (+ Datadog or Dynatrace for APM)"
-        why = "Enterprises with heavy compliance/audit needs often standardize log management on Splunk alongside a dedicated APM tool."
-        conf = "high"
+        apm, why, conf = "Splunk (+ Datadog or Dynatrace for APM)", "Enterprises with heavy compliance/audit needs often standardize log management on Splunk alongside a dedicated APM tool.", "high"
     elif s["enterprise"] and s["highScale"]:
-        apm = "Dynatrace"
-        why = "Strong automatic root-cause analysis (AI-assisted) valuable at large, complex enterprise scale."
-        conf = "high"
+        apm, why, conf = "Dynatrace", "Strong automatic root-cause analysis (AI-assisted) valuable at large, complex enterprise scale.", "high"
     elif s["startupMvp"]:
-        apm = "Grafana + Prometheus (OSS) or Datadog free tier"
-        why = "Lower cost for a small team; upgrade to Datadog/Dynatrace as scale and budget grow."
-        conf = "medium"
+        apm, why, conf = "Grafana + Prometheus (OSS) or Datadog free tier", "Lower cost for a small team; upgrade to Datadog/Dynatrace as scale and budget grow.", "medium"
     return {"v": f"OpenTelemetry (instrumentation standard) + {apm}", "why": f"Instrument everything with OpenTelemetry (vendor-neutral) and ship to {apm.split(' ')[0]}. {why}", "conf": conf}
 
 
@@ -487,11 +757,7 @@ def pick_frontend(s):
         hits += 1
     if not picks:
         picks.append("React")
-    return {
-        "v": " + ".join(picks),
-        "why": "React for fastest ecosystem/hiring fit (Angular if already an enterprise Angular shop); Flutter when both iOS and Android are needed from one codebase.",
-        "conf": "high" if hits >= 1 else "low",
-    }
+    return {"v": " + ".join(picks), "why": "React for fastest ecosystem/hiring fit (Angular if already an enterprise Angular shop); Flutter when both iOS and Android are needed from one codebase.", "conf": "high" if hits >= 1 else "low"}
 
 
 def pick_llm(s):
@@ -538,6 +804,8 @@ def pick_rag(s):
         return {"name": "RAG likely not required", "why": "No knowledge-base / document-search need detected. If the assistant only needs general reasoning (no proprietary data lookup), skip RAG and rely on the base LLM, or add it later.", "conf": "medium"}
     if s["structured"] and not s["unstructured"]:
         return {"name": RAG_TYPES[12], "why": "Data lives in structured/relational stores — retrieval should query the database (text-to-SQL or schema-aware retrieval) rather than chunked documents.", "conf": "high"}
+    if s["agentic"] and (s["compliance"] or s["healthcare"]):
+        return {"name": RAG_TYPES[5] + " + Corrective RAG (CRAG) validation layer", "why": "Agentic workflow in a compliance/clinical context needs both properties, not just one: let the agent decide dynamically when/what to retrieve (Agentic RAG), but also validate every retrieved chunk before generation (Corrective RAG) so the agent's autonomous retrieval decisions can't bypass the trust/hallucination checks a regulated or clinical context requires.", "conf": "high"}
     if s["agentic"]:
         return {"name": RAG_TYPES[5], "why": "Agentic workflow — let the agent decide dynamically when to retrieve and from which source, rather than always retrieving.", "conf": "high"}
     if s["enterprise"] and s["knowledgeBase"]:
@@ -599,11 +867,12 @@ def pick_docs(s):
 
 def pick_model_orchestration(s):
     mapping = [
-        {"task": "Architecture / system design & complex multi-step reasoning", "model": "Frontier large model (Claude Opus/Sonnet, GPT-5/o-series, Gemini Pro)", "why": "These calls are low-volume and high-stakes — the cost premium is trivial against the value of a correct design decision, and deep reasoning quality drops off fastest on smaller models."},
-        {"task": "Code generation, review & refactoring", "model": "Mid-large code-tuned model (Claude Sonnet, GPT-4.1-class, DeepSeek-Coder-V2, Codestral)", "why": "Strong code benchmarks at meaningfully lower cost/latency than reserving your top-tier reasoning model for every completion."},
-        {"task": "Classification, extraction, routing, simple chat", "model": "Small open-weight model, 4B–12B (Gemma, Llama, DeepSeek-small, Phi)", "why": "High call volume, low per-call complexity — this is where model cost dominates total spend, so the cheapest model that clears the quality bar wins. Also the tier most worth self-hosting."},
-        {"task": "RAG answer synthesis", "model": "Mid-size model, 12B–30B", "why": "Needs enough reasoning capacity to stay grounded in retrieved context without hallucinating, but doesn't need frontier-level general reasoning."},
-        {"task": "Agent orchestration / multi-step tool-use", "model": "Frontier or a tool-use-specialized large model", "why": "Reliability of tool-call formatting and multi-step planning degrades noticeably on smaller models — this is the task type least tolerant of downgrading."},
+        {"task": "Reasoning agent — architecture/system design & complex multi-step reasoning", "model": "Frontier large model (Claude Opus/Sonnet, GPT-5/o-series, Gemini Pro)", "why": "These calls are low-volume and high-stakes — the cost premium is trivial against the value of a correct design decision, and deep reasoning quality drops off fastest on smaller models.", "runtimeHint": "Cloud API / OpenRouter — quality-critical, low-volume; not worth self-hosting."},
+        {"task": "Code agent — generation, review & refactoring", "model": "Mid-large code-tuned model (Claude Sonnet, GPT-4.1-class, DeepSeek-Coder-V2, Codestral)", "why": "Strong code benchmarks at meaningfully lower cost/latency than reserving your top-tier reasoning model for every completion.", "runtimeHint": "Cloud API — code is the most quantization/downgrade-sensitive task type, avoid the on-device/small-model tier for this one."},
+        {"task": "Summarization agent — document/thread condensation", "model": "Mid-size model, 12B–30B (or a 4B–12B open-weight model for short/simple inputs)", "why": "Summarization is more forgiving than code or agentic tool-use — a well-tuned mid-size (or even small) model does this reliably, so it's one of the better candidates for cost/latency optimization via a smaller model.", "runtimeHint": "Good Ollama/self-host candidate if volume is steady — one of the cheapest tasks to run locally without a quality hit."},
+        {"task": "Classification, extraction, routing, simple chat", "model": "Small open-weight model, 4B–12B (Gemma, Llama, DeepSeek-small, Phi)", "why": "High call volume, low per-call complexity — this is where model cost dominates total spend, so the cheapest model that clears the quality bar wins. Also the tier most worth self-hosting.", "runtimeHint": "Best Ollama/self-host candidate — high volume + low complexity is exactly where dedicating hardware pays off fastest."},
+        {"task": "RAG answer synthesis", "model": "Mid-size model, 12B–30B", "why": "Needs enough reasoning capacity to stay grounded in retrieved context without hallucinating, but doesn't need frontier-level general reasoning.", "runtimeHint": "Self-hostable at steady volume; cloud API/OpenRouter otherwise for simplicity."},
+        {"task": "Agent orchestration / multi-step tool-use", "model": "Frontier or a tool-use-specialized large model", "why": "Reliability of tool-call formatting and multi-step planning degrades noticeably on smaller models — this is the task type least tolerant of downgrading.", "runtimeHint": "Cloud API — tool-call reliability is the task type least tolerant of a smaller/local model."},
     ]
     if s["startupMvp"] and s["smallTeam"] and not s["agentic"] and not s["highScale"]:
         return {
@@ -652,20 +921,40 @@ def pick_hosting_location(s):
     }
 
 
-VRAM_TABLE = [
-    {"tier": "4B (small)", "fp16": "~8–10 GB", "int4": "~4–6 GB", "gpu": "Single consumer/edge GPU — RTX 4090 (24GB), L4 (24GB), or smaller", "notes": "Comfortable single-GPU deployment even with room for concurrent requests and moderate context length."},
-    {"tier": "12B (small-mid)", "fp16": "~24–28 GB", "int4": "~10–14 GB", "gpu": "L4 (24GB) or RTX 4090 (24GB) quantized; A10G (24GB) fp16 is tight", "notes": "Int4 quantization is the practical default here to keep single-GPU deployment comfortable with headroom for KV-cache."},
-    {"tier": "30B (mid-large)", "fp16": "~60–65 GB", "int4": "~18–22 GB", "gpu": "A100 40GB (quantized) or A100/H100 80GB (fp16) for headroom", "notes": "This is where quantization stops being optional for single-GPU deployment — budget for it unless you have an 80GB card."},
-    {"tier": "70B+ (large)", "fp16": "~140+ GB", "int4": "~38–45 GB", "gpu": "Multi-GPU (2–4× A100/H100) for fp16, or a single H100 80GB with aggressive quantization", "notes": "Multi-GPU tensor-parallel serving adds real operational complexity — this tier is usually where \"just use a cloud API for this size\" wins on total cost of ownership unless you have a hard data-residency reason not to."},
+COMPUTE_TIER_TABLE = [
+    {"tier": "Mobile / Tablet", "ram": "4–16 GB unified", "modelFit": "1B–4B at Q4_K_M (4-bit)", "examples": "iPhone/Android flagship, iPad Pro", "notes": "On-device inference runs on the device's own RAM/CPU/NPU — no dedicated GPU. See the on-device runtime note below for framework choice (llama.cpp/GGUF, MLC-LLM, ExecuTorch)."},
+    {"tier": "Laptop (Windows / Mac)", "ram": "16–36 GB unified/system RAM", "modelFit": "7B–14B at Q4_K_M/Q5_K_M", "examples": "MacBook Pro/Air (M-series), Windows laptop with 32GB+ RAM", "notes": "The natural tier for local dev work and Ollama-based prototyping — comfortable single-user inference, not concurrent-request production serving."},
+    {"tier": "Workstation / Studio-class", "ram": "96–256 GB unified memory", "modelFit": "30B–70B comfortably; up to ~200B (inference) on DGX Spark, ~405B across 2 linked DGX Spark units", "examples": "Mac Studio (M3 Ultra, 96–512GB unified), NVIDIA DGX Spark (128GB unified, Grace Blackwell)", "notes": "DGX Spark is explicitly positioned as a desktop dev/prototyping box for local agents, not a production server — same caveat applies to Mac Studio for anything needing concurrent multi-user serving."},
+    {"tier": "Server (dedicated GPU)", "ram": "24–80 GB VRAM per GPU", "modelFit": "4B–70B depending on GPU count/size, int4 quantized", "examples": "Single/multi RTX 4090, L4, A100, or H100", "notes": "Where production self-hosted serving actually happens — dedicated VRAM instead of unified memory shared with the OS, and built for concurrent request throughput."},
+    {"tier": "Enterprise server / datacenter", "ram": "Multi-GPU cluster (4–8+ H100/H200, 320GB+ aggregate VRAM)", "modelFit": "70B–400B+, distributed/tensor-parallel serving", "examples": "On-prem GPU cluster, or cloud-hosted GPU fleet (AWS/GCP/Azure)", "notes": "This is usually also the point where a frontier cloud API (Claude, GPT, Gemini) wins on total cost of ownership versus self-hosting at this scale — self-host here only for a hard data-residency/compliance reason, not for cost."},
 ]
 
 
-def pick_vram_tier(s):
+def pick_compute_tier(s):
+    if s["mobile"] or s["iot"] or s["tablet"]:
+        return {"tier": "Mobile / Tablet", "why": "On-device inference target detected (mobile/tablet/IoT-gateway) — this is a fundamentally different sizing question from server hosting: RAM shared with the OS, no dedicated GPU, battery/thermal limits. Start at the 1B–4B tier and size up only if the smallest model that clears your quality bar isn't sufficient."}
     if (s["compliance"] or s["healthcare"] or s["security"]) and s["enterprise"]:
-        return {"tier": "30B (mid-large)", "why": "Fully local deployment for regulated data needs enough model capacity to approach cloud-frontier quality; 30B-class open-weight models are the current sweet spot for that trade-off before multi-GPU complexity kicks in at 70B+."}
-    if s["dataHeavy"] or s["ragNeed"]:
-        return {"tier": "12B (small-mid)", "why": "RAG-heavy workloads benefit from a bit more reasoning capacity than the smallest tier for staying grounded in retrieved context, without paying 30B's VRAM/GPU cost."}
-    return {"tier": "4B (small)", "why": "For routing/classification/extraction-style local workloads, the smallest tier that clears your quality bar minimizes both VRAM footprint and per-request latency — start here and size up only if evals show it's insufficient."}
+        return {"tier": "Server (dedicated GPU)", "why": "Fully local deployment for regulated data needs enough dedicated VRAM to approach cloud-frontier quality at the 30B tier without the added complexity of multi-GPU distributed serving — move to the Enterprise tier only once request volume genuinely requires it."}
+    if s["enterprise"] and s["highScale"]:
+        return {"tier": "Enterprise server / datacenter", "why": "Enterprise scale plus high request volume is where dedicated multi-GPU capacity (or an equivalent cloud GPU fleet) becomes worth the operational complexity — though re-check against a frontier cloud API's total cost first, since this tier is exactly where API pricing often still wins."}
+    if s["startupMvp"] or s["smallTeam"]:
+        return {"tier": "Laptop (Windows / Mac)", "why": "A small team's realistic self-hosting starting point is local dev-machine inference (Ollama on a laptop) for prototyping — not a dedicated GPU server, which is premature spend before you have predictable production volume."}
+    return {"tier": "Server (dedicated GPU)", "why": "Default mid-scale assumption absent a stronger signal either way — a single dedicated GPU (int4-quantized 4B–12B model) is the realistic production tier once you're past laptop-scale prototyping but before enterprise multi-GPU need."}
+
+
+def pick_runtime(s):
+    sensitive = s["compliance"] or s["healthcare"] or s["security"] or (s["security"] and s["finance"])
+    if s["onPrem"]:
+        return {"rec": "Ollama (fully local, no external network calls)", "why": "Air-gapped/no-public-cloud rules out any router or API that proxies requests to third-party infrastructure — Ollama running entirely inside your network boundary is the only option that fits, not a preference.", "conf": "high"}
+    if sensitive and s["selfHostInfra"]:
+        return {"rec": "Ollama, self-hosted alongside your existing Docker/Kubernetes infrastructure", "why": "You already carry the ops burden of self-hosting (Docker/K8s in the stack) and have sensitive-data handling requirements — Ollama keeps prompts/outputs on infrastructure you already operate and control, rather than adding a new third-party data-processing relationship for a marginal convenience gain.", "conf": "high"}
+    if sensitive:
+        return {"rec": "Ollama (self-hosted) for anything touching regulated/sensitive data; direct provider SDK for the rest", "why": "Compliance/security-sensitive data shouldn't transit a third-party router even one that claims not to log content — Ollama keeps it on infrastructure you control. Non-sensitive auxiliary tasks can still use a direct cloud provider SDK without adding OpenRouter's extra hop for something that doesn't need model-routing flexibility.", "conf": "high"}
+    if s["startupMvp"] and not s["selfHostInfra"]:
+        return {"rec": "OpenRouter (or a direct provider SDK if you only ever need one model family)", "why": "A small team without existing GPU/self-hosting infrastructure gets model breadth (300+ models across many providers via one API) and zero hardware ownership from OpenRouter — the ~5.5% routing fee and per-token pricing is a reasonable trade for not operating GPUs at your stage. Revisit Ollama once you have steady, predictable request volume worth dedicating hardware to.", "conf": "medium"}
+    if s["selfHostInfra"] and (s["highScale"] or s["enterprise"]):
+        return {"rec": "Hybrid: Ollama for your steady, predictable high-volume workload; OpenRouter (or direct SDK) for bursty/exploratory traffic", "why": "This is the common production pattern, not a compromise — steady, high-volume request classes (the ones worth dedicating a GPU to) run cheaper and more privately on self-hosted Ollama, while unpredictable or exploratory traffic is better served by not pre-committing hardware to it. Route by workload predictability, not an all-or-nothing platform choice.", "conf": "medium"}
+    return {"rec": "Direct provider SDK to start; move to OpenRouter if you need multi-model flexibility, or Ollama once self-hosting infrastructure and steady volume both exist", "why": "Absent a specific driver (data sensitivity, existing self-host infra, or a concrete need for many model families at once), the simplest option — calling your chosen provider's SDK directly — has the least moving parts. Add OpenRouter's routing layer or Ollama's self-hosting only when a concrete requirement calls for it.", "conf": "low"}
 
 
 def pick_interface_topology(s):
@@ -694,7 +983,20 @@ def pick_interface_topology(s):
     else:
         rag = {"rec": "Direct integration (single retrieval service)", "why": "One vector store, one retrieval service, called directly — no need for extra topology until you have multiple knowledge sources or regions to reconcile."}
 
-    return {"glossary": glossary, "llm": llm, "rag": rag}
+    if not s["agentic"]:
+        agent = {"rec": "Not applicable — no multi-agent/agentic workflow detected", "why": "This axis only matters once you have more than one agent or a genuinely autonomous multi-step workflow to coordinate. A single request/response LLM call doesn't need an agent topology decision."}
+    elif s["onPrem"]:
+        agent = {"rec": "Local-only orchestration (single self-hosted orchestrator process)", "why": "Same constraint as the LLM layer — no external network path exists, so agent coordination has to run entirely inside your boundary rather than routing to any external agent/model service."}
+    elif (s["compliance"] or s["security"]) and s["enterprise"]:
+        agent = {"rec": "Mesh interface (agents as first-class mesh participants)", "why": "Multiple agents each calling different tools/models/data sources in a regulated context need the same consistent mTLS, retry, and audit-observability policy your service mesh already gives regular services — treat agent-to-agent and agent-to-tool calls as mesh traffic, not an unmanaged side channel."}
+    elif s["highScale"] or s["globalMultiRegion"]:
+        agent = {"rec": "Distributed orchestration (multiple independent agent-runner replicas behind a queue/load balancer)", "why": "At real scale, a single orchestrator process becomes the bottleneck and single point of failure — run multiple stateless agent-runner replicas pulling from a shared task queue, the same pattern as any other horizontally-scaled service."}
+    elif s["selfHostInfra"] or hosting["rec"].startswith("Hybrid") or hosting["rec"].startswith("Local"):
+        agent = {"rec": "Hybrid orchestration (one coordinator routing sub-tasks to local or cloud models by task type)", "why": "You're already splitting model calls between local and cloud (see the runtime recommendation above) — the agent orchestrator should make that same routing decision per sub-task: a reasoning-heavy step goes to a frontier cloud model, a classification/extraction step can route to your self-hosted small model."}
+    else:
+        agent = {"rec": "Direct orchestration (single coordinator process, no distribution layer yet)", "why": "One agentic workflow, one coordinator calling out to tools/models directly — add distribution or mesh complexity only once you have multiple concurrent agent workflows or a scale/compliance driver for it."}
+
+    return {"glossary": glossary, "llm": llm, "rag": rag, "agent": agent}
 
 
 def pick_mcp_vs_api(s):
@@ -757,22 +1059,21 @@ def pick_vector_db_placement(s, rag_result):
 def pick_tradeoffs(s):
     t = []
 
-    # 0. On-prem overrides the whole cloud-strategy question
+    # 0/1. On-prem overrides cloud strategy; else single-cloud vs multi-cloud
     if s["onPrem"]:
         t.append({"d": "Public cloud vs. On-premises", "rec": "On-premises / air-gapped private infrastructure", "why": "An explicit no-public-cloud / air-gapped requirement overrides the usual cloud trade-off entirely — this isn't a single-vs-multi-cloud decision, it's a build-and-operate-your-own-infrastructure decision.", "when": "Revisit only if the air-gap/no-public-cloud constraint is ever relaxed (e.g. a sovereign/government cloud region becomes an approved option).", "conf": "high"})
-    # 1. Single-cloud vs multi-cloud
     elif s["enterprise"] and s["globalMultiRegion"] and s["compliance"]:
         t.append({"d": "Single-cloud vs. Multi-cloud", "rec": "Primary cloud + a scoped secondary cloud (DR / regulatory only)", "why": "Global, regulated, enterprise-scale profile — data-residency law or contractual disaster-recovery requirements often force a second cloud presence, but that's different from running everything active-active across two clouds.", "when": "Go further into full multi-cloud only if you have multiple regions with hard data-sovereignty laws requiring in-country cloud presence, or a board-level mandate to avoid single-vendor concentration risk regardless of cost.", "conf": "medium"})
     else:
         t.append({"d": "Single-cloud vs. Multi-cloud", "rec": "Single cloud", "why": "Multi-cloud roughly doubles operational complexity — two IAM models, two networking stacks, two sets of managed services to learn and monitor — for a benefit (vendor leverage, avoiding lock-in) that rarely pays off before significant scale.", "when": "Reconsider if a single-vendor outage has caused a business-critical incident more than once, procurement specifically wants renewal leverage, or compliance mandates in-country presence your primary cloud can't offer.", "conf": "high"})
 
-    # 2. IaC tool
+    # 2. IaC tool (OpenTofu-aware)
     if s["pythonMentioned"] and not s["awsShop"]:
-        t.append({"d": "Terraform vs. Pulumi vs. native IaC", "rec": "Terraform, with Pulumi as a strong alternative given your Python usage", "why": "Terraform remains the safest default — largest module ecosystem, cloud-agnostic, easiest to hire for. Pulumi is worth it specifically because it lets your existing Python team write infra in a real language (loops, conditionals, unit tests) instead of HCL.", "when": "Pick Pulumi over Terraform if your team already writes Python/TypeScript daily and wants infra code reviewed and tested the same way as application code. Pick cloud-native IaC (CDK, Bicep, Deployment Manager) only if you are firmly single-cloud and want zero third-party tooling in the deploy path.", "conf": "medium"})
+        t.append({"d": "OpenTofu/Terraform vs. Pulumi vs. native IaC", "rec": "OpenTofu (or Terraform) as the default, with Pulumi as a strong alternative given your Python usage", "why": "HCL-style declarative IaC remains the safest default for module ecosystem size, cloud-agnostic multi-cloud optionality, and ease of hiring — but since HashiCorp relicensed Terraform to BSL in 2023, OpenTofu (the Linux Foundation-governed, MPL-2.0/OSI-approved fork) is now the version worth defaulting to for a genuinely open, vendor-neutral toolchain; the two stayed compatible enough that switching later is mostly mechanical. Pulumi is worth it specifically because it lets your existing Python team write infra in a real language (loops, conditionals, unit tests) instead of HCL.", "when": "Pick Pulumi over OpenTofu/Terraform if your team already writes Python/TypeScript daily and wants infra code reviewed and tested the same way as application code. Stay on HashiCorp Terraform specifically only if you depend on HCP Terraform Stacks or a vendor-consolidation/procurement requirement mandates HashiCorp as sole vendor. Pick cloud-native IaC (CDK, Bicep, Deployment Manager) only if you are firmly single-cloud and want zero third-party tooling in the deploy path.", "conf": "medium"})
     elif s["awsShop"] and s["startupMvp"]:
-        t.append({"d": "Terraform vs. AWS CDK vs. native IaC", "rec": "Terraform as the default; AWS CDK is a reasonable alternative for an AWS-only small team", "why": "Terraform is cloud-agnostic and keeps optionality if you ever add a second cloud or need to hire from the broader IaC talent pool. CDK gives tighter day-one AWS service coverage and lets you write infra in TypeScript/Python, at the cost of being AWS-only.", "when": "Choose CDK specifically if you're confident you'll stay AWS-only long-term and want less HCL to learn. Move to Terraform (or add it) the moment a second cloud or a Terraform-experienced hire enters the picture.", "conf": "medium"})
+        t.append({"d": "OpenTofu/Terraform vs. AWS CDK vs. native IaC", "rec": "OpenTofu (or Terraform) as the default; AWS CDK is a reasonable alternative for an AWS-only small team", "why": "OpenTofu/Terraform is cloud-agnostic and keeps optionality if you ever add a second cloud or need to hire from the broader IaC talent pool — OpenTofu specifically over HashiCorp's Terraform build for its OSI-approved MPL-2.0 license (Terraform moved to BSL in 2023) and growing adoption momentum, unless a specific reason ties you to HashiCorp's build. CDK gives tighter day-one AWS service coverage and lets you write infra in TypeScript/Python, at the cost of being AWS-only.", "when": "Choose CDK specifically if you're confident you'll stay AWS-only long-term and want less HCL to learn. Move to OpenTofu/Terraform (or add it) the moment a second cloud or an IaC-experienced hire enters the picture.", "conf": "medium"})
     else:
-        t.append({"d": "Terraform vs. other IaC", "rec": "Terraform", "why": "Industry-standard, cloud-agnostic, declarative IaC with the largest module ecosystem and community support — the safest long-term default for hiring, documentation, and multi-cloud optionality.", "when": "Reconsider only if your team is deeply invested in a general-purpose language (Python/TypeScript/Go) and wants Pulumi's programmatic style, or you are permanently single-cloud and want to drop third-party tooling in favor of native IaC (CloudFormation/Bicep/Deployment Manager).", "conf": "medium"})
+        t.append({"d": "OpenTofu vs. Terraform vs. other IaC", "rec": "OpenTofu", "why": "Industry-standard, cloud-agnostic, declarative IaC with the largest module ecosystem and community support — the safest long-term default for hiring, documentation, and multi-cloud optionality. Specifically OpenTofu over HashiCorp's own Terraform build: after HashiCorp relicensed Terraform to the Business Source License in 2023 (not OSI-approved, restricts competing commercial use), the Linux Foundation-backed OpenTofu fork kept the original MPL-2.0 open-source license, has since shipped independent improvements (built-in state encryption, provider for_each, an -exclude flag), and had passed HashiCorp's own Terraform in share of new workspace creation on at least one major TACOS platform by mid-2026. The CLI and provider ecosystem stayed compatible enough that switching between them later is a mostly mechanical migration, not a rewrite.", "when": "Stay on HashiCorp's Terraform build specifically if you depend on HCP Terraform Stacks (no OpenTofu equivalent yet) or a procurement/vendor-consolidation requirement mandates HashiCorp as sole vendor. Reconsider the whole category if your team is deeply invested in a general-purpose language (Python/TypeScript/Go) and wants Pulumi's programmatic style, or you are permanently single-cloud and want to drop third-party tooling in favor of native IaC (CloudFormation/Bicep/Deployment Manager).", "conf": "medium"})
 
     # 3. Kafka vs Pub/Sub vs managed queue
     if s["highScale"] or s["realtime"] or s["finance"]:
@@ -782,14 +1083,97 @@ def pick_tradeoffs(s):
     else:
         t.append({"d": "Kafka vs. Pub/Sub vs. managed queue (SQS/SNS)", "rec": "Managed queue (SQS/Pub/Sub) first; adopt Kafka only when you outgrow it", "why": "Start with the lowest-ops option. Introducing a Kafka cluster before you actually need its guarantees just adds infrastructure to operate for no measurable benefit.", "when": "Move to Kafka when you need: event replay/audit trail, multiple consumer groups reading the same stream at different speeds, sustained throughput above roughly 10k messages/sec, or you're building a real event-sourcing/CDC pipeline.", "conf": "medium"})
 
-    # 4. Kubernetes vs Serverless — mirrors pick_compute()'s branch order exactly so this
-    # trade-off card never contradicts the Compute Model card for the same signals.
+    # 4. Kubernetes vs Serverless — mirrors pick_compute()'s branch order exactly
     if (s["startupMvp"] or s["smallTeam"]) and (s["highScale"] or s["enterprise"] or s["realtime"]):
         t.append({"d": "Kubernetes vs. Serverless", "rec": "Serverless containers (Cloud Run / Fargate) — middle path", "why": "Small team and real-time/high-scale/enterprise needs pull in different directions: full self-managed Kubernetes is more operational overhead than your team can likely absorb, but plain serverless functions under-deliver on control at this scale. Managed serverless containers give autoscaling and container-level control without a Kubernetes control plane to operate.", "when": "Move to full self-managed Kubernetes once you have dedicated platform engineering capacity; fall back to plain serverless functions if scale/latency needs turn out lighter than described.", "conf": "medium"})
     elif s["startupMvp"] or (s["smallTeam"] and not s["highScale"]):
         t.append({"d": "Kubernetes vs. Serverless", "rec": "Serverless (Cloud Run / Lambda / Cloud Functions)", "why": "No cluster to operate, patch, or right-size; you pay only for what you use, which matches a small team's time budget and an early-stage product's unpredictable traffic.", "when": "Move to Kubernetes once you have many services with complex inter-service networking needs, need fine-grained resource/cost control at steady high load, or serverless cold-start latency becomes a measurable user-facing problem.", "conf": "high"})
     elif s["highScale"] or s["enterprise"] or s["realtime"]:
         t.append({"d": "Kubernetes vs. Serverless", "rec": "Kubernetes", "why": "Predictable performance under sustained load, fine-grained resource control, and portability across clouds — worth the operational overhead once you're running many services at real scale or have strict latency SLAs serverless cold-starts would violate.", "when": "Fall back to serverless for individual bursty/event-driven workloads even inside a Kubernetes-centric org (e.g. scheduled jobs, webhooks) — it's not all-or-nothing per service.", "conf": "high"})
+
+    # 5. Single API gateway vs. multiple gateways
+    if s["enterprise"] and s["largeTeam"]:
+        t.append({"d": "Single API gateway vs. multiple gateways", "rec": "Multiple gateways, aligned to team/domain boundaries", "why": "Once different teams own different sets of microservices, a single shared gateway becomes a deployment bottleneck and a point of contention — every team's routing/policy change queues behind everyone else's. Domain-aligned gateways (or gateway instances per bounded context) let each team deploy independently, at the cost of needing a central API-management layer on top for consistent auth/observability/discovery across them.", "when": "Consolidate back toward fewer gateways if the coordination overhead of running many independent instances starts costing more than the deployment bottleneck it solved — this shows up as duplicated cross-cutting policy work (auth, rate limiting) drifting out of sync across gateways.", "conf": "medium"})
+    elif s["mobile"] and s["web"]:
+        t.append({"d": "Single API gateway vs. multiple gateways", "rec": "Backend-for-Frontend (BFF) — a gateway per client type (mobile, web)", "why": "Mobile and web clients typically need different data shapes, payload sizes, and auth flows — forcing both through one general-purpose gateway usually means accumulating conditional logic that serves neither client well. A thin BFF per client type lets each be optimized for its own frontend without that logic bleeding into a shared gateway.", "when": "Skip BFF and stay on a single gateway if your mobile and web clients actually consume near-identical API shapes today — add the split only once real payload/auth divergence between them shows up, not preemptively.", "conf": "medium"})
+    elif s["highScale"] and s["globalMultiRegion"]:
+        t.append({"d": "Single API gateway vs. multiple gateways", "rec": "Regional gateway instances behind global routing (same product, deployed per-region)", "why": "At global scale, the driver for multiple gateway instances is latency and regional failure isolation, not team ownership — a single centralized gateway (even a scalable one) forces every request through one region's network path. This is a deployment-topology decision, not a \"different product per region\" one.", "when": "Stay on a single regional deployment if your actual user base is concentrated in one geography despite \"global\" ambitions — don't pay the multi-region operational cost before the latency problem is real and measured.", "conf": "medium"})
+    else:
+        t.append({"d": "Single API gateway vs. multiple gateways", "rec": "Single gateway", "why": "For a small-to-mid team with one or a few client types and no strong domain-ownership boundaries yet, one gateway is simply less to build, secure, and monitor — one place to apply auth, rate limiting, and logging consistently. This is the default nearly every source on this pattern converges on: start with one, split only when a specific pain (deployment contention, client-shape divergence, or regional latency) actually shows up.", "when": "Split into multiple gateways (BFF, domain-aligned, or regional — see the three variants above) once you can name the specific pain driving it: distinct teams blocking on each other's gateway deploys, mobile/web payload needs diverging enough to matter, or measured latency from serving a global user base out of one region.", "conf": "medium"})
+
+    # 6. Delivery methodology — Waterfall vs. Agile
+    if s["fixedScope"] and not s["onPrem"]:
+        t.append({"d": "Delivery methodology — Waterfall vs. Agile", "rec": "Waterfall (or a gated-Waterfall shell)", "why": "Fixed-price/fixed-scope contractual delivery or a formal RFP/statement-of-work process usually mandates sign-off gates and locked scope before work starts — that's a real external constraint, not a team preference, and Agile's assumption of evolving scope doesn't fit a contract that's already fixed it.", "when": "Move toward Agile-inside-the-gates (deliver iteratively between contractual milestones, not literally waterfall-sequential engineering) the moment the contract structure allows it — pure sequential Waterfall engineering is rarely required even when contractual gating is.", "conf": "medium"})
+    elif s["enterprise"] and s["largeTeam"]:
+        t.append({"d": "Delivery methodology — Waterfall vs. Agile", "rec": "Hybrid — Agile delivery inside a lightweight Waterfall-gated governance shell", "why": "Large orgs often need budget/audit gates at a portfolio level without forcing sequential engineering underneath them — this gets you both: gated checkpoints for governance, iterative sprints for the actual engineering work.", "when": "Drop the gating shell entirely and go fully Agile if your organization's actual governance need turns out lighter than assumed (e.g. no external audit/budget-cycle requirement forcing the gates).", "conf": "medium"})
+    else:
+        t.append({"d": "Delivery methodology — Waterfall vs. Agile", "rec": "Agile", "why": "Requirements for a net-new product build are inherently uncertain and will change as you learn — Agile's iterative cycle absorbs that change cheaply. A small team specifically is a stronger argument for Agile, not Waterfall: you can't afford the heavyweight upfront specification process Waterfall assumes, and there's usually no external contractual/regulatory gate forcing rigidity.", "when": "Move toward Waterfall-style gating only if a specific external constraint appears — a fixed-price contract, a regulatory sign-off process, or a hardware-coupled build where late-stage software change is expensive to absorb. Team size alone is not that trigger.", "conf": "high" if (s["startupMvp"] or s["smallTeam"]) else "medium"})
+
+    # 7. Enterprise framework — TOGAF vs. SAFe
+    if s["togafMentioned"] or s["safeMentioned"]:
+        both = s["togafMentioned"] and s["safeMentioned"]
+        mentioned_what = "both" if both else ("TOGAF" if s["togafMentioned"] else "SAFe")
+        rec = "Both — TOGAF for architecture governance, SAFe for delivery coordination" if both else ("TOGAF (architecture governance)" if s["togafMentioned"] else "SAFe (scaled delivery coordination)")
+        t.append({"d": "Enterprise framework — TOGAF vs. SAFe", "rec": rec, "why": "You explicitly mentioned " + mentioned_what + " — worth naming precisely what each solves so they don't get used interchangeably: TOGAF is an architecture-governance framework (a shared vocabulary and review process for multi-system/multi-domain architecture decisions), SAFe is a framework for coordinating Agile delivery across many teams at once. An org can genuinely need both, one, or neither depending on whether the pain point is architecture governance, delivery coordination, or neither yet.", "when": "Drop whichever one doesn't match your actual pain point — adopting a framework because it was mentioned rather than because it solves a real coordination problem just adds process overhead.", "conf": "high"})
+    elif s["enterprise"] and s["largeTeam"]:
+        t.append({"d": "Enterprise framework — TOGAF vs. SAFe", "rec": "Both worth evaluating — TOGAF for architecture governance, SAFe for delivery coordination", "why": "Large org, multiple teams, is the profile where both frameworks earn their coordination overhead: TOGAF gives a shared architecture vocabulary and review process across systems/domains, SAFe coordinates Agile delivery across many squads at once. They solve different problems (architecture governance vs. delivery coordination) and aren't a single either/or choice.", "when": "Adopt only the one matching your actual pain point (architecture governance vs. delivery coordination) rather than both by default — introducing either without a concrete coordination problem to solve just adds process weight a smaller/simpler org structure doesn't need.", "conf": "medium"})
+    else:
+        t.append({"d": "Enterprise framework — TOGAF vs. SAFe", "rec": "Neither — lightweight architecture decision records (ADRs) instead", "why": "Both frameworks add real coordination overhead that isn't justified below a certain org size/team count — for a small-to-mid team, a lightweight ADR per major architecture decision (context, decision, consequences) captures the same \"why did we decide this\" value TOGAF formalizes, without the process weight.", "when": "Revisit if you cross into genuinely large-org territory: multiple teams needing a shared architecture vocabulary (→ TOGAF), or coordinating Agile delivery across many squads at once (→ SAFe).", "conf": "medium"})
+
+    # 8. IT governance — COBIT vs. ITIL
+    if s["cobitMentioned"] or s["itilMentioned"]:
+        both_gov = s["cobitMentioned"] and s["itilMentioned"]
+        mentioned_gov = "both" if both_gov else ("COBIT" if s["cobitMentioned"] else "ITIL")
+        rec = "Both — COBIT for IT risk/controls/audit governance, ITIL for day-to-day service management process" if both_gov else ("COBIT (IT risk/controls/audit governance)" if s["cobitMentioned"] else "ITIL v4 (service management process)")
+        t.append({"d": "IT governance/service management — COBIT vs. ITIL", "rec": rec, "why": "You explicitly mentioned " + mentioned_gov + " — precise scoping matters here since these solve different problems from each other and from TOGAF/SAFe above: COBIT is a governance/control framework auditors and boards use to assess whether IT risk is being managed (access controls, change management oversight, audit evidence), while ITIL is an operational framework for running IT services day to day (incident response, change management process, problem management, service catalog). A regulated enterprise can need COBIT for governance, ITIL for operations, and TOGAF for architecture simultaneously — they're not competing frameworks, they answer different questions.", "when": "Drop whichever one doesn't match a real, current need — implementing COBIT's full control framework or ITIL's full process suite before you have the audit/operational-scale pressure that justifies it just adds ceremony.", "conf": "high"})
+    elif s["enterprise"] and s["compliance"]:
+        t.append({"d": "IT governance/service management — COBIT vs. ITIL", "rec": "Worth evaluating COBIT for IT controls/audit governance; ITIL v4 once production incident/change volume justifies formal process", "why": "Enterprise scale plus a compliance/regulated context is the profile where an auditor or board is likely to ask \"how do you govern IT risk\" — COBIT is the standard answer to that specific question. ITIL is a separate, operational concern (formal incident/change/problem management process) that's worth adopting once you have enough production services and enough on-call/change volume that ad hoc incident handling stops working, which often lags the governance need.", "when": "Skip both if your actual regulatory scope doesn't require formal IT-controls attestation and your operational scale is still small enough that lightweight on-call/change practices work fine — introducing either framework early just adds process your team will resent and route around.", "conf": "medium"})
+    else:
+        t.append({"d": "IT governance/service management — COBIT vs. ITIL", "rec": "Neither — lightweight incident/change practices instead", "why": "Both frameworks are built for organizations with enough scale and external audit/reporting pressure to need formalized IT governance and service-management process — below that, a simple on-call rotation, a changelog, and a basic incident postmortem template capture most of the practical value without the framework overhead.", "when": "Revisit if you take on regulated-industry customers requiring formal IT-controls evidence (→ COBIT) or your production incident/change volume outgrows informal handling (→ ITIL).", "conf": "low"})
+
+    # 9. Edge auth (JWT) vs. service-to-service identity (mTLS + SPIFFE/SPIRE)
+    if s["mtlsMentioned"] or ((s["enterprise"] or s["largeTeam"]) and (s["compliance"] or s["security"])):
+        t.append({"d": "Edge auth (JWT) vs. service-to-service identity (mTLS + SPIFFE/SPIRE)", "rec": "Both, as distinct layers — JWT at the edge for who's calling in; mTLS + SPIFFE/SPIRE-issued workload identity for service-to-service calls inside the mesh", "why": "These authenticate two different things and neither substitutes for the other: JWT validation at the API Gateway/Cloud Run edge establishes who the external caller (user or client) is; it says nothing about whether \"order-service\" calling \"payment-service\" inside your cluster is actually order-service and not something that compromised the network. A common as-built gap is TLS termination + JWT at the edge only, with internal service-to-service traffic left unauthenticated/unencrypted by default — that's a real internal trust boundary most teams don't realize is open. SPIFFE/SPIRE issues short-lived, cryptographically verifiable workload identities (SVIDs) that Istio/your mesh can enforce mTLS against, giving you the \"who is actually calling whom, inside the network\" guarantee JWT-at-the-edge doesn't provide.", "when": "Skip the SPIFFE/SPIRE layer specifically (plain mesh-managed mTLS is enough) if you don't have a compliance/audit requirement for portable, independently-verifiable workload identity and you fully trust your mesh vendor's internal certificate management — SPIRE is a genuine operational add, not a default for every mesh deployment.", "conf": "high"})
+    elif s["enterprise"] or s["largeTeam"]:
+        t.append({"d": "Edge auth (JWT) vs. service-to-service identity (mTLS)", "rec": "JWT at the edge now; add mesh-enforced mTLS between services once service count/team count justify a mesh at all", "why": "At moderate scale, edge JWT auth plus your cloud provider's VPC-level network isolation is a reasonable trust boundary — full service-to-service mTLS is usually adopted alongside the service mesh decision (see Service Mesh above) rather than as a separate earlier investment.", "when": "Don't wait past the point where you adopt a service mesh at all — once Istio (or similar) is in place for traffic management/observability reasons, turning on mesh-enforced mTLS between services is close to free, so there's little reason to leave internal traffic unauthenticated once the mesh exists.", "conf": "medium"})
+
+    # 10. Media server topology for video/voice conferencing
+    if s["videoConferencing"]:
+        t.append({"d": "Media server topology — P2P mesh vs. SFU vs. MCU", "rec": "SFU (Selective Forwarding Unit) — e.g. LiveKit, mediasoup, or Jitsi Videobridge if self-hosting; Daily.co/Agora/100ms if you'd rather buy than build", "why": "P2P mesh (every client sends a stream to every other client) only holds up to roughly 3-5 participants before upload bandwidth and CPU explode combinatorially — it's the wrong default for anything billed as \"group calls.\" An SFU forwards streams without re-encoding them, which is the standard middle ground from 5 to hundreds/thousands of participants. MCU (server decodes, mixes, and re-encodes one composite stream) trades server CPU cost for lower client bandwidth/CPU — useful for low-power endpoints or SIP/telephony bridging, rarely the primary topology in 2026. Whichever you pick, you also need TURN relay servers (coturn is the standard self-hosted option) for the meaningful share of real users behind symmetric NAT/restrictive firewalls who can't connect via STUN/direct P2P alone — this isn't optional hardening, calls silently fail without it for those users.", "when": "Stay on P2P mesh only for a genuine 1:1 or small (≤4 person) fixed-size call feature where you want zero media-server cost. Move to MCU (or a hybrid SFU+MCU) if most participants are low-power/bandwidth-constrained endpoints, or you need to bridge into legacy SIP/telephony. Buy (Daily.co/Agora/100ms/LiveKit Cloud) instead of self-hosting the SFU if you don't have the ops capacity for media-plane infrastructure — this is a deep enough specialty that \"build it ourselves\" is a real cost most teams underestimate.", "conf": "high"})
+
+    # 11. Micro-frontends vs. a single frontend app
+    if s["microFrontend"] or (s["enterprise"] and s["largeTeam"] and s["mobile"] and s["web"]):
+        rec = "Micro-frontends via Webpack/Rspack Module Federation, or single-spa if you need to mix frameworks across teams" if s["microFrontend"] else "Worth evaluating Module Federation once distinct teams own distinct customer-facing apps (as yours do)"
+        t.append({"d": "Micro-frontends (Module Federation) vs. a single frontend app", "rec": rec, "why": "Micro-frontends earn their coordination overhead specifically when separate teams need to deploy separate parts of the UI on independent schedules without blocking on each other — Module Federation (Webpack/Rspack) is the dominant 2026 mechanism, letting apps expose/consume modules at runtime with shared-dependency negotiation so you're not shipping N copies of React. single-spa is the framework-agnostic alternative when different teams are on genuinely different frameworks. A shared design-system package (versioned npm package or a federated \"shared\" remote) is what keeps the UI consistent across independently-deployed apps — without it, micro-frontends drift visually team by team.", "when": "Don't adopt this for a single team or a product without real team-ownership boundaries yet — the operational cost (multiple CI/CD pipelines, shared-dependency version negotiation, cross-team API contracts) reliably exceeds the benefit below roughly 15-20 engineers or a single product roadmap. A modular monolith frontend (or an Nx/Turborepo monorepo without runtime federation) gets most of the codebase-modularity benefit at a fraction of the operational complexity — reach for that first, and only add runtime federation once independent deploy cadence is the actual blocker.", "conf": "high" if s["microFrontend"] else "medium"})
+
+    # 12. Saga pattern — choreography vs. orchestration
+    if s["sagaWorkflow"]:
+        orchestration_fit = s["enterprise"] or s["largeTeam"] or s["finance"]
+        rec = "Orchestration — a durable workflow engine (Temporal.io, or AWS Step Functions if you're AWS-native) drives the saga as an explicit state machine" if orchestration_fit else "Choreography for now (services react to each other's events) — but keep the step count small"
+        t.append({"d": "Saga pattern — Choreography vs. Orchestration", "rec": rec, "why": "Splitting a checkout/order flow (reserve inventory → charge payment → book shipping) across services means no single database transaction spans all three — you need eventual consistency with explicit compensating actions if a later step fails. Choreography (each service publishes an event, the next reacts) has no central coordinator and stays simple for 2-4 steps, but the flow logic gets smeared across services and becomes hard to trace or debug once it grows — that's exactly the failure mode a durable orchestration engine (Temporal, Step Functions) solves: an explicit, observable state machine that tracks \"where is this order stuck\" and handles retries/compensation for you. Either way, publish saga events via the transactional outbox pattern (write the event to an outbox table in the same local transaction as the business update, then use CDC — e.g. Debezium — to publish reliably) — writing to your DB and separately publishing to a broker as two operations is the classic dual-write bug that silently loses events on a crash between the two.", "when": "Move from choreography to orchestration the moment the saga grows past roughly 4-5 steps, needs multiple distinct compensation paths, or \"why is this order stuck\" becomes a support/debugging problem nobody can answer quickly. Never reach for two-phase-commit (XA transactions) across services as an alternative — it requires synchronous cross-service locking that kills availability during any partial failure and isn't supported by most modern brokers; the field has converged on saga+compensation, not 2PC, for this problem.", "conf": "high"})
+
+    # 13. Multi-tenant isolation — silo vs. pool vs. bridge
+    if s["multiTenant"]:
+        t.append({"d": "Multi-tenant isolation — Silo vs. Pool vs. Bridge", "rec": "Bridge — shared compute, tenant-isolated data via Postgres Row-Level Security (RLS) with a tenant_id on every table", "why": "Silo (dedicated infrastructure per tenant) gives the strongest isolation and simplest compliance story but doesn't scale economically past a small number of tenants — you're running N copies of your entire stack. Pool (fully shared schema, no enforced boundary beyond app code) is cheapest but relies entirely on every query remembering a WHERE tenant_id = ? clause — one missed clause, one raw-SQL escape hatch, or one buggy ORM query leaks another tenant's data, and this is the single most common cause of real cross-tenant breaches. The bridge model — shared compute/schema with Postgres RLS enforcing tenant_id at the database layer, not just in application code — is the dominant 2026 pattern for SaaS serving many small-to-mid tenants: it scales cheaply and still gives DB-enforced (not just app-trusted) isolation. Cache keys and rate limits also need tenant_id namespacing (per-tenant Redis key prefixes, per-tenant token buckets) or one tenant's load starves everyone else's — the \"noisy neighbor\" problem.", "when": "Move specific tenants to silo (dedicated DB/infra) when they're large enough, regulated enough (healthcare/finance/government), or contractually demanding enough to require guaranteed data residency or isolation guarantees RLS can't promise on paper — this is often a targeted exception applied to a handful of accounts, not an all-or-nothing switch. Schema-per-tenant is a legitimate middle ground for hundreds (not thousands) of mid-size tenants needing more customization/backup granularity than shared-schema-RLS offers, but it becomes a migration/connection-pooling problem well before thousands of tenants.", "conf": "high"})
+
+    # 14. Marketplace payments — build vs. Stripe Connect
+    if s["marketplace"]:
+        t.append({"d": "Marketplace payments — build your own ledger/escrow vs. Stripe Connect", "rec": "Stripe Connect (or Adyen for Platforms / Mangopay if geography or true held-funds escrow needs push you off Stripe)", "why": "Rolling your own split-payment/escrow ledger means becoming (or partnering with) a licensed money transmitter, and building KYC/AML checks, 1099-K tax reporting, PCI compliance, and chargeback/dispute handling from scratch — this is consistently cited as one of the most expensive, riskiest mistakes marketplace founders make, and it's rarely a differentiator worth owning. Stripe Connect is purpose-built for this: it handles seller onboarding/KYC, split payments via application_fee_amount, delayed payouts (functional escrow via payout timing), 1099-K generation, and fraud screening (Radar) as a package. Adyen for Platforms and Mangopay are the credible alternatives when you need true held-funds escrow wallets (not just delayed transfer) or specific EU/multi-currency handling Stripe doesn't fit as well.", "when": "Consider Custom Stripe Connect accounts (more control, more compliance burden pushed back to you) only once volume/brand requirements justify owning more of the onboarding UX. Consider a non-Stripe provider specifically when your geography, currency mix, or a genuine escrow-wallet (not delayed-transfer) requirement is a hard constraint Stripe can't satisfy — verify this against your actual regulatory footprint before switching, not preemptively.", "conf": "high"})
+
+    # 15. ML feature infrastructure — full feature store vs. shared code repo
+    if s["mlFeatureStore"]:
+        feature_store_justified = s["enterprise"] or s["highScale"]
+        rec = "A managed or open-source feature store (Feast if you want no lock-in, Tecton/SageMaker/Databricks Feature Store if you're already on that platform)" if feature_store_justified else "A shared, versioned feature-computation code repo (no dedicated feature store yet)"
+        t.append({"d": "ML feature infrastructure — full feature store vs. a shared feature-code repo", "rec": rec, "why": "The core risk here is training/serving skew: feature logic written once for offline batch training (Spark/SQL) and separately for low-latency online inference silently drifts apart and degrades production accuracy without anyone noticing until it shows up in model performance. A full feature store (Feast, Tecton, SageMaker/Databricks Feature Store) pays off once multiple models/teams share features, you need sub-second-fresh online serving (Redis/DynamoDB-backed), and you're fighting real skew across pipelines — but it's a dual-database system (offline store + online store + a sync job) that's genuine operational overhead most teams don't need on day one. Whatever you choose, put a model registry (MLflow is the open-source default; Weights & Biases if you want richer collaborative dashboards) in front of production models from the start — tracking \"what model is actually live\" via file paths or Slack messages instead of a registry is what makes safe rollback impossible later.", "when": "Move to a full feature store once you have more than one model consuming the same features, or a product need for sub-second feature freshness (e.g. real-time fraud scoring) that a nightly/hourly batch job can't satisfy. Stay on a shared code repo (with the same transformation logic imported by both the training job and the serving path, not reimplemented) if you have one or two models and daily/hourly freshness is genuinely enough — this is the more common case than the feature-store marketing suggests.", "conf": "medium"})
+
+    # 16. Search index technology
+    if s["searchRecommendation"]:
+        rec = "Typesense or Meilisearch — near-zero-ops, fast, good enough for small-to-mid catalogs" if (not s["dataHeavy"] and not s["enterprise"] and not s["highScale"]) else "Elasticsearch/OpenSearch for deep relevance/analytics control, or Algolia if you'd rather pay for a fully-managed, typo-tolerant experience and skip the ops"
+        t.append({"d": "Search index — Postgres full-text vs. Elasticsearch/OpenSearch vs. Algolia/Typesense", "rec": rec, "why": "Using Postgres LIKE/ILIKE (or an untuned tsvector) as \"search\" is the most common early mistake here — no typo tolerance, poor relevance ranking, and full-table-scan-shaped performance that degrades badly past tens of thousands of rows; Postgres full-text search (tsvector + GIN index) is a legitimate low-cost option only for small catalogs with modest requirements. Elasticsearch/OpenSearch gives the deepest relevance tuning and analytics/aggregation power at the cost of real operational investment (cluster sizing, reindexing pipelines); OpenSearch specifically avoids Elastic's SSPL/Elastic License 2.0 restrictions. Algolia and Typesense/Meilisearch trade some control for either a fully managed experience (Algolia — fast, typo-tolerant, merchandising features, higher per-record cost) or a near-zero-ops single-binary engine (Typesense/Meilisearch — predictable low latency, practical ceiling around tens of GB per node). For recommendations specifically: start with collaborative filtering + a content-based/popularity fallback (the fallback matters — pure collaborative filtering fails hard on new users/items with no interaction history, the \"cold start\" problem) before investing in a learned two-tower/ranking model, which is expensive to build and only worth it once basic relevance is solid and you have enough interaction data to train on.", "when": "Move off Postgres full-text the moment typo-tolerance, faceted filtering, or catalog size (tens of thousands of rows and growing) become real product problems. Move from Algolia/Typesense to Elasticsearch/OpenSearch (or add it alongside) once you need deep custom relevance tuning or heavy internal analytics/aggregations on the same data most managed search products don't expose. If combining keyword and semantic/vector search, fuse results with Reciprocal Rank Fusion (rank-based fusion) rather than trying to normalize incompatible BM25/cosine-similarity score scales directly.", "conf": "medium"})
+
+    # 17. Semantic-routing / AI-guardrail service
+    if s["routingGuardrailService"] or (s["agentic"] and (s["compliance"] or s["security"])):
+        t.append({"d": "Semantic-routing / guardrail logic — dedicated service vs. embedded per-agent", "rec": "A dedicated routing/guardrail service (an AI gateway) — e.g. Portkey or Cloudflare AI Gateway if you want routing+guardrails+observability bundled, or Not Diamond/OpenRouter's Auto Router/RouteLLM (open source) if you specifically want routing without a full gateway product", "why": "Two problems compound once you have more than one model or more than one agent/service making LLM calls: (1) cost/latency waste from sending every request to a frontier model when most queries are simple enough for a cheap one — RouteLLM's own benchmark gets ~95% of GPT-4-level quality while routing only ~14% of queries to the strong model, which is the order of magnitude at stake; (2) guardrail duplication — PII redaction, prompt-injection/jailbreak detection, and content-policy checks re-implemented (or forgotten) per agent instead of enforced once, centrally, with one audit trail. Centralizing both in a dedicated service — commonly the same service, since both need to intercept every request/response — fixes both at once. Guardrail checks should split by cost: fast pre-call checks (regex/PII pattern match, a small jailbreak classifier) stay synchronous in the request path since they can also short-circuit an unsafe request before it reaches an expensive model; slower post-call checks (LLM-as-judge groundedness, deep content classifiers) are usually sampled/async rather than blocking every response.", "when": "Skip a dedicated routing/guardrail service if you're only calling one model from one place — a single hardcoded model choice with inline validation is simpler and correct until that changes; adding this layer before you actually have 2+ models with different cost/quality profiles in play is premature complexity. Start with rule-based routing (keyword/length conditions) before reaching for an embedding-similarity or trained-classifier router — a k-NN or rules baseline is often competitive and much cheaper to build/maintain than a fully learned router.", "conf": "high" if s["routingGuardrailService"] else "medium"})
 
     return t
 
@@ -812,6 +1196,57 @@ def pick_cost_optimization(s):
         items.append({"t": "Batch embedding generation instead of real-time per-document embedding", "w": "Batching cuts API overhead and often qualifies for lower batch-inference pricing."})
     items.append({"t": "FinOps tagging with per-team/per-service showback or chargeback dashboards", "w": "Visibility is the prerequisite for optimization — teams cut their own waste once they can see it."})
     return items
+
+
+# ---------- Directional monthly cost estimate (FinOps lens) ----------
+# Deliberately a RANGE, not a point estimate — see KICKOFF_BRIEF.md's known-traps note and
+# ../docs/use-case-knowledge-base/09-cost-estimation-methodology.md for full sourcing.
+
+
+def pick_cost_estimate(s, ctx=None):
+    scale = "high" if (s["enterprise"] and s["highScale"]) else "medium" if (s["highScale"] or s["enterprise"] or s["realtime"]) else "low"
+
+    if s["onPrem"]:
+        compute_band = {"label": "Not applicable — capex, not opex", "detail": "Self-managed hardware is a one-time/amortized hardware+facilities cost, not a monthly cloud bill — budget separately (servers, colo/rack space, networking gear, and the ops headcount to run it)."}
+    elif scale == "high":
+        compute_band = {"label": "$10,000–$50,000+/mo", "detail": "Enterprise Kubernetes footprint (100+ nodes) — highly dependent on node count and instance class; this is an order-of-magnitude planning band, not a quote."}
+    elif scale == "medium":
+        compute_band = {"label": "$300–$1,500/mo", "detail": "Serverless containers or a small-to-mid Kubernetes cluster (3–6 nodes) — control plane + node cost + load balancer + storage."}
+    else:
+        compute_band = {"label": "$0–$500/mo", "detail": "Serverless/FaaS at low-to-moderate traffic — much of this typically lands inside cloud free tiers (e.g. Cloud Run's 2M free requests/mo, Lambda's 1M free requests/mo); budget for min-instances/cold-start mitigation pushing toward the top of this range."}
+
+    if scale == "high":
+        db_band = {"label": "$1,000–$5,000+/mo", "detail": "HA multi-AZ managed Postgres, a clustered/replicated Redis, and (if applicable) a production-tier vector database at real scale."}
+    elif scale == "medium":
+        db_band = {"label": "$150–$900/mo", "detail": "Mid-tier managed Postgres, a small managed Redis, and a vector DB starter-to-production tier if you have a RAG/knowledge-base requirement."}
+    else:
+        db_band = {"label": "$25–$100/mo", "detail": "A small managed Postgres instance plus a small managed Redis instance — the realistic floor for \"managed, not self-run\" databases."}
+    vector_db_note = ""
+    if s["knowledgeBase"] or s["agentic"]:
+        vector_db_note = " Vector DB specifically: free/starter tier ($0–$25/mo) is realistic pre-launch; budget $50–$700/mo once you have real document/query volume, climbing further at very large index sizes (Pinecone/Qdrant Cloud production tiers)."
+
+    uses_llm = s["chatbot"] or s["agentic"] or s["knowledgeBase"] or s["voice"]
+    llm_band = None
+    if uses_llm:
+        hosting = (ctx or {}).get("hosting") or {}
+        is_local = bool(re.match(r"^local", (hosting.get("rec") or "").strip(), re.IGNORECASE))
+        if is_local:
+            llm_band = {"label": "$0 direct API spend", "detail": "Self-hosted/local inference (Ollama or similar) means no per-token API bill — the real cost shows up as GPU compute in the line above, not here. This is the actual cost trade-off local hosting makes: capex/fixed infra cost instead of variable per-token spend.", "table": None}
+        else:
+            volume_label = "~30,000 conversations/day" if scale == "high" else "~3,000 conversations/day" if scale == "medium" else "~1,000 conversations/day"
+            mult = 30 if scale == "high" else 3 if scale == "medium" else 1
+            rows = [
+                {"tier": "Budget open-weight (via OpenRouter — Llama/Qwen/Mistral-class)", "low": 3 * mult, "high": 50 * mult},
+                {"tier": "Mid-tier hosted (Gemini Flash-class)", "low": 115 * mult, "high": 160 * mult},
+                {"tier": "Frontier (Claude Sonnet-class / GPT flagship-class)", "low": 1050 * mult, "high": 1350 * mult},
+            ]
+            llm_band = {
+                "label": f"${rows[0]['low']:,}–${rows[2]['high']:,}/mo depending on model tier",
+                "detail": f"At an illustrative volume of {volume_label} (~1,500 input + 500 output tokens/conversation) — the model-tier choice swings this by roughly two orders of magnitude, which is why \"route cheap tasks to cheap models\" (see Cost & Resource Optimization below) is the single highest-leverage lever here, not infrastructure tuning. Prompt caching can cut repeat-context cost 50–90% further for RAG/chatbot workloads with long system prompts.",
+                "table": rows,
+            }
+
+    return {"scale": scale, "computeBand": compute_band, "dbBand": db_band, "vectorDbNote": vector_db_note, "llmBand": llm_band, "usesLLM": uses_llm}
 
 
 def pick_concurrency(s):
@@ -869,50 +1304,74 @@ def pick_governance(s):
 
 def recommend_stack(requirement_text: str) -> dict:
     """Mirrors index.html's analyze() function: runs the full rule engine over a free-text
-    requirement and returns {signals, recommendations}. This is the single function
-    app/mcp/server.py's recommend_stack() tool calls — everything above is private to this
-    module. Category keys are snake_case (this is server-side Python, not a mechanical port
-    of index.html's rendering code) — only the signal dict keys stay camelCase, per this
-    module's docstring."""
+    requirement and returns {signals, recommendations}. Category keys are snake_case (this is
+    server-side Python, not a mechanical port of index.html's rendering code) — only signal
+    dict keys and vendor-table keys stay camelCase, per this module's docstring."""
     if not requirement_text or not requirement_text.strip():
         raise ValueError("requirement_text must be non-empty")
 
     s = detect_signals(requirement_text)
 
+    cloud = pick_cloud(s)
+    compute = pick_compute(s)
+    msg = pick_messaging(s)
+    db = pick_database(s)
+    containers = pick_containers(s)
+    obs = pick_observability(s)
+    fe = pick_frontend(s)
+    llm = pick_llm(s)
     rag = pick_rag(s)
+    gw = pick_gateway(s)
+    cicd = pick_cicd(s)
+    hosting = pick_hosting_location(s)
 
     recommendations = {
-        "cloud": pick_cloud(s),
-        "gateway": pick_gateway(s),
+        "cloud": cloud,
+        "gateway": gw,
         "iam": pick_iam(s),
         "languages": pick_languages(s),
         "architecture": pick_architecture(s),
-        "compute": pick_compute(s),
-        "messaging": pick_messaging(s),
+        "compute": compute,
+        "messaging": msg,
         "mesh": pick_mesh(s),
         "cache": pick_cache(s),
-        "database": pick_database(s),
-        "containers": pick_containers(s),
-        "observability": pick_observability(s),
-        "frontend": pick_frontend(s),
-        "cicd": pick_cicd(s),
+        "database": db,
+        "containers": containers,
+        "observability": obs,
+        "frontend": fe,
+        "cicd": cicd,
         "dns": pick_dns(s),
         "docs": pick_docs(s),
-        "llm": pick_llm(s),
+        "llm": llm,
         "mcp_servers": pick_mcp(s),
         "rag": rag,
         "guardrails": pick_guardrails(s),
         "cost_optimization": pick_cost_optimization(s),
+        "cost_estimate": pick_cost_estimate(s, {"hosting": hosting}),
         "concurrency": pick_concurrency(s),
         "governance": pick_governance(s),
         "tradeoffs": pick_tradeoffs(s),
         "model_orchestration": pick_model_orchestration(s),
-        "hosting_location": pick_hosting_location(s),
-        "vram_tier": pick_vram_tier(s),
+        "hosting_location": hosting,
+        "compute_tier": pick_compute_tier(s),
+        "runtime": pick_runtime(s),
         "interface_topology": pick_interface_topology(s),
         "mcp_vs_api": pick_mcp_vs_api(s),
         "guardrail_pipeline": pick_guardrail_pipeline(s),
         "vector_db_placement": pick_vector_db_placement(s, rag),
+        # Vendor/alternatives comparisons (Groups 1-4) — see module docstring.
+        "cloud_vendor": pick_cloud_vendor(cloud),
+        "compute_platform_vendor": pick_compute_platform(s, compute),
+        "orchestrator_vendor": pick_orchestrator(s, containers),
+        "gateway_vendor": pick_gateway_vendor(s),
+        "database_vendor": pick_database_vendor(db),
+        "messaging_vendor": pick_messaging_vendor(s, msg),
+        "llm_provider_vendor": pick_llm_provider(s, llm),
+        "vector_db_vendor": pick_vector_db_vendor(s, pick_vector_db_placement(s, rag)),
+        "guardrails_vendor": pick_guardrails_vendor(s),
+        "cicd_vendor": pick_cicd_vendor(s, cicd),
+        "observability_vendor": pick_observability_vendor(s, obs),
+        "frontend_vendor": pick_frontend_vendor(s, fe),
     }
 
     return {"signals": s, "recommendations": recommendations}

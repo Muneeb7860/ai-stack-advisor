@@ -1,0 +1,14 @@
+{
+  "name": "ai-stack-advisor-docs",
+  "private": true,
+  "description": "Generators for the BRD/PRD/DDD docx deliverables (docs/*_gen.js). Not a publishable package.",
+  "scripts": {
+    "gen:brd": "node brd_gen.js",
+    "gen:prd": "node prd_gen.js",
+    "gen:ddd": "node ddd_gen.js",
+    "gen:all": "npm run gen:brd && npm run gen:prd && npm run gen:ddd"
+  },
+  "dependencies": {
+    "docx": "^9.0.0"
+  }
+}

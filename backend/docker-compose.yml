@@ -29,6 +29,11 @@ services:
       - ./app:/srv/app/app
       - ./alembic:/srv/app/alembic
       - ./tests:/srv/app/tests
+      # app/retrieval.py resolves the corpus as ../../docs/use-case-knowledge-base relative to
+      # itself (i.e. sibling of backend/, matching the real repo layout) — since the Docker
+      # build context is backend/ only, docs/ is never baked into the image, so it's mounted
+      # here instead. Read-only: this backend never writes to the corpus.
+      - ../docs/use-case-knowledge-base:/srv/docs/use-case-knowledge-base:ro
     command: >
       sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 

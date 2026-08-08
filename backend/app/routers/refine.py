@@ -32,6 +32,16 @@ Guardrails per design-doc-v2 Section 3.2 ("the tool practicing what it recommend
 - Rate limiting per session: NOT implemented in this milestone — there is no session/user
   concept yet in this schema (no accounts, by design). Flagging as a real gap rather than
   claiming it's covered; revisit if abuse becomes a concern before accounts ever exist.
+
+RAG grounding (KICKOFF_BRIEF.md decision #6, added when the frontend-expansion session's
+docs/use-case-knowledge-base/ corpus landed): grounding context is retrieved from that corpus
+(app/retrieval.py's two-stage design — see RETRIEVAL-PROTOTYPE-FINDINGS.md) and injected into
+the prompt so the model reasons from sourced, citable material for any of the 8 newer use-case
+domains, rather than free-associating from parametric memory — consistent with why the v1 rule
+engine is transparent/rule-based in the first place. Grounding is best-effort: if retrieval
+returns nothing relevant (e.g. the requirement doesn't touch any of the 11 covered domains),
+refine proceeds without it exactly as it did before this corpus existed — RAG augments the
+existing rule-engine-critique flow, it doesn't gate it.
 """
 import json
 
@@ -41,6 +51,40 @@ from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..db import get_db
+from ..retrieval import format_citation, retrieve
+
+# Deliberately low, not the 0.15 used as a QUALITY-MEASUREMENT threshold in
+# tests/test_retrieval_eval.py's negative controls — that threshold is for judging whether
+# retrieval found the *right* answer; this one is for judging whether a chunk is worth
+# *injecting into a prompt* at all, which is a much lower bar. Empirically checked, not
+# guessed: eval case 12's genuine anti-pattern hit (Postgres LIKE search anti-pattern —
+# exactly the "is X okay?" use case this corpus was principally built for, per
+# 00-INDEX-AND-INGESTION-GUIDE.md §2) scores ~0.115 — BELOW 0.15. A 0.15 cutoff here would
+# have silently suppressed grounding for the corpus's flagship use case. Real, disclosed
+# limitation this low threshold accepts in exchange: moderately technical-but-unrelated
+# queries (e.g. "How do we set up CI/CD for Kubernetes?") can still score 0.07-0.14 — nonzero,
+# genuinely irrelevant noise — and pass this bar. That's an acceptable trade per the module
+# docstring (an irrelevant chunk costs prompt space, not correctness, since the system prompt
+# instructs the model to only cite what it can actually justify) — a query with truly zero
+# lexical overlap with the corpus still scores 0.0 and is filtered.
+GROUNDING_SCORE_THRESHOLD = 0.03
+GROUNDING_TOP_K = 2
+
+
+def _build_grounding_context(requirement_text: str) -> str:
+    """Best-effort RAG grounding — returns '' if nothing scores above threshold, which is a
+    valid, expected outcome (see module docstring), not an error."""
+    results = [r for r in retrieve(requirement_text, top_k=GROUNDING_TOP_K) if r["score"] >= GROUNDING_SCORE_THRESHOLD]
+    if not results:
+        return ""
+    sections = [
+        f"[{format_citation(r)}]\n{r['chunk_text']}" for r in results
+    ]
+    return (
+        "\n\nGrounding context retrieved from the architecture knowledge base (cite these "
+        "using the bracketed source name if you use them; do not cite anything not shown "
+        "here):\n\n" + "\n\n---\n\n".join(sections)
+    )
 
 router = APIRouter(prefix="/api", tags=["refine"])
 
@@ -68,6 +112,11 @@ entirely. An empty adjusted_picks list is a valid, good answer if nothing is wro
 - If a category seems debatable but you cannot point to a specific textual reason, raise it \
 as an open question instead of silently overriding it.
 - Never invent a new category that was not present in the original recommendation set.
+- If grounding context from the architecture knowledge base is provided below, you may use it \
+to justify a change, but only by citing the bracketed source name shown with it (e.g. \
+"[02-video-audio-conferencing.md § A. Media topology]") — never cite a source that wasn't \
+actually shown to you, and never treat the absence of grounding context as license to \
+free-associate from general knowledge instead of the requirement text itself.
 - Call the submit_refinement tool exactly once with your findings. Do not respond in prose.
 """
 
@@ -110,6 +159,7 @@ REFINEMENT_TOOL = {
 def _run_refinement(api_key: str, requirement_text: str, recommendations: dict) -> dict:
     """Isolated into its own function so tests can monkeypatch it instead of hitting the real
     Anthropic API — no network calls, no real API key, needed to test this endpoint."""
+    grounding = _build_grounding_context(requirement_text)
     client = Anthropic(api_key=api_key)
     try:
         message = client.messages.create(
@@ -124,6 +174,7 @@ def _run_refinement(api_key: str, requirement_text: str, recommendations: dict) 
                     "content": (
                         f"Requirement text:\n{requirement_text}\n\n"
                         f"Rule engine recommendations (JSON):\n{json.dumps(recommendations)}"
+                        f"{grounding}"
                     ),
                 }
             ],

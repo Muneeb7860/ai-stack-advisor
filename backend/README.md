@@ -8,8 +8,9 @@ must stay that way** (PRD NFR-5) — nothing here is a hard dependency for the c
 | Feature | Status | Endpoint(s) |
 |---|---|---|
 | Share links | **Built, tested** | `POST /api/analyses`, `POST /api/analyses/{id}/share`, `GET /api/analyses/shared/{slug}` |
-| LLM refinement | **Built, tested** | `POST /api/refine` — see `app/routers/refine.py` docstring for the constrained-reasoning design and a resolved gap (optional `analysis_id`) not covered by the original spec |
-| Grounded follow-up Q&A | **Built, tested** | `POST /api/ask` — see `app/routers/ask.py` docstring; scoped structurally to one `analysis_id`, replays full conversation history each turn |
+| LLM refinement | **Built, tested** | `POST /api/refine` — see `app/routers/refine.py` docstring for the constrained-reasoning design, RAG grounding, and a resolved gap (optional `analysis_id`) not covered by the original spec |
+| Grounded follow-up Q&A | **Built, tested** | `POST /api/ask` — see `app/routers/ask.py` docstring; scoped structurally to one `analysis_id`, replays full conversation history each turn, RAG-grounded on the follow-up question |
+| RAG retrieval | **Built, tested** | `app/retrieval.py` — two-stage TF-IDF retrieval over `../docs/use-case-knowledge-base/`, backs both endpoints above; see `RETRIEVAL-PROTOTYPE-FINDINGS.md` in that folder for the design rationale and `tests/test_retrieval_eval.py` for the 21-case eval (20 pass, 1 disclosed limitation) |
 | MCP tool wrapper | **Built, tested** | `app/mcp/server.py` — `recommend_stack()` tool, backed by `app/rule_engine.py` (Python port of `index.html`'s rule engine, verified against it — see `../docs/adr/0001-mcp-rule-engine-port.md`) |
 
 Full requirement traceability: `../docs/AI-Stack-Advisor-PRD.docx` FR-27/28/29, the ERD
@@ -43,29 +44,47 @@ uvicorn app.main:app --reload
 pytest tests/ -v
 ```
 
-42 tests currently, all passing:
+84 tests currently (82 passing, 1 xfailed by design, 1 xpassed):
 - `test_share.py` (7): health check, create/share/fetch round-trip, share idempotency (same
   slug on repeat calls), 404s on unknown analysis/slug, and a sanity check that the MCP
   server module is fully built (replaces the old import-time-stub tripwire now that there's
   nothing left stubbed).
-- `test_refine.py` (8): analysis creation-vs-reuse based on whether `analysis_id` is passed,
+- `test_refine.py` (11): analysis creation-vs-reuse based on whether `analysis_id` is passed,
   the exact inputs forwarded to the model, the API key never appearing in the response,
   append-only persistence of `RefinementResult` across repeat calls, the input-length
-  guardrail (422), and Anthropic API failures surfacing as 502 rather than a crash.
-- `test_ask.py` (9): 404 on unknown analysis, the system prompt actually grounding in the
+  guardrail (422), Anthropic API failures surfacing as 502 rather than a crash, and RAG
+  grounding (`_build_grounding_context`) returning citable content for covered domains, empty
+  for zero-overlap queries, and never gating the core refine flow either way.
+- `test_ask.py` (12): 404 on unknown analysis, the system prompt actually grounding in the
   analysis's requirement text/recommendations, question+answer persistence, conversation
   history replay across turns, strict per-analysis scoping (a second analysis never sees the
   first's history — the DDD 4.3 invariant), the API key never appearing in the response, the
-  input-length guardrail (422), Anthropic failures surfacing as 502, and no orphaned
-  question-with-no-answer row when the model call fails.
-- `test_rule_engine.py` (12): regression tests for `app/rule_engine.py`, one per bug
+  input-length guardrail (422), Anthropic failures surfacing as 502, no orphaned
+  question-with-no-answer row when the model call fails, and RAG grounding keyed on the
+  follow-up question (not the original requirement text) per the ingestion guide's own
+  "anti-patterns answer 'is X okay?' phrasing" note.
+- `test_rule_engine.py` (23): regression tests for `app/rule_engine.py`, one per bug
   `../validation-report.md` found and fixed in the original JS (negation handling, on-prem
-  override, warehouse detection, team-size conflicts, the small-team regex fallback) plus
-  structural checks (all 30 recommendation categories present, signal dict keys stay
-  camelCase matching `index.html`). Pure functions, no DB/network needed.
-- `test_mcp_server.py` (6): invocation logging (with and without a client name), the
-  nullable-then-populated `analysis_id` (DDD 4.4), and — the one this suite actually caught
-  during manual verification — logging still happens even when the rule engine raises.
+  override, warehouse detection, team-size conflicts, the small-team regex fallback), one per
+  new dimension from the frontend-expansion pass (live-multiplayer, collaborative editing,
+  video conferencing, social-feed fan-out, geospatial, fixed-scope delivery, cost estimator,
+  the `compute_tier` replacement of `vram_tier`, the vendor-comparison layer), plus structural
+  checks (all recommendation categories present, signal dict keys stay camelCase matching
+  `index.html`). Pure functions, no DB/network needed.
+- `test_mcp_server.py` (8): invocation logging (with and without a client name), the
+  nullable-then-populated `analysis_id` (DDD 4.4), logging still happening even when the rule
+  engine raises, and two regression tests for a real bug a validation round's manual
+  end-to-end testing caught: the client-name extraction read `.clientInfo` (camelCase) on a
+  pydantic model whose real Python attribute is `.client_info` (snake_case) — silently
+  swallowed by a broad exception handler instead of erroring, so no unit test calling the
+  function with a hand-built argument could have caught it. Only driving a real stdio
+  JSON-RPC session end-to-end and checking what actually landed in Postgres did.
+- `test_retrieval_eval.py` (22): the 21-case retrieval eval set from
+  `../docs/use-case-knowledge-base/` (direct retrieval, anti-pattern "is X okay?" phrasing,
+  cross-document queries, decision-point boundary cases, negative controls) wired to the real
+  `app/retrieval.py` implementation — 20 genuine passes, 1 xfail (a disclosed TF-IDF-vs-real-
+  embeddings paraphrase limitation, not silently hidden), plus a structural check that a
+  Signals/triggers chunk is never returned as citable content for any of the 21 queries.
 
 `test_refine.py` and `test_ask.py` monkeypatch the real Anthropic call
 (`app.routers.refine._run_refinement` / `app.routers.ask._run_ask`) — no live API key or
@@ -117,10 +136,13 @@ raising that with the user first.
    doc-citation bug: the original spec cited "design-doc-v2.md Section 9.2," which doesn't
    exist in that file — the real cites are design-doc-v2.md §3.2 (refine) / §3.3 (ask), and
    PRD §9.2 (the section number that was actually meant).
-4. ✅ MCP tool wrapper — done. All four v2 milestones are now complete. See
-   `app/mcp/server.py` and `app/rule_engine.py` (the Python port of `index.html`'s rule
-   engine — verified against the actual JS with zero diffs across 13 scenarios before this
-   was built; see `../docs/adr/0001-mcp-rule-engine-port.md`).
+4. ✅ MCP tool wrapper — done. See `app/mcp/server.py` and `app/rule_engine.py` (the Python
+   port of `index.html`'s rule engine — verified against the actual JS with zero diffs, and
+   re-verified after a later frontend-expansion pass — see
+   `../docs/adr/0001-mcp-rule-engine-port.md` for both rounds).
+5. ✅ RAG grounding retrofit — done, added after a parallel frontend/knowledge-base session
+   produced `../docs/use-case-knowledge-base/`. See `app/retrieval.py` and both routers'
+   `_build_grounding_context()` functions.
 
 ## MCP tool (`recommend_stack`)
 

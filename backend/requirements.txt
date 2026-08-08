@@ -11,3 +11,7 @@ python-multipart>=0.0.9
 # 2.0 rename of the older mcp.server.fastmcp.FastMCP API. A pin below 2.0 would resolve to
 # the pre-rename module path and break the import — not just a "get the latest" preference.
 mcp>=2.0
+# app/retrieval.py: TF-IDF/cosine-similarity retrieval over docs/use-case-knowledge-base/,
+# same approach as the research prototype it ports from (see that module's docstring for why
+# TF-IDF rather than a dense embedding model — a real, disclosed limitation, not an oversight).
+scikit-learn>=1.4

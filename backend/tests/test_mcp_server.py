@@ -7,11 +7,14 @@ its own test coverage upstream; what's worth testing here is this project's own 
 invocation logging, the nullable-then-populated analysis_id, and unconditional logging even
 on failure (DDD 4.4).
 """
+from types import SimpleNamespace
+
 import pytest
+from mcp.types import Implementation, InitializeRequestParams
 
 from app.db import SessionLocal
 from app import models
-from app.mcp.server import _log_and_recommend
+from app.mcp.server import _client_name_from_context, _log_and_recommend
 
 
 def _count_invocations(db):
@@ -119,3 +122,32 @@ def test_mcp_tool_is_registered():
     from app.mcp.server import mcp
 
     assert mcp.name == "ai-stack-advisor"
+
+
+def test_client_name_from_context_uses_correct_attribute_name():
+    """Regression test for a real bug found during manual end-to-end verification (driving an
+    actual stdio JSON-RPC session): _client_name_from_context originally read
+    ctx.session.client_params.clientInfo.name, but mcp.types.InitializeRequestParams' Python
+    attribute is client_info (snake_case) — clientInfo is only its JSON serialization alias.
+    The typo silently returned None via the except-Exception fallback instead of erroring, so
+    no unit test calling the function directly (with a hand-built client_name argument) could
+    have caught it — only a real client_params object shaped like the actual SDK type could.
+    This test uses the REAL pydantic types for exactly that reason, not a hand-rolled mock."""
+    client_info = Implementation(name="Claude Desktop", version="1.0")
+    params = InitializeRequestParams(protocolVersion="2024-11-05", capabilities={}, clientInfo=client_info)
+    fake_ctx = SimpleNamespace(session=SimpleNamespace(client_params=params))
+
+    assert _client_name_from_context(fake_ctx) == "Claude Desktop"
+
+
+def test_client_name_from_context_returns_none_outside_request_context():
+    """ctx.session raises ValueError (not AttributeError) when there's no live MCP request —
+    the other half of the bug this file's sibling test regression-tests: a narrower
+    except-AttributeError-only catch let this ValueError crash the whole tool call."""
+
+    class RaisesOutsideRequest:
+        @property
+        def session(self):
+            raise ValueError("Context is not available outside of a request")
+
+    assert _client_name_from_context(RaisesOutsideRequest()) is None

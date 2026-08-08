@@ -1,4 +1,5 @@
 const fs = require('fs');
+const path = require('path');
 const {
   Packer, Paragraph, TextRun, AlignmentType, TableOfContents,
   NAVY, ACCENT, LIGHT, MUTED, GOOD, WARN,
@@ -13,8 +14,8 @@ children.push(...coverTitle(
   'Business Requirements Document',
   'Rule-based multi-role architecture advisor',
   [
-    ['Document Version', '1.0'],
-    ['Status', 'Draft — for internal review'],
+    ['Document Version', '1.1'],
+    ['Status', 'Draft — for internal review (v2 backend now shipped; see Section 8.2 and Section 12)'],
     ['Prepared by', 'Muneeb, with Claude (Cowork)'],
     ['Date', new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })],
     ['Classification', 'Internal'],
@@ -31,6 +32,7 @@ children.push(reqTable(
     ['0.1', 'Session start', 'Muneeb / Claude', 'Initial concept: rule-based tool to recommend AI/tech stack from business requirements'],
     ['0.5', 'Same session', 'Muneeb / Claude', 'Expanded to full architecture advisor: cost, throughput, governance, AI serving layer, trade-off decisions'],
     ['1.0', 'Same session', 'Muneeb / Claude', 'This BRD formalizes the business case for the product built and validated to date'],
+    ['1.1', 'Later session', 'Muneeb / Claude', 'v2 backend built and tested (share links, /api/refine, /api/ask, MCP tool wrapper). Updated BR-9 and the roadmap (Section 12) to reflect shipped status; BR-7/BR-8 remain not met — no functional requirement content changed otherwise.'],
   ]
 ));
 children.push(h2('1.2 Related Documents'));
@@ -104,7 +106,7 @@ const brRows = [
   ['BR-6', 'The product must not produce a recommendation that contradicts an explicitly stated hard constraint (e.g. recommending a public cloud when the user states no public cloud is permitted).', 'Met — fixed in validation pass; see BR-6 note below'],
   ['BR-7', 'The product must reach real external users to test demand and recommendation quality before further feature investment.', 'Not met — no external users to date'],
   ['BR-8', 'The product must define and commit to a primary target segment (see Section 5) to focus positioning and future feature investment.', 'Not met — open decision'],
-  ['BR-9', 'Where a paid/backend tier is introduced (LLM refinement, persistence, MCP distribution), it must not degrade or paywall the free client-side experience that satisfies BR-5.', 'Planned — v2, pending desktop/backend access'],
+  ['BR-9', 'Where a paid/backend tier is introduced (LLM refinement, persistence, MCP distribution), it must not degrade or paywall the free client-side experience that satisfies BR-5.', 'Met — v2 shipped; v1 remains fully functional with zero backend calls (PRD NFR-5)'],
 ];
 children.push(reqTable(['ID', 'Requirement', 'Status'], [900, 6300, 1900], brRows));
 children.push(p('Note on BR-6: this was not a design intention from the outset — it was a live bug discovered during validation testing (an air-gapped/no-public-cloud requirement was still returning a public-cloud recommendation). It is listed as a formal business requirement here specifically so it is regression-tested going forward, not just fixed once.', { italics: true, color: MUTED, size: 19 }));
@@ -135,10 +137,10 @@ children.push(bullet('Cost/resource optimization and concurrency/throughput reco
 children.push(bullet('Governance output: KRA, KPI, SLA, and reliability/continuous-improvement targets'));
 children.push(bullet('Confidence scoring on every recommendation'));
 children.push(bullet('Sticky navigation and collapsible sections for usability at full scope'));
-children.push(h2('8.2 In Scope (v2 — Designed, Not Yet Built)'));
-children.push(bullet('LLM-powered refinement pass for ambiguous/conflicting requirements, using the user\'s own Anthropic API key'));
-children.push(bullet('Share links (persistence) for completed analyses'));
-children.push(bullet('MCP tool wrapper for use from inside Claude Desktop/Code'));
+children.push(h2('8.2 In Scope (v2 — Shipped)'));
+children.push(bullet('LLM-powered refinement pass for ambiguous/conflicting requirements, using the user\'s own Anthropic API key — shipped as POST /api/refine'));
+children.push(bullet('Share links (persistence) for completed analyses — shipped'));
+children.push(bullet('MCP tool wrapper for use from inside Claude Desktop/Code — shipped, plus a grounded follow-up Q&A endpoint (POST /api/ask) added during the build'));
 children.push(h2('8.3 Out of Scope'));
 children.push(bullet('Provisioning or executing infrastructure changes — this is an advisory tool only, never a "terraform apply" tool'));
 children.push(bullet('Multi-user accounts, team collaboration, or role-based access control'));
@@ -152,7 +154,7 @@ children.push(bullet('That practitioners value transparent, auditable reasoning 
 children.push(bullet('That the AI-native decision categories (LLM size/provider, RAG, hosting, guardrails) are under-served enough by competitors to be a meaningful wedge — supported by the competitive scan, not by user interviews.'));
 children.push(bullet('That a rule-based engine can stay accurate as the underlying technology landscape shifts (new model releases, deprecated tools) without constant manual maintenance — not yet tested over time.'));
 children.push(h3('Constraints'));
-children.push(bullet('v2 backend work (LLM refinement, persistence, MCP tool) is blocked on desktop/local-environment access; a browser-only session cannot host a live API.'));
+children.push(bullet('v2 backend work (LLM refinement, persistence, MCP tool) required desktop/local-environment access, which a browser-only session couldn\'t provide — resolved once that access became available; see Section 12.'));
 children.push(bullet('No dedicated budget, team, or timeline has been assigned to this product — it has been built opportunistically within a single working session.'));
 children.push(bullet('No user research has been conducted; all target-segment and positioning statements in this document are inferred from competitor behavior, not primary research.'));
 
@@ -189,7 +191,7 @@ children.push(reqTable(
   [
     ['v1', 'Client-side rule engine, full stack + AI-serving + governance recommendation surface', 'Shipped'],
     ['v1.1', 'QA/validation pass — negation handling, on-prem support, data-warehouse detection', 'Shipped'],
-    ['v2', 'LLM refinement layer, persistence (share links), MCP tool wrapper', 'Designed — blocked on backend access'],
+    ['v2', 'LLM refinement layer, persistence (share links), grounded follow-up Q&A, MCP tool wrapper', 'Shipped'],
     ['v3', 'Informed by real user feedback per BR-7 — scope not yet defined', 'Not started'],
   ]
 ));
@@ -208,6 +210,6 @@ const doc = baseDoc({
 });
 
 Packer.toBuffer(doc).then((buf) => {
-  fs.writeFileSync('/home/claude/ai-stack-advisor/docs/AI-Stack-Advisor-BRD.docx', buf);
+  fs.writeFileSync(path.join(__dirname, 'AI-Stack-Advisor-BRD.docx'), buf);
   console.log('BRD written');
 });

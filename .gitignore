@@ -1,0 +1,4 @@
+# docs/ generator scripts (brd_gen.js etc.) need the docx npm package locally.
+docs/node_modules/
+
+.DS_Store

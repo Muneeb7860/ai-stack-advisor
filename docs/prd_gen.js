@@ -1,4 +1,5 @@
 const fs = require('fs');
+const path = require('path');
 const {
   Packer, Paragraph, TextRun, AlignmentType,
   NAVY, ACCENT, LIGHT, MUTED, GOOD, WARN,
@@ -13,8 +14,8 @@ children.push(...coverTitle(
   'Product Requirements Document',
   'Functional & technical specification',
   [
-    ['Document Version', '1.0'],
-    ['Status', 'Draft — describes v1 as-built + v2 as-designed'],
+    ['Document Version', '1.2'],
+    ['Status', 'v1 and v2 both shipped — see Section 9.2 and Release Plan (Section 11)'],
     ['Prepared by', 'Muneeb, with Claude (Cowork)'],
     ['Date', new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })],
     ['Companion document', 'Business Requirements Document (BRD)'],
@@ -28,12 +29,14 @@ children.push(reqTable(
   [1600, 7400],
   [
     ['1.0', 'Initial PRD, written to document v1 (shipped) and v2 (designed, pending backend access) — this PRD was written after v1 was built and validated, not before, and reflects the actual implementation rather than a forward-looking spec alone.'],
+    ['1.1', 'Updated after a two-pass rule-engine expansion (separate session, frontend-only): signal count grew from ~35 to 65+, pickX() functions from ~30 to 45, spanning 8 new use-case domains, a directional cost estimator, a semantic-routing/guardrail-service dimension, and governance/security dimensions. Also new: a 12-file RAG knowledge-base corpus (docs/use-case-knowledge-base/) and a 21-case retrieval evaluation set. Section counts (16) and the core client-side-only architecture (NFR-5) are unchanged.'],
+    ['1.2', 'v2 backend built and tested in a later session (FastAPI + Postgres + Alembic; share links, /api/refine, /api/ask, and the MCP tool wrapper — FR-27/28/29 all shipped, /api/refine and /api/ask grounded in the 1.1 RAG corpus). Updated Section 7.7, 9.2, and the Release Plan (Section 11) to reflect that; no functional requirement content changed, only status.'],
   ]
 ));
 
 // ---------- Overview ----------
 children.push(h1('2. Product Overview'));
-children.push(p('AI Stack Advisor is a single-page web application. A user pastes a free-text description of their product or business requirement; the application detects signals in that text across ~35 dimensions (industry, scale, compliance, latency, data type, team size, existing vendor commitments, and more) and renders a full architecture recommendation organized into 16 navigable sections, covering both traditional infrastructure decisions and AI-native decisions.'));
+children.push(p('AI Stack Advisor is a single-page web application. A user pastes a free-text description of their product or business requirement; the application detects signals in that text across 65+ dimensions (industry, scale, compliance, latency, data type, team size, existing vendor commitments, and more) and renders a full architecture recommendation organized into 16 navigable sections, covering both traditional infrastructure decisions and AI-native decisions.'));
 children.push(p('v1 runs entirely client-side: a JavaScript rule engine embedded in a single HTML file, with no server, no API calls, and no data leaving the browser. v2 (designed, not yet built) adds an optional backend for LLM-assisted refinement of ambiguous cases, persistence via share links, and an MCP tool wrapper for use from Claude Desktop/Code.'));
 
 // ---------- Problem statement ----------
@@ -89,7 +92,7 @@ children.push(h2('7.1 Input & Signal Detection'));
 children.push(reqTable(['ID', 'Requirement'], [1000, 7400], [
   ['FR-1', 'Accept free-text business/product requirement input via a single textarea; no required structured fields.'],
   ['FR-2', 'Provide five one-click example scenarios spanning fintech, healthcare, e-commerce, enterprise, and early-stage MVP profiles.'],
-  ['FR-3', 'Detect ~35 signal dimensions from the input text (industry, scale, compliance, latency, data type, team size, cloud vendor mentions, language mentions, and more) via keyword and pattern matching.'],
+  ['FR-3', 'Detect 65+ signal dimensions from the input text (industry, scale, compliance, latency, data type, team size, cloud vendor mentions, language mentions, and more) via keyword and pattern matching.'],
   ['FR-4', 'Strip short negated clauses ("no compliance requirements", "don\'t need X") before signal matching, so stated non-requirements are not read as requirements.'],
   ['FR-5', 'Detect on-premises/air-gapped/no-public-cloud requirements from raw (non-negation-stripped) text, since these are phrased using negation words that are themselves the requirement.'],
 ]));
@@ -136,11 +139,11 @@ children.push(reqTable(['ID', 'Requirement'], [1000, 7400], [
   ['FR-26', 'Display all detected input signals as a visible chip list before the recommendation sections, so the user can see what drove the output.'],
 ]));
 
-children.push(h2('7.7 Planned — v2 (Not Yet Built)'));
-children.push(reqTable(['ID', 'Requirement', 'Dependency'], [1000, 5600, 1800], [
-  ['FR-27', 'An optional "Refine with AI" pass that sends the free-text input and the v1 rule-engine output to an LLM (user\'s own Anthropic API key) for cases where the rules are uncertain or the user wants to ask a follow-up question about a recommendation.', 'Backend / desktop access'],
-  ['FR-28', 'Share links: persist a completed analysis to a shareable URL.', 'Backend / desktop access'],
-  ['FR-29', 'MCP tool wrapper (recommend_stack(...)) callable from Claude Desktop/Code directly.', 'Backend / desktop access'],
+children.push(h2('7.7 v2 — Shipped'));
+children.push(reqTable(['ID', 'Requirement', 'Status'], [1000, 5600, 1800], [
+  ['FR-27', 'An optional "Refine with AI" pass that sends the free-text input and the v1 rule-engine output to an LLM (user\'s own Anthropic API key) for cases where the rules are uncertain or the user wants to ask a follow-up question about a recommendation.', 'Shipped — POST /api/refine + POST /api/ask'],
+  ['FR-28', 'Share links: persist a completed analysis to a shareable URL.', 'Shipped'],
+  ['FR-29', 'MCP tool wrapper (recommend_stack(...)) callable from Claude Desktop/Code directly.', 'Shipped'],
 ]));
 
 // ---------- Non-functional ----------
@@ -156,15 +159,15 @@ children.push(reqTable(['ID', 'Requirement'], [1000, 7400], [
 // ---------- Architecture ----------
 children.push(h1('9. System Architecture'));
 children.push(h2('9.1 v1 — As Built'));
-children.push(p('A single self-contained HTML file. A JavaScript rule engine (detectSignals() plus ~30 pickX() functions, one per recommendation category) runs synchronously in the browser on form submit. No build step, no framework, no dependencies — chosen deliberately for a tool at this stage of validation, where operational simplicity matters more than the marginal benefit a framework would add (see BRD Section 3.3 differentiation on "zero cost to run").'));
-children.push(h2('9.2 v2 — Designed, Pending Backend Access'));
-children.push(p('Documented in full in the companion v2 Design Document. Summary: a FastAPI backend adds two endpoints — POST /api/refine (LLM-assisted reconciliation of ambiguous rule-engine output, only overriding a v1 pick when it can cite a specific reason from the input text) and POST /api/ask (grounded follow-up Q&A scoped to the current recommendation). Postgres stores shared analyses. An MCP server wraps the same logic as a callable recommend_stack(...) tool. All three require the user\'s own Anthropic API key and a live hosting environment neither available in a browser-only session.'));
+children.push(p('A single self-contained HTML file. A JavaScript rule engine (detectSignals() plus 45 pickX() functions, one per recommendation category) runs synchronously in the browser on form submit. No build step, no framework, no dependencies — chosen deliberately for a tool at this stage of validation, where operational simplicity matters more than the marginal benefit a framework would add (see BRD Section 3.3 differentiation on "zero cost to run").'));
+children.push(h2('9.2 v2 — Shipped'));
+children.push(p('Documented in full in the companion v2 Design Document. A FastAPI backend adds two endpoints — POST /api/refine (LLM-assisted reconciliation of ambiguous rule-engine output, only overriding a v1 pick when it can cite a specific reason from the input text) and POST /api/ask (grounded follow-up Q&A scoped to the current recommendation). Postgres stores shared analyses. An MCP server wraps the same logic as a callable recommend_stack(...) tool. All three require the user\'s own Anthropic API key, passed per-request and never stored server-side. All four pieces (share links, /api/refine, /api/ask, MCP tool) are built and tested — see backend/README.md for the running system\'s test suite and quickstart.'));
 children.push(h2('9.3 Data Flow (v1)'));
 children.push(numbered('User enters free text and clicks Analyze.'));
-children.push(numbered('detectSignals(text) returns a signals object (~35 boolean/derived fields).'));
+children.push(numbered('detectSignals(text) returns a signals object (65+ boolean/derived fields).'));
 children.push(numbered('Each pickX(signals) function returns a recommendation, rationale, and confidence rating for its category.'));
 children.push(numbered('The results are assembled into 16 sections, rendered into the DOM inside a sticky-nav/collapsible-section shell.'));
-children.push(numbered('Nothing is persisted; a page refresh clears all state (until v2\'s share-link feature ships).'));
+children.push(numbered('Nothing is persisted unless the user explicitly saves/shares it via v2\'s share-link feature; a page refresh otherwise clears all state.'));
 
 // ---------- Success metrics ----------
 children.push(h1('10. Success Metrics'));
@@ -179,21 +182,22 @@ children.push(reqTable(['Release', 'Contents', 'Status'], [1600, 6000, 1800], [
   ['v1.3', 'Sticky nav + collapsible sections', 'Shipped'],
   ['v1.4', 'Validation/QA pass — negation handling, on-prem support, warehouse detection, conflict-resolution fixes', 'Shipped'],
   ['v1.5', 'Flow View: node-canvas visualization of the recommendation (n8n/Voiceflow/VectorShift-style pan/zoom/drag graph, alternate to the card view); recursive logic audit — fixed several false-positive signal matches and a same-report contradiction between the Compute Model card and the Kubernetes-vs-Serverless trade-off card', 'Shipped'],
-  ['v2.0', 'LLM refinement endpoint, share links, MCP tool wrapper', 'Designed — blocked on backend/desktop access'],
+  ['v2.0', 'Share links, LLM refinement endpoint (/api/refine), grounded follow-up Q&A (/api/ask), MCP tool wrapper (recommend_stack) — FastAPI + Postgres + Alembic backend, 44 passing tests', 'Shipped'],
 ]));
 
 // ---------- Known limitations ----------
 children.push(h1('12. Known Limitations'));
 children.push(p('From the Validation Report and general assessment — listed explicitly so they are tracked, not discovered later:'));
 children.push(bullet('Keyword/pattern matching is inherently approximate; the negation-stripping fix (FR-4) reduces but does not eliminate false-positive signal detection on unusual phrasing.'));
-children.push(bullet('No benchmark exists against real expert-architect judgment — validation to date is internal scenario testing (11 cases), not comparison against how senior architects would actually decide the same inputs.'));
+children.push(bullet('No benchmark exists against real expert-architect judgment — validation to date is internal scenario testing (35+ crafted scenarios across the original validation pass and the two-round expansion pass), not comparison against how senior architects would actually decide the same inputs, and not real end users.'));
 children.push(bullet('The rule engine encodes a snapshot of current technology/model landscape knowledge and will drift out of date as new models, tools, and best practices emerge, with no automated update mechanism.'));
 children.push(bullet('Confidence ratings reflect how much matching signal was detected, not an externally validated probability of correctness — a "High confidence" pick is high-confidence in the sense that strong signal supports it, not that it has been checked against ground truth.'));
+children.push(bullet('The docs/use-case-knowledge-base/ corpus is written for RAG retrieval but has only been tested against a local TF-IDF prototype (lexical similarity), not the real embedding-based retrieval /api/refine/ask now use in production — 18/21 eval cases passed against that prototype, with one concrete finding (keyword-dense "Signals/triggers" chunks out-ranking substantive content chunks) already fed back into the ingestion guide. See docs/use-case-knowledge-base/RETRIEVAL-EVAL-SET.md.'));
 
 // ---------- Open questions ----------
 children.push(h1('13. Open Questions'));
 children.push(numbered('Which of the three target segments (Section 5 / BRD Section 5) should the product formally commit to, and how much should the depth/hand-holding balance change per segment?', 0, 'numbered-list-2'));
-children.push(numbered('Should v1 add a cost-estimation feature to match StackAdvisor.ai\'s strongest concrete differentiator, or is that out of scope given the "not a provisioning tool" non-goal?', 0, 'numbered-list-2'));
+children.push(numbered('RESOLVED (v1.1): a directional monthly cost estimator was added — compute/database/LLM-API bands by scale tier, with LLM cost broken out by model tier specifically. Deliberately a range, not a point estimate, and explicitly caveated as a planning figure, not a quote, since a client-side tool has no live pricing API. See docs/use-case-knowledge-base/09-cost-estimation-methodology.md for full sourcing.', 0, 'numbered-list-2'));
 children.push(numbered('What instrumentation is needed to capture the success metrics in Section 10 without violating NFR-1 (no data leaves the browser) — this is a real tension between measurement and the current privacy posture that needs an explicit decision.', 0, 'numbered-list-2'));
 children.push(numbered('Once real users are exposed to the tool (BRD BR-7), what is the process for feeding disagreement/feedback back into rule-engine updates?', 0, 'numbered-list-2'));
 children.push(numbered('Should the new Flow View (node-canvas visualization of the recommendation, added after this PRD was first drafted) be formalized as its own FR item in the next revision?', 0, 'numbered-list-2'));
@@ -203,6 +207,6 @@ const doc = baseDoc({
 });
 
 Packer.toBuffer(doc).then((buf) => {
-  fs.writeFileSync('/home/claude/ai-stack-advisor/docs/AI-Stack-Advisor-PRD.docx', buf);
+  fs.writeFileSync(path.join(__dirname, 'AI-Stack-Advisor-PRD.docx'), buf);
   console.log('PRD written');
 });

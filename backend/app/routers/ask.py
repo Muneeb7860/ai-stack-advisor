@@ -28,6 +28,16 @@ optimization, not implemented in this milestone — flagging it rather than sile
 it's out of scope forever.
 
 API key handling: identical to /api/refine — request-scoped, never logged, never persisted.
+
+RAG grounding (KICKOFF_BRIEF.md decision #6): retrieved from docs/use-case-knowledge-base/
+(app/retrieval.py) using the user's QUESTION as the query, not the original requirement text —
+per 00-INDEX-AND-INGESTION-GUIDE.md §2, "Anti-patterns sections are high-value retrieval
+targets for /api/ask... a large share of real follow-up questions are 'is X okay?'" — that
+phrasing is exactly what the question text itself carries, and exactly what the corpus's
+anti-patterns sections were written to answer. Same best-effort framing as /api/refine: no
+match found is a normal outcome, not an error, and /api/ask's core grounding (the existing
+Analysis's own requirement_text and recommendations, scoped structurally by analysis_id) is
+unaffected either way.
 """
 import json
 
@@ -37,6 +47,10 @@ from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..db import get_db
+from ..retrieval import format_citation, retrieve
+
+GROUNDING_SCORE_THRESHOLD = 0.03  # see refine.py's identical constant for the full rationale
+GROUNDING_TOP_K = 2
 
 router = APIRouter(prefix="/api", tags=["ask"])
 
@@ -51,13 +65,28 @@ Original requirement text:
 
 Full recommendation set (JSON):
 {recommendations}
-
-Ground every answer in the requirement text and the recommendation above. If the question \
-asks you to reconsider a pick, you may explain the trade-off, but do not silently declare a \
-new official recommendation — that only happens through the separate refine flow \
-(POST /api/refine). If the user's question relies on information not present in the \
-requirement text or the recommendation, say so explicitly rather than inventing details.
+{grounding}
+Ground every answer in the requirement text and the recommendation above. If grounding context \
+from the architecture knowledge base is provided, you may cite it using its bracketed source \
+name — never cite a source that wasn't actually shown to you. If the question asks you to \
+reconsider a pick, you may explain the trade-off, but do not silently declare a new official \
+recommendation — that only happens through the separate refine flow (POST /api/refine). If the \
+user's question relies on information not present in the requirement text, the recommendation, \
+or the grounding context, say so explicitly rather than inventing details.
 """
+
+
+def _build_grounding_context(question: str) -> str:
+    """Best-effort RAG grounding keyed on the follow-up question — see module docstring for
+    why the question, not the original requirement text, is the retrieval query here."""
+    results = [r for r in retrieve(question, top_k=GROUNDING_TOP_K) if r["score"] >= GROUNDING_SCORE_THRESHOLD]
+    if not results:
+        return ""
+    sections = [f"[{format_citation(r)}]\n{r['chunk_text']}" for r in results]
+    return (
+        "\nGrounding context retrieved from the architecture knowledge base for this "
+        "question:\n\n" + "\n\n---\n\n".join(sections) + "\n"
+    )
 
 
 def _run_ask(api_key: str, system_prompt: str, history: list[dict]) -> str:
@@ -97,6 +126,7 @@ def ask(payload: schemas.AskRequest, db: Session = Depends(get_db)):
     system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
         requirement_text=analysis.requirement_text,
         recommendations=json.dumps(analysis.recommendations),
+        grounding=_build_grounding_context(payload.question),
     )
     history = [{"role": m.role, "content": m.content} for m in prior_messages]
     history.append({"role": "user", "content": payload.question})

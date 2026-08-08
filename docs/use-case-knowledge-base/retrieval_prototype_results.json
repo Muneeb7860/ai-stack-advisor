@@ -1,0 +1,452 @@
+{
+  "summary": {
+    "pass": 18,
+    "partial": 2,
+    "fail": 1,
+    "total": 21
+  },
+  "by_section": {
+    "direct": {
+      "pass": 11,
+      "fail": 0,
+      "partial": 0
+    },
+    "anti_pattern": {
+      "pass": 2,
+      "fail": 0,
+      "partial": 1
+    },
+    "cross_document": {
+      "pass": 1,
+      "fail": 1,
+      "partial": 0
+    },
+    "boundary": {
+      "pass": 2,
+      "fail": 0,
+      "partial": 1
+    },
+    "negative_control": {
+      "pass": 2,
+      "fail": 0,
+      "partial": 0
+    }
+  },
+  "details": [
+    {
+      "id": 1,
+      "section": "direct",
+      "query": "We're building a Figma-like design tool where multiple people edit the same canvas at once.",
+      "passed": true,
+      "detail": "expected_any_of=['01-realtime-collaborative-editing.md'] got_top_docs=['01-realtime-collaborative-editing.md']",
+      "phrase_check": null,
+      "top3": [
+        [
+          "01-realtime-collaborative-editing.md",
+          "Business context",
+          0.195
+        ]
+      ]
+    },
+    {
+      "id": 2,
+      "section": "direct",
+      "query": "How do we handle Zoom-style group video calls with screen sharing for up to 50 people?",
+      "passed": true,
+      "detail": "expected_any_of=['02-video-audio-conferencing.md'] got_top_docs=['02-video-audio-conferencing.md']",
+      "phrase_check": null,
+      "top3": [
+        [
+          "02-video-audio-conferencing.md",
+          "Signals / triggers",
+          0.326
+        ]
+      ]
+    },
+    {
+      "id": 3,
+      "section": "direct",
+      "query": "We have separate teams owning the customer app, the admin dashboard, and the driver app \u2014 how do we let them deploy independently?",
+      "passed": true,
+      "detail": "expected_any_of=['03-micro-frontend-architecture.md'] got_top_docs=['03-micro-frontend-architecture.md']",
+      "phrase_check": null,
+      "top3": [
+        [
+          "03-micro-frontend-architecture.md",
+          "(preamble)",
+          0.427
+        ]
+      ]
+    },
+    {
+      "id": 4,
+      "section": "direct",
+      "query": "Our checkout needs to reserve inventory, charge payment, and book shipping across three services \u2014 how do we keep that consistent?",
+      "passed": true,
+      "detail": "expected_any_of=['04-event-driven-distributed-transactions.md'] got_top_docs=['04-event-driven-distributed-transactions.md']",
+      "phrase_check": null,
+      "top3": [
+        [
+          "04-event-driven-distributed-transactions.md",
+          "(preamble)",
+          0.445
+        ]
+      ]
+    },
+    {
+      "id": 5,
+      "section": "direct",
+      "query": "We're building a B2B SaaS product and each customer company's data needs to be completely isolated from every other customer.",
+      "passed": true,
+      "detail": "expected_any_of=['05-multi-tenant-saas.md'] got_top_docs=['05-multi-tenant-saas.md']",
+      "phrase_check": null,
+      "top3": [
+        [
+          "05-multi-tenant-saas.md",
+          "Signals / triggers",
+          0.294
+        ]
+      ]
+    },
+    {
+      "id": 6,
+      "section": "direct",
+      "query": "We're building a marketplace connecting freelancers with clients \u2014 how should we handle payments and escrow?",
+      "passed": true,
+      "detail": "expected_any_of=['06-two-sided-marketplace.md'] got_top_docs=['06-two-sided-marketplace.md']",
+      "phrase_check": null,
+      "top3": [
+        [
+          "06-two-sided-marketplace.md",
+          "B. Payments architecture",
+          0.309
+        ]
+      ]
+    },
+    {
+      "id": 7,
+      "section": "direct",
+      "query": "We want to add a fraud-scoring model to flag suspicious transactions \u2014 what infrastructure do we need to train and serve it?",
+      "passed": true,
+      "detail": "expected_any_of=['07-ml-feature-store-and-model-serving.md'] got_top_docs=['07-ml-feature-store-and-model-serving.md']",
+      "phrase_check": null,
+      "top3": [
+        [
+          "07-ml-feature-store-and-model-serving.md",
+          "Signals / triggers",
+          0.202
+        ]
+      ]
+    },
+    {
+      "id": 8,
+      "section": "direct",
+      "query": "Our product catalog needs a search bar with autocomplete and a 'you may also like' section.",
+      "passed": true,
+      "detail": "expected_any_of=['08-search-and-recommendation-engine.md'] got_top_docs=['08-search-and-recommendation-engine.md']",
+      "phrase_check": null,
+      "top3": [
+        [
+          "08-search-and-recommendation-engine.md",
+          "Signals / triggers",
+          0.272
+        ]
+      ]
+    },
+    {
+      "id": 9,
+      "section": "direct",
+      "query": "Roughly how much should we budget monthly for an AI chatbot handling a few thousand conversations a day?",
+      "passed": true,
+      "detail": "expected_any_of=['09-cost-estimation-methodology.md'] got_top_docs=['09-cost-estimation-methodology.md']",
+      "phrase_check": null,
+      "top3": [
+        [
+          "09-cost-estimation-methodology.md",
+          "LLM API cost \u2014 the highest-leverage number",
+          0.101
+        ]
+      ]
+    },
+    {
+      "id": 10,
+      "section": "direct",
+      "query": "What does 'hexagonal architecture' actually look like inside one service's folder structure?",
+      "passed": true,
+      "detail": "expected_any_of=['10-hexagonal-intraservice-code-organization.md'] got_top_docs=['10-hexagonal-intraservice-code-organization.md']",
+      "phrase_check": null,
+      "top3": [
+        [
+          "10-hexagonal-intraservice-code-organization.md",
+          "Business context",
+          0.346
+        ]
+      ]
+    },
+    {
+      "id": 11,
+      "section": "direct",
+      "query": "We have multiple agents calling different LLMs \u2014 should we route and guardrail that centrally or per-agent?",
+      "passed": true,
+      "detail": "expected_any_of=['11-semantic-routing-guardrail-service.md'] got_top_docs=['11-semantic-routing-guardrail-service.md']",
+      "phrase_check": null,
+      "top3": [
+        [
+          "11-semantic-routing-guardrail-service.md",
+          "(preamble)",
+          0.142
+        ]
+      ]
+    },
+    {
+      "id": 12,
+      "section": "anti_pattern",
+      "query": "Is it okay to just use Postgres LIKE queries for our search feature?",
+      "passed": "partial",
+      "detail": "expected_any_of=['08-search-and-recommendation-engine.md'] got_top_docs=['08-search-and-recommendation-engine.md']",
+      "phrase_check": "MISSING: ['anti-pattern', 'ILIKE']",
+      "top3": [
+        [
+          "08-search-and-recommendation-engine.md",
+          "Signals / triggers",
+          0.18
+        ],
+        [
+          "08-search-and-recommendation-engine.md",
+          "(preamble)",
+          0.125
+        ],
+        [
+          "08-search-and-recommendation-engine.md",
+          "Sources",
+          0.121
+        ]
+      ]
+    },
+    {
+      "id": 13,
+      "section": "anti_pattern",
+      "query": "Can we use two-phase commit across our microservices instead of dealing with sagas?",
+      "passed": true,
+      "detail": "expected_any_of=['04-event-driven-distributed-transactions.md'] got_top_docs=['04-event-driven-distributed-transactions.md', '10-hexagonal-intraservice-code-organization.md']",
+      "phrase_check": "OK",
+      "top3": [
+        [
+          "04-event-driven-distributed-transactions.md",
+          "Anti-patterns",
+          0.191
+        ],
+        [
+          "04-event-driven-distributed-transactions.md",
+          "Sources",
+          0.075
+        ],
+        [
+          "10-hexagonal-intraservice-code-organization.md",
+          "Business context",
+          0.06
+        ]
+      ]
+    },
+    {
+      "id": 14,
+      "section": "anti_pattern",
+      "query": "Our cursor and presence data for the collaborative editor is slowing down the database \u2014 is that normal?",
+      "passed": true,
+      "detail": "expected_any_of=['01-realtime-collaborative-editing.md'] got_top_docs=['01-realtime-collaborative-editing.md']",
+      "phrase_check": "OK",
+      "top3": [
+        [
+          "01-realtime-collaborative-editing.md",
+          "Anti-patterns",
+          0.156
+        ],
+        [
+          "01-realtime-collaborative-editing.md",
+          "D. Presence / awareness / cursor sharing",
+          0.147
+        ],
+        [
+          "01-realtime-collaborative-editing.md",
+          "As implemented in `index.html`",
+          0.089
+        ]
+      ]
+    },
+    {
+      "id": 15,
+      "section": "cross_document",
+      "query": "We're building a virtual classroom app with live video calls and a shared collaborative whiteboard.",
+      "passed": false,
+      "detail": "expected_all=['01-realtime-collaborative-editing.md', '02-video-audio-conferencing.md'] got_top_docs=['02-video-audio-conferencing.md', '03-micro-frontend-architecture.md', '06-two-sided-marketplace.md']",
+      "phrase_check": null,
+      "top3": [
+        [
+          "02-video-audio-conferencing.md",
+          "Signals / triggers",
+          0.283
+        ],
+        [
+          "02-video-audio-conferencing.md",
+          "Business context",
+          0.168
+        ],
+        [
+          "03-micro-frontend-architecture.md",
+          "Signals / triggers",
+          0.139
+        ]
+      ]
+    },
+    {
+      "id": 16,
+      "section": "cross_document",
+      "query": "We're an on-demand delivery marketplace connecting drivers and customers, and we need real-time driver location tracking on a map.",
+      "passed": true,
+      "detail": "expected_any_of=['06-two-sided-marketplace.md'] got_top_docs=['06-two-sided-marketplace.md']",
+      "phrase_check": null,
+      "top3": [
+        [
+          "06-two-sided-marketplace.md",
+          "Sources",
+          0.108
+        ],
+        [
+          "06-two-sided-marketplace.md",
+          "Reference implementations",
+          0.107
+        ],
+        [
+          "06-two-sided-marketplace.md",
+          "Signals / triggers",
+          0.102
+        ]
+      ]
+    },
+    {
+      "id": 17,
+      "section": "boundary",
+      "query": "Should our video conferencing app use peer-to-peer or a server-based approach for 8 participants?",
+      "passed": "partial",
+      "detail": "expected_any_of=['02-video-audio-conferencing.md'] got_top_docs=['02-video-audio-conferencing.md', '01-realtime-collaborative-editing.md']",
+      "phrase_check": "MISSING: ['P2P', 'mesh', '3-5', '3\u20135']",
+      "top3": [
+        [
+          "02-video-audio-conferencing.md",
+          "Signals / triggers",
+          0.335
+        ],
+        [
+          "02-video-audio-conferencing.md",
+          "(preamble)",
+          0.111
+        ],
+        [
+          "01-realtime-collaborative-editing.md",
+          "A. Conflict-resolution algorithm \u2014 CRDT vs. Operational Transformation (OT)",
+          0.106
+        ]
+      ]
+    },
+    {
+      "id": 18,
+      "section": "boundary",
+      "query": "We need a model registry so we always know which model version is actually live in production.",
+      "passed": true,
+      "detail": "expected_any_of=['07-ml-feature-store-and-model-serving.md'] got_top_docs=['07-ml-feature-store-and-model-serving.md']",
+      "phrase_check": "OK",
+      "top3": [
+        [
+          "07-ml-feature-store-and-model-serving.md",
+          "D. Experiment tracking & model registry",
+          0.286
+        ],
+        [
+          "07-ml-feature-store-and-model-serving.md",
+          "Signals / triggers",
+          0.196
+        ],
+        [
+          "07-ml-feature-store-and-model-serving.md",
+          "As implemented in `index.html`",
+          0.091
+        ]
+      ]
+    },
+    {
+      "id": 19,
+      "section": "boundary",
+      "query": "Should routing between cheap and expensive models be rule-based or a trained classifier?",
+      "passed": true,
+      "detail": "expected_any_of=['11-semantic-routing-guardrail-service.md'] got_top_docs=['11-semantic-routing-guardrail-service.md']",
+      "phrase_check": "OK",
+      "top3": [
+        [
+          "11-semantic-routing-guardrail-service.md",
+          "C. Semantic routing approaches (increasing sophistication and cost)",
+          0.201
+        ],
+        [
+          "11-semantic-routing-guardrail-service.md",
+          "As implemented in `index.html`",
+          0.165
+        ],
+        [
+          "11-semantic-routing-guardrail-service.md",
+          "Anti-patterns",
+          0.14
+        ]
+      ]
+    },
+    {
+      "id": 20,
+      "section": "negative_control",
+      "query": "How do we set up CI/CD for our Kubernetes deployments?",
+      "passed": true,
+      "detail": "max_score=0.136 (threshold 0.15) top_doc=03-micro-frontend-architecture.md",
+      "phrase_check": null,
+      "top3": [
+        [
+          "03-micro-frontend-architecture.md",
+          "D. \"You probably don't need micro-frontends\" case",
+          0.136
+        ],
+        [
+          "09-cost-estimation-methodology.md",
+          "Caveats and re-verification",
+          0.12
+        ],
+        [
+          "09-cost-estimation-methodology.md",
+          "Compute cost bands (monthly, order-of-magnitude, as of Aug 2026)",
+          0.071
+        ]
+      ]
+    },
+    {
+      "id": 21,
+      "section": "negative_control",
+      "query": "What's the best way to configure DNS and SSL certificates for our custom domain?",
+      "passed": true,
+      "detail": "max_score=0.113 (threshold 0.15) top_doc=10-hexagonal-intraservice-code-organization.md",
+      "phrase_check": null,
+      "top3": [
+        [
+          "10-hexagonal-intraservice-code-organization.md",
+          "Common mistakes",
+          0.113
+        ],
+        [
+          "10-hexagonal-intraservice-code-organization.md",
+          "The pattern",
+          0.101
+        ],
+        [
+          "10-hexagonal-intraservice-code-organization.md",
+          "Why this matters beyond \"clean code\"",
+          0.071
+        ]
+      ]
+    }
+  ]
+}

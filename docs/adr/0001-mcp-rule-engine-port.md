@@ -65,3 +65,54 @@ zero-diff result are the durable record of that check having been done.
   verification harness wasn't committed). If this becomes a real maintenance burden, a
   worthwhile follow-up would be committing a small Node+pytest harness that re-runs this
   comparison automatically — flagged here as a real gap, not silently deferred.
+
+## Addendum: post-merge validation round (same day)
+
+A dedicated validation/verification pass, run after this ADR's decision had already shipped
+(not as part of deciding it), re-ran the same JS-vs-Python diff with an expanded scenario set
+— 33 total, the original 13 plus 20 new ones specifically targeting `pickIAM()`'s many
+vendor-selection branches (Entra, Ping/ForgeRock, Oracle, JumpCloud, OneLogin, CyberArk,
+Saviynt, identity-governance complementary picks) and a few signal-detection edge cases
+(Java-not-JavaScript, "go" as a verb vs. the language, an overloaded many-signals input).
+**Zero diffs** across all 33. This doesn't change the decision above; it's additional
+confidence that the port's coverage extends well past the original 13 scenarios into
+branches that hadn't been exercised yet.
+
+That same validation round is also where the real bug documented in
+`backend/app/mcp/server.py` (`_client_name_from_context`'s `.clientInfo` vs. `.client_info`
+attribute-name mistake) was found — by driving an actual stdio MCP session end-to-end, not by
+this ADR's JS-vs-Python diff (that diff only exercises `rule_engine.py`, which was correct
+throughout; the bug was in `mcp/server.py`'s protocol-layer glue code, a different file this
+ADR doesn't cover). Noted here because it's the same validation effort, not because it's part
+of the port decision itself.
+
+## Addendum 2: full re-port after the frontend expansion pass
+
+A separate, parallel design/research session (see `KICKOFF_BRIEF.md` Section 0) expanded
+`index.html`'s rule engine substantially: signal count grew from ~35 to 65+, `pickX()`
+functions from ~30 to 45 — new use-case domains (collaborative editing, video conferencing,
+micro-frontends, event-driven sagas, multi-tenant SaaS, marketplaces, ML feature stores,
+search/recommendation), a directional cost estimator (`pickCostEstimate`), a 4-group
+vendor-alternatives comparison layer (`pick*Vendor()` functions + their data tables, ~17 new
+functions), governance/security dimensions (Waterfall/Agile, TOGAF/SAFe, COBIT/ITIL,
+mTLS+SPIFFE/SPIRE), and `pickVRAMTier()` was replaced entirely by a 5-tier `pickComputeTier()`
+continuum plus a new `pickRuntime()` (Ollama/OpenRouter/direct-SDK) decision.
+
+`app/rule_engine.py` was fully re-ported against this expanded source — not patched
+incrementally — and re-verified the same way as the original port: JS extracted from the
+current `index.html`, executed under Node, diffed against the Python port's output. Scenario
+set expanded to **41 total** (the prior 33 plus 8 new scenarios specifically targeting the new
+dimensions: live-multiplayer/leaderboard, collaborative editing, video conferencing/
+telehealth, micro-frontends, saga workflows, multi-tenant SaaS, marketplaces, ML feature
+stores, search/recommendation, semantic routing, social-feed fan-out, geospatial/fleet,
+fixed-scope/government delivery, TOGAF/SAFe, COBIT/ITIL, mTLS/SPIFFE, mobile/web BFF,
+Ollama/OpenRouter runtime selection, on-device mobile/tablet sizing, and both cost-estimate
+scale tiers). **Zero diffs across all 41.**
+
+This re-port also added `pick_cost_estimate()`, `pick_compute_tier()`, `pick_runtime()`, and
+the full vendor-comparison layer (`pick_cloud_vendor()` through `pick_frontend_vendor()`, plus
+their `*_VENDORS` data tables) to the Python port and to `recommend_stack()`'s output shape —
+the MCP tool's `recommend_stack()` output now includes `cost_estimate`, `compute_tier`,
+`runtime`, and per-category `*_vendor` keys that didn't exist in the original port. This is a
+response-shape change for any existing MCP client code parsing the old category set — see
+`backend/tests/test_rule_engine.py` for the updated set of expected top-level keys.

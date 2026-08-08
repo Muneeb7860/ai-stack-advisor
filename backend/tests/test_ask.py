@@ -222,3 +222,34 @@ def test_ask_persists_nothing_when_model_call_fails(monkeypatch, existing_analys
         assert len(rows) == 0
     finally:
         db.close()
+
+
+def test_build_grounding_context_uses_question_as_query():
+    """/api/ask grounds on the follow-up QUESTION, not the original requirement text (module
+    docstring: anti-pattern sections are written to directly answer 'is X okay?' phrasing)."""
+    grounding = ask_module._build_grounding_context(
+        "Is it okay to just use Postgres LIKE queries for our search feature?"
+    )
+    assert grounding != ""
+    assert "08-search-and-recommendation-engine.md" in grounding
+    assert "anti-pattern" in grounding.lower()
+
+
+def test_build_grounding_context_empty_for_zero_overlap_question():
+    """GROUNDING_SCORE_THRESHOLD is deliberately low (see refine.py's constant comment) —
+    filters true zero-overlap queries only, not merely off-topic-sounding ones."""
+    grounding = ask_module._build_grounding_context("Tell me a joke about cats.")
+    assert grounding == ""
+
+
+def test_ask_still_works_when_grounding_is_empty(mock_ask, existing_analysis):
+    """Grounding must never gate the core ask flow."""
+    resp = client.post(
+        "/api/ask",
+        json={
+            "analysis_id": existing_analysis["id"],
+            "question": "What's the best way to configure DNS for our custom domain?",
+            "anthropic_api_key": "sk-ant-fake-key-not-real",
+        },
+    )
+    assert resp.status_code == 200

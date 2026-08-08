@@ -150,3 +150,43 @@ def test_refine_surfaces_anthropic_api_errors_as_502(monkeypatch, refine_payload
     monkeypatch.setattr(refine_module, "_run_refinement", _raise)
     resp = client.post("/api/refine", json=refine_payload)
     assert resp.status_code == 502
+
+
+def test_build_grounding_context_returns_citable_content_for_covered_domain():
+    """RAG grounding (KICKOFF_BRIEF.md decision #6) — a requirement squarely in one of the 11
+    knowledge-base domains should produce non-empty, citable grounding context. Uses eval case
+    1's exact query (docs/use-case-knowledge-base/eval_cases.json) — a verified direct hit in
+    tests/test_retrieval_eval.py — rather than a hand-written query that might land near the
+    threshold boundary for reasons unrelated to what this test is actually checking."""
+    grounding = refine_module._build_grounding_context(
+        "We're building a Figma-like design tool where multiple people edit the same canvas at once."
+    )
+    assert grounding != ""
+    assert "01-realtime-collaborative-editing.md" in grounding
+    # Never a Signals/triggers chunk — see app/retrieval.py's module docstring.
+    from app.retrieval import ROUTING_HEADER_PATTERN
+
+    citation_lines = [line for line in grounding.splitlines() if line.startswith("[")]
+    assert citation_lines, "expected at least one bracketed citation line"
+    for line in citation_lines:
+        assert not ROUTING_HEADER_PATTERN.search(line)
+
+
+def test_build_grounding_context_empty_for_zero_overlap_query():
+    """Best-effort, not a hard gate (module docstring) — GROUNDING_SCORE_THRESHOLD is
+    deliberately low (0.03, see refine.py's constant comment for the full empirical
+    reasoning), so this only filters TRUE zero-lexical-overlap queries, not merely
+    off-topic-but-still-technical-sounding ones (those can legitimately score 0.03-0.14 and
+    are an accepted, disclosed trade-off — not something this test asserts against)."""
+    grounding = refine_module._build_grounding_context("Tell me a joke about cats.")
+    assert grounding == ""
+
+
+def test_refine_still_works_when_grounding_is_empty(mock_anthropic, refine_payload):
+    """Grounding must never gate the core refine flow — confirm refine still succeeds end to
+    end for a requirement with no knowledge-base match at all."""
+    resp = client.post(
+        "/api/refine",
+        json={**refine_payload, "requirement_text": "Configure DNS for our custom domain."},
+    )
+    assert resp.status_code == 200
