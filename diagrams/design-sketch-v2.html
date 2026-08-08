@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Stack Advisor — Layout Sketch (v2 direction)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0c11; --panel:#12151d; --panel2:#151922; --border:#1f2430; --box:#0a0e15;
+    --text:#e8ebf1; --muted:#828a99; --muted2:#9aa1ae; --accent:#5b8def; --accent2:#7c5bef;
+    --accent2-text:#9580f5; --good:#34c98a; --warn:#e0a23c; --danger:#e0616a; --chip:#171b24;
+    --radius:10px; --radius-sm:7px; --radius-lg:14px;
+    --ease:cubic-bezier(.2,.7,.3,1);
+    --fs-3xs:9px; --fs-2xs:10px; --fs-xs:11px; --fs-sm:12px; --fs-base:13px; --fs-md:14px; --fs-lg:16px;
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-font-smoothing:antialiased;}
+  body{
+    margin:0; font-family:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:radial-gradient(1200px 750px at 15% -10%, #151b28 0%, var(--bg) 55%), var(--bg);
+    color:var(--text); min-height:100vh; letter-spacing:-0.006em; font-size:14px; line-height:1.5;
+  }
+  .note{
+    max-width:1180px; margin:0 auto; padding:14px 20px; background:rgba(91,141,239,0.08);
+    border-bottom:1px solid rgba(91,141,239,0.25); font-size:12px; color:#8fb2f7; line-height:1.6;
+  }
+  .note b{color:var(--text);}
+  .shell{max-width:1180px; margin:0 auto; padding:22px 20px 80px;}
+
+  /* ---------- Header + at-a-glance strip ---------- */
+  .topbar{display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:16px; flex-wrap:wrap;}
+  .titleblock h1{font-size:20px; margin:0 0 4px; font-weight:700; display:flex; align-items:center; gap:8px;}
+  .meta-line{font-size:var(--fs-xs); color:var(--muted); display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
+  .meta-line .dot{width:4px; height:4px; border-radius:50%; background:var(--muted); flex-shrink:0;}
+  .edit-btn{background:var(--chip); border:1px solid var(--border); color:var(--muted2); font-size:var(--fs-xs); padding:7px 12px; border-radius:8px; cursor:pointer; font-weight:600; white-space:nowrap;}
+  .edit-btn:hover{color:var(--text); border-color:var(--accent);}
+
+  .glance{
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:1px;
+    background:var(--border); border:1px solid var(--border); border-radius:var(--radius-lg);
+    overflow:hidden; margin-bottom:22px;
+  }
+  .glance-cell{background:linear-gradient(180deg, var(--panel), var(--panel2)); padding:13px 15px; position:relative;}
+  .glance-cell .gc-label{font-size:var(--fs-2xs); text-transform:uppercase; letter-spacing:0.05em; color:var(--muted); font-weight:700; margin-bottom:5px; display:flex; align-items:center; gap:5px;}
+  .glance-cell .gc-value{font-size:var(--fs-md); font-weight:700; letter-spacing:-0.01em; line-height:1.3;}
+  .gc-conf{width:6px; height:6px; border-radius:50%; flex-shrink:0;}
+  .gc-conf.high{background:var(--good);}
+  .gc-conf.med{background:var(--warn);}
+  .gc-conf.low{background:var(--muted);}
+
+  /* ---------- Tabs ---------- */
+  .tabs{display:flex; gap:2px; background:var(--chip); border:1px solid var(--border); border-radius:10px; padding:3px; margin-bottom:20px; overflow-x:auto;}
+  .tab{
+    flex:1; text-align:center; padding:9px 14px; border-radius:7px; font-size:var(--fs-base); font-weight:600;
+    color:var(--muted); cursor:pointer; white-space:nowrap; transition:all .15s var(--ease); user-select:none;
+  }
+  .tab.active{background:var(--accent); color:#fff;}
+  .tab:not(.active):hover{color:var(--text); background:rgba(255,255,255,0.03);}
+  .tab .tab-count{font-size:var(--fs-3xs); opacity:0.75; margin-left:3px;}
+
+  .panel{display:none;}
+  .panel.active{display:block; animation:fadeIn .2s var(--ease);}
+  @keyframes fadeIn{from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;}}
+
+  .section-lede{font-size:var(--fs-sm); color:var(--muted); margin:0 0 16px; max-width:680px; line-height:1.6;}
+  .layer-label{font-size:var(--fs-2xs); text-transform:uppercase; letter-spacing:0.06em; color:var(--accent2-text); font-weight:700; margin:20px 0 9px; display:flex; align-items:center; gap:8px;}
+  .layer-label:first-child{margin-top:0;}
+  .layer-label::after{content:''; flex:1; height:1px; background:var(--border);}
+
+  .grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(250px,1fr)); gap:10px;}
+  .stack-card{background:var(--box); border:1px solid var(--border); border-radius:var(--radius); padding:13px; transition:border-color .15s var(--ease), transform .15s var(--ease);}
+  .stack-card:hover{border-color:#2c3342; transform:translateY(-1px);}
+  .stack-card .head{display:flex; justify-content:space-between; align-items:flex-start; gap:8px;}
+  .stack-card h3{margin:0; font-size:var(--fs-2xs); color:var(--muted); text-transform:uppercase; letter-spacing:0.03em; font-weight:600;}
+  .stack-card .pick{font-size:var(--fs-md); font-weight:700; margin:5px 0 6px; color:var(--text); letter-spacing:-0.01em;}
+  .stack-card .why{font-size:var(--fs-sm); color:var(--muted); line-height:1.5;}
+  .conf{flex-shrink:0; display:inline-flex; align-items:center; gap:5px; font-size:var(--fs-3xs); font-weight:700; text-transform:uppercase; letter-spacing:0.03em; padding:2px 7px 2px 6px; border-radius:5px; white-space:nowrap; background:var(--chip); color:var(--muted2); border:1px solid var(--border);}
+  .conf::before{content:''; width:6px; height:6px; border-radius:50%; flex-shrink:0;}
+  .conf.high::before{background:var(--good);}
+  .conf.med::before{background:var(--warn);}
+  .conf.low::before{background:var(--muted);}
+
+  /* ---------- Cost: bar visualization ---------- */
+  .cost-bars{display:flex; flex-direction:column; gap:14px; background:var(--box); border:1px solid var(--border); border-radius:var(--radius-lg); padding:18px 20px; margin-bottom:16px;}
+  .cost-bar-row{display:grid; grid-template-columns:110px 1fr 130px; gap:14px; align-items:center;}
+  .cost-bar-name{font-size:var(--fs-sm); font-weight:700; color:var(--text);}
+  .cost-bar-track{position:relative; height:22px; background:var(--chip); border-radius:6px; overflow:hidden;}
+  .cost-bar-fill{position:absolute; top:0; bottom:0; border-radius:6px; background:linear-gradient(90deg, var(--accent), var(--accent2));}
+  .cost-bar-fill.llm{background:linear-gradient(90deg, #34c98a, #5fd9a8);}
+  .cost-bar-fill.db{background:linear-gradient(90deg, #e0a23c, #eab868);}
+  .cost-bar-range{font-size:var(--fs-xs); color:var(--muted2); text-align:right; font-weight:600; font-variant-numeric:tabular-nums;}
+  .cost-scale{display:flex; justify-content:space-between; font-size:var(--fs-3xs); color:var(--muted); padding-left:124px; margin-top:-4px;}
+  .cost-caveat{font-size:var(--fs-xs); color:var(--muted); line-height:1.6; padding-top:12px; border-top:1px dashed var(--border); margin-top:2px;}
+
+  .tier-table{width:100%; border-collapse:collapse; font-size:var(--fs-sm); background:var(--box); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden;}
+  .tier-table th{text-align:left; font-size:var(--fs-2xs); text-transform:uppercase; letter-spacing:0.04em; color:var(--muted); font-weight:700; padding:9px 12px; border-bottom:1px solid var(--border); background:var(--chip);}
+  .tier-table td{padding:10px 12px; border-bottom:1px solid var(--border); color:var(--text); vertical-align:top;}
+  .tier-table tr:last-child td{border-bottom:none;}
+
+  /* ---------- Trade-offs: comparison layout ---------- */
+  .tradeoff{background:var(--box); border:1px solid var(--border); border-radius:var(--radius-lg); padding:16px 18px; margin-bottom:12px;}
+  .tradeoff .to-title{font-size:var(--fs-xs); color:var(--muted); text-transform:uppercase; letter-spacing:0.04em; font-weight:700; margin-bottom:10px;}
+  .to-compare{display:grid; grid-template-columns:1fr auto 1fr; gap:14px; align-items:stretch;}
+  .to-side{border-radius:var(--radius); padding:12px 14px; border:1px solid var(--border);}
+  .to-side.chosen{background:rgba(52,201,138,0.06); border-color:rgba(52,201,138,0.35);}
+  .to-side.alt{background:rgba(255,255,255,0.015); opacity:0.75;}
+  .to-side .to-tag{font-size:var(--fs-3xs); font-weight:700; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:5px; display:block;}
+  .to-side.chosen .to-tag{color:var(--good);}
+  .to-side.alt .to-tag{color:var(--muted);}
+  .to-side .to-name{font-size:var(--fs-md); font-weight:700; margin-bottom:5px;}
+  .to-side .to-body{font-size:var(--fs-sm); color:var(--muted); line-height:1.5;}
+  .to-vs{align-self:center; font-size:var(--fs-2xs); color:var(--muted); font-weight:700;}
+  .to-switch{margin-top:11px; font-size:var(--fs-sm); color:var(--muted); line-height:1.55; background:rgba(224,162,60,0.07); border:1px solid rgba(224,162,60,0.22); border-radius:var(--radius-sm); padding:9px 12px;}
+  .to-switch b{color:var(--warn); font-weight:700;}
+  @media (max-width:640px){ .to-compare{grid-template-columns:1fr;} .to-vs{display:none;} }
+
+  /* ---------- Governance ---------- */
+  .gov-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(260px,1fr)); gap:10px;}
+  .gov-block{background:var(--box); border:1px solid var(--border); border-radius:var(--radius); padding:14px;}
+  .gov-block h4{margin:0 0 9px; font-size:var(--fs-2xs); text-transform:uppercase; letter-spacing:0.04em; color:var(--accent2-text); font-weight:700; display:flex; align-items:center; justify-content:space-between;}
+  .gov-block .gov-item{display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-top:1px solid var(--border); font-size:var(--fs-sm);}
+  .gov-block .gov-item:first-of-type{border-top:none;}
+  .gov-block .gi-label{color:var(--text);}
+  .gov-block .gi-target{color:var(--muted2); font-weight:600; white-space:nowrap; font-variant-numeric:tabular-nums;}
+
+  .subhead{font-size:var(--fs-md); font-weight:700; margin:0 0 12px; letter-spacing:-0.006em;}
+</style>
+</head>
+<body>
+
+<div class="note">
+  <b>This is a static layout sketch, not a working build.</b> Content is drawn from the "fintech fraud detection" example to feel real, but nothing here is wired to the rule engine. It exists to show a possible information-architecture direction — an at-a-glance summary strip plus tabs instead of one long scroll, and comparison-style trade-off cards — for discussion before any of it gets built into <code>index.html</code>.
+</div>
+
+<div class="shell">
+
+  <div class="topbar">
+    <div class="titleblock">
+      <h1>🧭 Fintech fraud detection — mobile + web, SOC2/PCI, 6 engineers</h1>
+      <div class="meta-line">
+        45 recommendations across 8 domains <span class="dot"></span> 38 signals detected <span class="dot"></span> generated instantly, in your browser
+      </div>
+    </div>
+    <button class="edit-btn">✎ Edit requirements</button>
+  </div>
+
+  <!-- AT A GLANCE: the answer to "just tell me the headline stack" without scrolling -->
+  <div class="glance">
+    <div class="glance-cell">
+      <div class="gc-label"><span class="gc-conf high"></span>Cloud</div>
+      <div class="gc-value">AWS</div>
+    </div>
+    <div class="glance-cell">
+      <div class="gc-label"><span class="gc-conf high"></span>Architecture</div>
+      <div class="gc-value">Microservices, hexagonal</div>
+    </div>
+    <div class="glance-cell">
+      <div class="gc-label"><span class="gc-conf med"></span>Backend</div>
+      <div class="gc-value">Python (FastAPI) + Go</div>
+    </div>
+    <div class="glance-cell">
+      <div class="gc-label"><span class="gc-conf high"></span>Primary LLM</div>
+      <div class="gc-value">Claude Sonnet</div>
+    </div>
+    <div class="glance-cell">
+      <div class="gc-label"><span class="gc-conf med"></span>Est. monthly cost</div>
+      <div class="gc-value">$4.2K–$18K</div>
+    </div>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <div class="tab active" data-tab="overview">Overview</div>
+    <div class="tab" data-tab="stack">Stack <span class="tab-count">32</span></div>
+    <div class="tab" data-tab="cost">Cost & AI</div>
+    <div class="tab" data-tab="tradeoffs">Trade-offs <span class="tab-count">9</span></div>
+    <div class="tab" data-tab="governance">Governance</div>
+  </div>
+
+  <!-- ============ OVERVIEW ============ -->
+  <div class="panel active" id="panel-overview">
+    <p class="section-lede">The six decisions that shape everything downstream — start here, then go to Stack, Cost, or Trade-offs for the full picture and the reasoning behind each pick.</p>
+    <div class="grid">
+      <div class="stack-card"><div class="head"><h3>Cloud provider</h3><span class="conf high">High</span></div><div class="pick">AWS</div><div class="why">PCI-DSS + SOC2 tooling maturity and fraud/ML service breadth (SageMaker, Fraud Detector) outweigh multi-cloud flexibility at this stage.</div></div>
+      <div class="stack-card"><div class="head"><h3>Architecture style</h3><span class="conf high">High</span></div><div class="pick">Microservices, hexagonal per service</div><div class="why">Compliance boundary (PCI scope) benefits from service isolation; hexagonal keeps each service's domain logic testable independent of infra.</div></div>
+      <div class="stack-card"><div class="head"><h3>Primary database</h3><span class="conf high">High</span></div><div class="pick">PostgreSQL</div><div class="why">Transactional integrity for financial records is non-negotiable — ACID guarantees over eventual consistency here.</div></div>
+      <div class="stack-card"><div class="head"><h3>LLM orchestration</h3><span class="conf med">Medium</span></div><div class="pick">Claude Sonnet + rule-based fraud model</div><div class="why">LLM handles the support chatbot; fraud scoring itself should stay a dedicated, auditable ML model — not an LLM call, for regulatory explainability.</div></div>
+      <div class="stack-card"><div class="head"><h3>Compliance posture</h3><span class="conf high">High</span></div><div class="pick">SOC2 Type II + PCI-DSS Level dependent on volume</div><div class="why">Both explicitly stated — scope PCI to the card-data path only, keep the rest of the system out of PCI scope where possible.</div></div>
+      <div class="stack-card"><div class="head"><h3>Team-size fit</h3><span class="conf med">Medium</span></div><div class="pick">Managed services over self-hosted</div><div class="why">6 engineers can't also run Kafka/K8s ops — lean on RDS, managed Kubernetes, and managed queues to keep the ops surface small.</div></div>
+    </div>
+  </div>
+
+  <!-- ============ STACK ============ -->
+  <div class="panel" id="panel-stack">
+    <p class="section-lede">Every category, grouped by layer instead of one flat 30-card grid — infra decisions read top to bottom in the order you'd actually make them.</p>
+
+    <div class="layer-label">Foundation</div>
+    <div class="grid">
+      <div class="stack-card"><div class="head"><h3>Cloud provider</h3><span class="conf high">High</span></div><div class="pick">AWS</div><div class="why">PCI-DSS tooling maturity, fraud/ML service breadth.</div></div>
+      <div class="stack-card"><div class="head"><h3>Compute model</h3><span class="conf high">High</span></div><div class="pick">Kubernetes (EKS) + serverless for bursty paths</div><div class="why">Core transaction path always-on; notification/webhook fan-out serverless.</div></div>
+      <div class="stack-card"><div class="head"><h3>IAM / identity</h3><span class="conf high">High</span></div><div class="pick">AWS IAM + Okta for workforce SSO</div><div class="why">Separate customer auth from employee/admin auth — different blast radius.</div></div>
+      <div class="stack-card"><div class="head"><h3>DNS / edge</h3><span class="conf med">Medium</span></div><div class="pick">Cloudflare in front of ALB</div><div class="why">DDoS/WAF layer ahead of the compliance boundary, not behind it.</div></div>
+    </div>
+
+    <div class="layer-label">Data</div>
+    <div class="grid">
+      <div class="stack-card"><div class="head"><h3>Primary database</h3><span class="conf high">High</span></div><div class="pick">PostgreSQL (RDS Multi-AZ)</div><div class="why">ACID guarantees for financial records; Multi-AZ for the uptime SLA.</div></div>
+      <div class="stack-card"><div class="head"><h3>Caching</h3><span class="conf high">High</span></div><div class="pick">Redis (ElastiCache)</div><div class="why">Session state + fraud-score result caching for repeat-lookup latency.</div></div>
+      <div class="stack-card"><div class="head"><h3>Messaging / streaming</h3><span class="conf med">Medium</span></div><div class="pick">Kafka (MSK)</div><div class="why">Transaction event stream needs durable replay for audit trails, not just delivery.</div></div>
+    </div>
+
+    <div class="layer-label">Application</div>
+    <div class="grid">
+      <div class="stack-card"><div class="head"><h3>Backend language(s)</h3><span class="conf med">Medium</span></div><div class="pick">Python (FastAPI) + Go for the hot path</div><div class="why">Python for the AI/chatbot service, Go for the low-latency transaction-scoring path.</div></div>
+      <div class="stack-card"><div class="head"><h3>Frontend</h3><span class="conf high">High</span></div><div class="pick">React (web) + React Native (mobile)</div><div class="why">Explicit mobile + web requirement; shared component logic across both.</div></div>
+      <div class="stack-card"><div class="head"><h3>API gateway</h3><span class="conf med">Medium</span></div><div class="pick">AWS API Gateway</div><div class="why">Native IAM integration and per-route throttling for the fraud-scoring endpoint.</div></div>
+    </div>
+
+    <div class="layer-label">Operations</div>
+    <div class="grid">
+      <div class="stack-card"><div class="head"><h3>CI/CD</h3><span class="conf high">High</span></div><div class="pick">GitHub Actions → Terraform + EKS</div><div class="why">Small team — one pipeline, infra-as-code for the audit trail compliance wants anyway.</div></div>
+      <div class="stack-card"><div class="head"><h3>Observability</h3><span class="conf high">High</span></div><div class="pick">OpenTelemetry + Datadog</div><div class="why">Vendor-neutral instrumentation, managed backend so 6 engineers aren't running their own Prometheus/Grafana stack.</div></div>
+    </div>
+  </div>
+
+  <!-- ============ COST & AI ============ -->
+  <div class="panel" id="panel-cost">
+    <p class="section-lede">Directional planning ranges, not a quote — shown as bands so the relative weight of each line is obvious at a glance, not just as three rows of text.</p>
+
+    <div class="cost-bars">
+      <div class="cost-bar-row">
+        <div class="cost-bar-name">Compute</div>
+        <div class="cost-bar-track"><div class="cost-bar-fill" style="left:8%; width:22%;"></div></div>
+        <div class="cost-bar-range">$2,000–$6,000/mo</div>
+      </div>
+      <div class="cost-bar-row">
+        <div class="cost-bar-name">Database</div>
+        <div class="cost-bar-track"><div class="cost-bar-fill db" style="left:4%; width:10%;"></div></div>
+        <div class="cost-bar-range">$800–$2,200/mo</div>
+      </div>
+      <div class="cost-bar-row">
+        <div class="cost-bar-name">LLM API</div>
+        <div class="cost-bar-track"><div class="cost-bar-fill llm" style="left:6%; width:52%;"></div></div>
+        <div class="cost-bar-range">$1,400–$9,800/mo</div>
+      </div>
+      <div class="cost-scale"><span>$0</span><span>$5K</span><span>$10K</span><span>$15K</span><span>$20K+</span></div>
+      <div class="cost-caveat">Bands are grounded in Aug-2026 vendor pricing and re-checked against official pricing pages where possible — this is a planning range from a static, zero-backend tool with no live pricing API or visibility into your actual traffic. Verify against current pricing before budgeting a real commitment.</div>
+    </div>
+
+    <div class="subhead">LLM cost by model tier</div>
+    <table class="tier-table">
+      <tr><th>Tier</th><th>Example model</th><th>Illustrative monthly cost</th><th>When it fits</th></tr>
+      <tr><td>Budget / open-weight</td><td>Llama 3.x 8B, self-hosted</td><td>$150–$600 (GPU infra, not per-token)</td><td>High-volume, low-complexity classification or routing</td></tr>
+      <tr><td>Mid-tier hosted</td><td>Claude Haiku</td><td>$800–$3,500</td><td>Customer support chatbot at this volume</td></tr>
+      <tr><td>Frontier</td><td>Claude Sonnet / Opus</td><td>$1,400–$9,800</td><td>Complex reasoning, policy-document Q&A, escalation handling</td></tr>
+    </table>
+  </div>
+
+  <!-- ============ TRADE-OFFS ============ -->
+  <div class="panel" id="panel-tradeoffs">
+    <p class="section-lede">Each trade-off shown as chosen-vs-alternative side by side, instead of a single recommendation paragraph with the alternative implied — the rejected option and why it lost are now visible without extra clicks.</p>
+
+    <div class="tradeoff">
+      <div class="to-title">Messaging — Kafka vs. managed queue (SQS/SNS)</div>
+      <div class="to-compare">
+        <div class="to-side chosen">
+          <span class="to-tag">✓ Recommended</span>
+          <div class="to-name">Kafka</div>
+          <div class="to-body">You need a durable, replayable log — required for audit trails, fraud/analytics pipelines, and multiple independent consumer groups reading the same stream at different speeds.</div>
+        </div>
+        <div class="to-vs">vs</div>
+        <div class="to-side alt">
+          <span class="to-tag">Alternative</span>
+          <div class="to-name">Managed queue (SQS/SNS)</div>
+          <div class="to-body">Simpler ops, no cluster to run — but no replay or durable audit history, and no fan-out to independent consumer groups.</div>
+        </div>
+      </div>
+      <div class="to-switch"><b>Switch when:</b> traffic is moderate and you don't actually need replay/audit history — Kafka's operational cost only pays off once you're using its durability guarantees.</div>
+    </div>
+
+    <div class="tradeoff">
+      <div class="to-title">Fraud scoring — dedicated ML model vs. LLM-based scoring</div>
+      <div class="to-compare">
+        <div class="to-side chosen">
+          <span class="to-tag">✓ Recommended</span>
+          <div class="to-name">Dedicated ML model (gradient-boosted / feature store)</div>
+          <div class="to-body">Regulatory explainability requires a deterministic, auditable decision path — a feature-store-backed classifier gives you that. An LLM call is neither reliably deterministic nor easily explainable to an auditor.</div>
+        </div>
+        <div class="to-vs">vs</div>
+        <div class="to-side alt">
+          <span class="to-tag">Alternative</span>
+          <div class="to-name">LLM-based scoring</div>
+          <div class="to-body">Faster to prototype, no feature pipeline to build — but non-deterministic output and weak explainability make it a poor fit for a PCI-scoped decision.</div>
+        </div>
+      </div>
+      <div class="to-switch"><b>Switch when:</b> never, for the core scoring decision itself — an LLM can sit downstream to summarize <em>why</em> a transaction was flagged, in plain language, without being the thing that made the call.</div>
+    </div>
+  </div>
+
+  <!-- ============ GOVERNANCE ============ -->
+  <div class="panel" id="panel-governance">
+    <p class="section-lede">Targets shown against a value, not just a bullet — a KPI without a number next to it isn't something a team can be held to.</p>
+    <div class="gov-grid">
+      <div class="gov-block">
+        <h4>KRA — Key Result Areas</h4>
+        <div class="gov-item"><span class="gi-label">System reliability & availability</span></div>
+        <div class="gov-item"><span class="gi-label">Cost efficiency & resource utilization</span></div>
+        <div class="gov-item"><span class="gi-label">AI output quality & safety</span></div>
+      </div>
+      <div class="gov-block">
+        <h4>KPI — Key Performance Indicators</h4>
+        <div class="gov-item"><span class="gi-label">P95 API latency</span><span class="gi-target">&lt; 800ms</span></div>
+        <div class="gov-item"><span class="gi-label">Error rate</span><span class="gi-target">&lt; 0.1%</span></div>
+        <div class="gov-item"><span class="gi-label">RAG groundedness rate</span><span class="gi-target">sampled weekly</span></div>
+      </div>
+      <div class="gov-block">
+        <h4>SLA — Service Level Agreements</h4>
+        <div class="gov-item"><span class="gi-label">Uptime</span><span class="gi-target">99.95%</span></div>
+        <div class="gov-item"><span class="gi-label">P1 support response</span><span class="gi-target">&lt; 1hr</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  document.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      document.getElementById('panel-' + t.dataset.tab).classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Stack Advisor — Guided Mode Sketch (v3 direction)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0c11; --panel:#12151d; --panel2:#151922; --border:#1f2430; --box:#0a0e15;
+    --text:#e8ebf1; --muted:#828a99; --muted2:#9aa1ae; --accent:#5b8def; --accent2:#7c5bef;
+    --accent2-text:#9580f5; --good:#34c98a; --warn:#e0a23c; --chip:#171b24;
+    --radius:10px; --radius-sm:7px; --radius-lg:14px;
+    --ease:cubic-bezier(.2,.7,.3,1);
+    --fs-3xs:9px; --fs-2xs:10px; --fs-xs:11px; --fs-sm:12px; --fs-base:13px; --fs-md:14px; --fs-lg:16px;
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-font-smoothing:antialiased;}
+  body{
+    margin:0; font-family:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:radial-gradient(1200px 750px at 15% -10%, #151b28 0%, var(--bg) 55%), var(--bg);
+    color:var(--text); min-height:100vh; letter-spacing:-0.006em; font-size:14px; line-height:1.5;
+  }
+  .note{
+    padding:14px 20px; background:rgba(91,141,239,0.08);
+    border-bottom:1px solid rgba(91,141,239,0.25); font-size:12px; color:#8fb2f7; line-height:1.6;
+  }
+  .note b{color:var(--text);}
+  .note-inner{max-width:640px; margin:0 auto;}
+
+  /* ================= MODE PICKER ================= */
+  #screen-mode{max-width:640px; margin:60px auto; padding:0 20px; display:none;}
+  #screen-mode.active{display:block;}
+  .mode-head h1{font-size:22px; margin:0 0 8px; font-weight:700;}
+  .mode-head p{color:var(--muted); font-size:var(--fs-base); line-height:1.6; margin:0 0 28px;}
+  .mode-cards{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .mode-card{
+    background:linear-gradient(180deg, var(--panel), var(--panel2)); border:1px solid var(--border);
+    border-radius:var(--radius-lg); padding:22px 20px; cursor:pointer; transition:all .15s var(--ease); text-align:left;
+  }
+  .mode-card:hover{border-color:var(--accent); transform:translateY(-2px);}
+  .mode-card .mc-icon{font-size:24px; margin-bottom:10px;}
+  .mode-card .mc-title{font-size:var(--fs-lg); font-weight:700; margin-bottom:6px;}
+  .mode-card .mc-desc{font-size:var(--fs-sm); color:var(--muted); line-height:1.55;}
+  .mode-card .mc-time{font-size:var(--fs-2xs); color:var(--accent2-text); font-weight:700; text-transform:uppercase; letter-spacing:0.04em; margin-top:12px;}
+  .mode-card.recommended{border-color:rgba(52,201,138,0.4);}
+  .mode-card.recommended .mc-badge{display:inline-block; background:rgba(52,201,138,0.12); color:var(--good); font-size:var(--fs-3xs); font-weight:700; text-transform:uppercase; letter-spacing:0.04em; padding:3px 8px; border-radius:5px; margin-bottom:10px;}
+  @media (max-width:560px){ .mode-cards{grid-template-columns:1fr;} }
+
+  /* ================= WIZARD ================= */
+  #screen-wizard{max-width:640px; margin:0 auto; padding:36px 20px 60px; display:none;}
+  #screen-wizard.active{display:block;}
+  .wiz-progress{display:flex; align-items:center; gap:10px; margin-bottom:32px;}
+  .wiz-track{flex:1; height:4px; background:var(--chip); border-radius:2px; overflow:hidden;}
+  .wiz-fill{height:100%; background:linear-gradient(90deg, var(--accent), var(--accent2)); border-radius:2px; transition:width .3s var(--ease);}
+  .wiz-step-label{font-size:var(--fs-xs); color:var(--muted); white-space:nowrap; font-variant-numeric:tabular-nums;}
+
+  .wiz-step{display:none;}
+  .wiz-step.active{display:block; animation:fadeIn .25s var(--ease);}
+  @keyframes fadeIn{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;}}
+  .wiz-q{font-size:19px; font-weight:700; margin:0 0 6px; letter-spacing:-0.01em;}
+  .wiz-sub{font-size:var(--fs-base); color:var(--muted); margin:0 0 22px; line-height:1.5;}
+
+  .chip-grid{display:flex; flex-wrap:wrap; gap:9px; margin-bottom:8px;}
+  .pick-chip{
+    background:var(--box); border:1.5px solid var(--border); color:var(--text); padding:11px 16px;
+    border-radius:10px; font-size:var(--fs-base); cursor:pointer; transition:all .15s var(--ease); font-weight:500;
+    display:flex; align-items:center; gap:8px;
+  }
+  .pick-chip .ico{font-size:15px;}
+  .pick-chip:hover{border-color:#3a4256;}
+  .pick-chip.selected{border-color:var(--accent); background:rgba(91,141,239,0.1); font-weight:600;}
+  .pick-chip.selected::after{content:'✓'; color:var(--accent); font-weight:700; margin-left:2px;}
+
+  .radio-list{display:flex; flex-direction:column; gap:8px;}
+  .pick-radio{
+    background:var(--box); border:1.5px solid var(--border); border-radius:10px; padding:13px 16px;
+    cursor:pointer; transition:all .15s var(--ease); display:flex; align-items:center; justify-content:space-between; gap:10px;
+  }
+  .pick-radio:hover{border-color:#3a4256;}
+  .pick-radio.selected{border-color:var(--accent); background:rgba(91,141,239,0.1);}
+  .pick-radio .pr-main{font-size:var(--fs-base); font-weight:600;}
+  .pick-radio .pr-sub{font-size:var(--fs-xs); color:var(--muted); margin-top:2px;}
+  .pick-radio .pr-dot{width:16px; height:16px; border-radius:50%; border:1.5px solid var(--border); flex-shrink:0; position:relative;}
+  .pick-radio.selected .pr-dot{border-color:var(--accent);}
+  .pick-radio.selected .pr-dot::after{content:''; position:absolute; inset:3px; border-radius:50%; background:var(--accent);}
+
+  .wiz-textarea{
+    width:100%; min-height:90px; resize:vertical; background:var(--box); border:1px solid var(--border);
+    border-radius:var(--radius); color:var(--text); padding:12px; font-size:var(--fs-base); font-family:inherit;
+  }
+  .wiz-textarea:focus{outline:none; border-color:var(--accent);}
+  .skip-note{font-size:var(--fs-xs); color:var(--muted); margin-top:10px; font-style:italic;}
+
+  .wiz-nav{display:flex; justify-content:space-between; align-items:center; margin-top:30px;}
+  .wiz-btn{padding:11px 20px; border-radius:9px; font-size:var(--fs-base); font-weight:600; cursor:pointer; border:none; transition:all .15s var(--ease);}
+  .wiz-btn.next{background:linear-gradient(135deg, var(--accent), var(--accent2)); color:#fff;}
+  .wiz-btn.next:disabled{opacity:0.35; cursor:not-allowed;}
+  .wiz-btn.next:not(:disabled):hover{filter:brightness(1.08);}
+  .wiz-btn.back{background:transparent; color:var(--muted); border:1px solid var(--border);}
+  .wiz-btn.back:hover{color:var(--text); border-color:var(--accent);}
+
+  .infer-strip{
+    margin-top:26px; padding:11px 14px; background:rgba(124,91,239,0.07); border:1px solid rgba(124,91,239,0.22);
+    border-radius:var(--radius-sm); font-size:var(--fs-xs); color:var(--muted2); line-height:1.6; display:none;
+  }
+  .infer-strip.show{display:block;}
+  .infer-strip b{color:var(--accent2-text);}
+
+  /* ================= RESULTS (progressive reveal) ================= */
+  #screen-results{max-width:900px; margin:0 auto; padding:32px 20px 80px; display:none;}
+  #screen-results.active{display:block;}
+  .res-head{margin-bottom:22px;}
+  .res-head .rh-eyebrow{font-size:var(--fs-xs); color:var(--muted); margin-bottom:6px;}
+  .res-head h1{font-size:20px; margin:0 0 8px; font-weight:700;}
+  .res-summary{
+    background:linear-gradient(180deg, var(--panel), var(--panel2)); border:1px solid var(--border);
+    border-radius:var(--radius-lg); padding:18px 20px; font-size:var(--fs-md); line-height:1.65; margin-bottom:20px;
+  }
+  .res-summary b{color:var(--accent2-text);}
+
+  .glance{display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:1px; background:var(--border); border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; margin-bottom:24px;}
+  .glance-cell{background:var(--box); padding:13px 15px;}
+  .glance-cell .gc-label{font-size:var(--fs-2xs); text-transform:uppercase; letter-spacing:0.05em; color:var(--muted); font-weight:700; margin-bottom:5px;}
+  .glance-cell .gc-value{font-size:var(--fs-md); font-weight:700; letter-spacing:-0.01em;}
+
+  .reveal-list{display:flex; flex-direction:column; gap:8px;}
+  .reveal-item{background:var(--box); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden;}
+  .reveal-head{display:flex; align-items:center; justify-content:space-between; padding:15px 18px; cursor:pointer; user-select:none;}
+  .reveal-head:hover{background:rgba(255,255,255,0.015);}
+  .reveal-title{display:flex; align-items:center; gap:10px;}
+  .reveal-title .ico{font-size:17px;}
+  .reveal-title .rt-text{font-size:var(--fs-md); font-weight:700;}
+  .reveal-title .rt-sub{font-size:var(--fs-xs); color:var(--muted); margin-top:2px; font-weight:400;}
+  .reveal-toggle{font-size:var(--fs-xs); color:var(--accent); font-weight:700; display:flex; align-items:center; gap:5px;}
+  .reveal-toggle .arrow{transition:transform .2s var(--ease); font-size:10px;}
+  .reveal-item.open .reveal-toggle .arrow{transform:rotate(180deg);}
+  .reveal-body{max-height:0; overflow:hidden; transition:max-height .3s var(--ease);}
+  .reveal-item.open .reveal-body{max-height:2000px;}
+  .reveal-body-inner{padding:0 18px 18px; border-top:1px solid var(--border); margin-top:0; padding-top:14px;}
+
+  .mini-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(220px,1fr)); gap:9px;}
+  .mini-card{background:rgba(255,255,255,0.015); border:1px solid var(--border); border-radius:8px; padding:11px 13px;}
+  .mini-card h4{margin:0 0 4px; font-size:var(--fs-2xs); text-transform:uppercase; letter-spacing:0.03em; color:var(--muted); font-weight:600;}
+  .mini-card .mc-pick{font-size:var(--fs-base); font-weight:700; margin-bottom:3px;}
+  .mini-card .mc-why{font-size:var(--fs-xs); color:var(--muted); line-height:1.5;}
+
+  .start-over{margin-top:26px; font-size:var(--fs-xs); color:var(--muted); text-align:center;}
+  .start-over a{color:var(--accent); cursor:pointer; text-decoration:none;}
+  .start-over a:hover{text-decoration:underline;}
+</style>
+</head>
+<body>
+
+<div class="note"><div class="note-inner"><b>Static interactive sketch — not wired to the rule engine.</b> This is the flow discussed: a guided question mode as the default entry point instead of a blank paragraph, feeding the exact same signal set the rule engine already extracts from free text — and a results screen that reveals only the headline picks by default, with everything else collapsed until you ask for it. Click through it for real.</div></div>
+
+<!-- ================= SCREEN 1: MODE PICKER ================= -->
+<div id="screen-mode" class="active">
+  <div class="mode-head">
+    <h1>🧭 AI Stack Advisor</h1>
+    <p>Tell us about what you're building — however's easiest for you.</p>
+  </div>
+  <div class="mode-cards">
+    <div class="mode-card recommended" onclick="startWizard()">
+      <span class="mc-badge">Recommended</span>
+      <div class="mc-icon">💬</div>
+      <div class="mc-title">Answer a few questions</div>
+      <div class="mc-desc">6 short questions, skips what doesn't apply to you. No jargon required — good if you're not sure what to write in a paragraph.</div>
+      <div class="mc-time">~90 seconds</div>
+    </div>
+    <div class="mode-card" onclick="startFreetext()">
+      <div class="mc-icon">📝</div>
+      <div class="mc-title">Paste your own description</div>
+      <div class="mc-desc">Already have a PRD, brief, or a paragraph describing the product? Paste it in and skip the questions.</div>
+      <div class="mc-time">~20 seconds</div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= SCREEN 2: WIZARD ================= -->
+<div id="screen-wizard">
+  <div class="wiz-progress">
+    <div class="wiz-track"><div class="wiz-fill" id="wizFill" style="width:16.6%"></div></div>
+    <div class="wiz-step-label" id="wizStepLabel">Step 1 of 6</div>
+  </div>
+
+  <!-- Step 1 -->
+  <div class="wiz-step active" data-step="1">
+    <div class="wiz-q">What are you building?</div>
+    <div class="wiz-sub">Pick as many as apply.</div>
+    <div class="chip-grid" data-group="building">
+      <div class="pick-chip" data-val="web"><span class="ico">🖥️</span>Web app</div>
+      <div class="pick-chip" data-val="mobile"><span class="ico">📱</span>Mobile app</div>
+      <div class="pick-chip" data-val="api"><span class="ico">🔌</span>API / backend service</div>
+      <div class="pick-chip" data-val="chatbot"><span class="ico">💬</span>AI chatbot / assistant</div>
+      <div class="pick-chip" data-val="data"><span class="ico">📊</span>Data / analytics platform</div>
+      <div class="pick-chip" data-val="internal"><span class="ico">🛠️</span>Internal tool</div>
+    </div>
+  </div>
+
+  <!-- Step 2 -->
+  <div class="wiz-step" data-step="2">
+    <div class="wiz-q">Who's it for?</div>
+    <div class="wiz-sub">This changes a lot — an internal tool and a public product have very different defaults.</div>
+    <div class="radio-list" data-group="audience">
+      <div class="pick-radio" data-val="internal"><div><div class="pr-main">Internal team</div><div class="pr-sub">Employees only, not customer-facing</div></div><div class="pr-dot"></div></div>
+      <div class="pick-radio" data-val="smb"><div><div class="pr-main">Small business customers</div><div class="pr-sub">B2B, a manageable number of accounts</div></div><div class="pr-dot"></div></div>
+      <div class="pick-radio" data-val="enterprise"><div><div class="pr-main">Enterprise customers</div><div class="pr-sub">Large orgs, likely with their own compliance asks</div></div><div class="pr-dot"></div></div>
+      <div class="pick-radio" data-val="consumer"><div><div class="pr-main">Consumer / general public</div><div class="pr-sub">Anyone can sign up</div></div><div class="pr-dot"></div></div>
+    </div>
+  </div>
+
+  <!-- Step 3 (skipped automatically if audience = internal) -->
+  <div class="wiz-step" data-step="3">
+    <div class="wiz-q">Any compliance or data-sensitivity requirements?</div>
+    <div class="wiz-sub">If you're not sure, pick "None that I know of" — you can always add detail at the end.</div>
+    <div class="chip-grid" data-group="compliance">
+      <div class="pick-chip" data-val="none"><span class="ico">—</span>None that I know of</div>
+      <div class="pick-chip" data-val="hipaa"><span class="ico">🏥</span>Healthcare (HIPAA)</div>
+      <div class="pick-chip" data-val="pci"><span class="ico">💳</span>Payments (PCI)</div>
+      <div class="pick-chip" data-val="soc2"><span class="ico">🏢</span>Enterprise (SOC2)</div>
+      <div class="pick-chip" data-val="gov"><span class="ico">🏛️</span>Government</div>
+    </div>
+  </div>
+
+  <!-- Step 4 -->
+  <div class="wiz-step" data-step="4">
+    <div class="wiz-q">How big is your engineering team?</div>
+    <div class="wiz-sub">Small teams get recommendations biased toward managed services over self-hosted ops.</div>
+    <div class="radio-list" data-group="teamsize">
+      <div class="pick-radio" data-val="1-5"><div><div class="pr-main">1–5 engineers</div></div><div class="pr-dot"></div></div>
+      <div class="pick-radio" data-val="6-15"><div><div class="pr-main">6–15 engineers</div></div><div class="pr-dot"></div></div>
+      <div class="pick-radio" data-val="16-50"><div><div class="pr-main">16–50 engineers</div></div><div class="pr-dot"></div></div>
+      <div class="pick-radio" data-val="50+"><div><div class="pr-main">50+ engineers</div></div><div class="pr-dot"></div></div>
+    </div>
+  </div>
+
+  <!-- Step 5 -->
+  <div class="wiz-step" data-step="5">
+    <div class="wiz-q">Any AI or LLM component?</div>
+    <div class="wiz-sub">Pick as many as apply — or none, if this is a fairly traditional build.</div>
+    <div class="chip-grid" data-group="ai">
+      <div class="pick-chip" data-val="none"><span class="ico">—</span>No AI needed</div>
+      <div class="pick-chip" data-val="chatbot"><span class="ico">💬</span>Customer-facing chatbot</div>
+      <div class="pick-chip" data-val="internal-kb"><span class="ico">📚</span>Internal knowledge assistant</div>
+      <div class="pick-chip" data-val="reco"><span class="ico">🎯</span>Recommendations / personalization</div>
+      <div class="pick-chip" data-val="fraud"><span class="ico">🛡️</span>Fraud / anomaly detection</div>
+      <div class="pick-chip" data-val="unsure"><span class="ico">🤔</span>Not sure yet</div>
+    </div>
+  </div>
+
+  <!-- Step 6 -->
+  <div class="wiz-step" data-step="6">
+    <div class="wiz-q">Anything else worth knowing?</div>
+    <div class="wiz-sub">Optional — existing cloud provider, latency needs, budget constraints, anything the questions above didn't cover.</div>
+    <textarea class="wiz-textarea" placeholder="e.g. We're already on AWS, need to launch in 6 weeks, budget is tight..."></textarea>
+    <div class="skip-note">Skip this and we'll work from your answers above alone.</div>
+  </div>
+
+  <div class="infer-strip" id="inferStrip"></div>
+
+  <div class="wiz-nav">
+    <button class="wiz-btn back" id="wizBack" onclick="wizBack()">Back</button>
+    <button class="wiz-btn next" id="wizNext" onclick="wizNext()" disabled>Continue</button>
+  </div>
+</div>
+
+<!-- ================= SCREEN 2b: FREETEXT (existing path, unchanged) ================= -->
+<div id="screen-freetext" style="max-width:640px; margin:0 auto; padding:36px 20px 60px; display:none;">
+  <div class="wiz-q">Describe what you're building</div>
+  <div class="wiz-sub">Paste a paragraph, a PRD excerpt, whatever you've got — the more specific, the better the read.</div>
+  <textarea class="wiz-textarea" style="min-height:160px;" placeholder="e.g. We're a fintech startup building a mobile + web app for real-time fraud detection on card transactions..."></textarea>
+  <div class="wiz-nav">
+    <button class="wiz-btn back" onclick="backToMode()">Back</button>
+    <button class="wiz-btn next" onclick="showResults()">Analyze</button>
+  </div>
+</div>
+
+<!-- ================= SCREEN 3: PROGRESSIVE RESULTS ================= -->
+<div id="screen-results">
+  <div class="res-head">
+    <div class="rh-eyebrow">Based on your answers</div>
+    <h1>Here's the shape of it</h1>
+  </div>
+
+  <div class="res-summary">
+    A <b>customer-facing chatbot</b> for an <b>enterprise</b> audience, built by a <b>small team (1–5)</b>, with <b>SOC2</b> in scope — that combination points toward managed infrastructure over self-hosted ops, a hosted LLM rather than self-hosted, and compliance-ready defaults from day one rather than bolted on later.
+  </div>
+
+  <div class="glance">
+    <div class="glance-cell"><div class="gc-label">Cloud</div><div class="gc-value">AWS</div></div>
+    <div class="glance-cell"><div class="gc-label">Architecture</div><div class="gc-value">Modular monolith</div></div>
+    <div class="glance-cell"><div class="gc-label">Primary LLM</div><div class="gc-value">Claude Sonnet</div></div>
+    <div class="glance-cell"><div class="gc-label">Est. monthly cost</div><div class="gc-value">$800–$3,500</div></div>
+  </div>
+
+  <div class="reveal-list">
+    <div class="reveal-item" data-panel="stack">
+      <div class="reveal-head" onclick="toggleReveal(this)">
+        <div class="reveal-title"><span class="ico">🧱</span><div><div class="rt-text">Full stack breakdown</div><div class="rt-sub">14 categories — database, caching, CI/CD, and more</div></div></div>
+        <div class="reveal-toggle">Show <span class="arrow">▾</span></div>
+      </div>
+      <div class="reveal-body"><div class="reveal-body-inner">
+        <div class="mini-grid">
+          <div class="mini-card"><h4>Primary database</h4><div class="mc-pick">PostgreSQL</div><div class="mc-why">Managed (RDS) — ACID guarantees, no ops burden for a 1–5 person team.</div></div>
+          <div class="mini-card"><h4>Compute</h4><div class="mc-pick">Serverless (ECS Fargate)</div><div class="mc-why">Scale-to-zero, no cluster to manage at this team size.</div></div>
+          <div class="mini-card"><h4>IAM</h4><div class="mc-pick">AWS IAM + Okta</div><div class="mc-why">SOC2 wants auditable access control from day one.</div></div>
+          <div class="mini-card"><h4>Observability</h4><div class="mc-pick">Datadog</div><div class="mc-why">Managed, not another thing to self-host and patch.</div></div>
+          <div class="mini-card"><h4>CI/CD</h4><div class="mc-pick">GitHub Actions</div><div class="mc-why">Already where the code lives; no extra platform to learn.</div></div>
+          <div class="mini-card"><h4>Frontend</h4><div class="mc-pick">React</div><div class="mc-why">Default for a small-team web build with the widest hiring pool.</div></div>
+        </div>
+      </div></div>
+    </div>
+
+    <div class="reveal-item" data-panel="cost">
+      <div class="reveal-head" onclick="toggleReveal(this)">
+        <div class="reveal-title"><span class="ico">💰</span><div><div class="rt-text">Cost estimate</div><div class="rt-sub">Directional monthly range, by category</div></div></div>
+        <div class="reveal-toggle">Show <span class="arrow">▾</span></div>
+      </div>
+      <div class="reveal-body"><div class="reveal-body-inner">
+        <div class="mini-grid">
+          <div class="mini-card"><h4>Compute</h4><div class="mc-pick">$300–$1,200/mo</div></div>
+          <div class="mini-card"><h4>Database</h4><div class="mc-pick">$100–$400/mo</div></div>
+          <div class="mini-card"><h4>LLM API</h4><div class="mc-pick">$400–$1,900/mo</div><div class="mc-why">Claude Sonnet, mid-volume support chatbot traffic.</div></div>
+        </div>
+      </div></div>
+    </div>
+
+    <div class="reveal-item" data-panel="tradeoffs">
+      <div class="reveal-head" onclick="toggleReveal(this)">
+        <div class="reveal-title"><span class="ico">⚖️</span><div><div class="rt-text">Trade-offs & alternatives</div><div class="rt-sub">3 decisions worth knowing the "why" behind</div></div></div>
+        <div class="reveal-toggle">Show <span class="arrow">▾</span></div>
+      </div>
+      <div class="reveal-body"><div class="reveal-body-inner">
+        <div class="mini-grid">
+          <div class="mini-card"><h4>Serverless vs. Kubernetes</h4><div class="mc-pick">Serverless wins here</div><div class="mc-why">Switch to Kubernetes once you're past ~10-15 services or need fine-grained resource control.</div></div>
+          <div class="mini-card"><h4>Modular monolith vs. microservices</h4><div class="mc-pick">Modular monolith wins here</div><div class="mc-why">A 1–5 person team can't yet afford microservices' coordination overhead — split out services only when a specific one needs independent scaling.</div></div>
+          <div class="mini-card"><h4>Hosted vs. self-hosted LLM</h4><div class="mc-pick">Hosted (Claude) wins here</div><div class="mc-why">Self-hosting only pays off at volumes this team isn't at yet — revisit if per-token spend becomes the dominant cost line.</div></div>
+        </div>
+      </div></div>
+    </div>
+
+    <div class="reveal-item" data-panel="governance">
+      <div class="reveal-head" onclick="toggleReveal(this)">
+        <div class="reveal-title"><span class="ico">🎯</span><div><div class="rt-text">Governance targets</div><div class="rt-sub">KPIs and SLAs worth setting from day one</div></div></div>
+        <div class="reveal-toggle">Show <span class="arrow">▾</span></div>
+      </div>
+      <div class="reveal-body"><div class="reveal-body-inner">
+        <div class="mini-grid">
+          <div class="mini-card"><h4>Uptime SLA</h4><div class="mc-pick">99.9%</div></div>
+          <div class="mini-card"><h4>P95 latency</h4><div class="mc-pick">&lt; 1s</div></div>
+          <div class="mini-card"><h4>RAG groundedness</h4><div class="mc-pick">Sampled weekly</div></div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="start-over">Answers not quite right? <a onclick="reset()">Start over</a> or <a onclick="backToMode(); showFreetext();">switch to paste-a-description mode</a>.</div>
+</div>
+
+<script>
+  const state = { building:[], audience:null, compliance:[], teamsize:null, ai:[] };
+  let currentStep = 1;
+  const STEP_ORDER = [1,2,3,4,5,6];
+
+  document.querySelectorAll('.pick-chip').forEach(el => {
+    el.addEventListener('click', () => {
+      const group = el.closest('.chip-grid').dataset.group;
+      el.classList.toggle('selected');
+      const val = el.dataset.val;
+      const arr = state[group];
+      const idx = arr.indexOf(val);
+      if (idx > -1) arr.splice(idx,1); else arr.push(val);
+      updateNextEnabled();
+      maybeShowInference();
+    });
+  });
+  document.querySelectorAll('.pick-radio').forEach(el => {
+    el.addEventListener('click', () => {
+      const group = el.closest('.radio-list').dataset.group;
+      el.closest('.radio-list').querySelectorAll('.pick-radio').forEach(x => x.classList.remove('selected'));
+      el.classList.add('selected');
+      state[group] = el.dataset.val;
+      updateNextEnabled();
+      maybeShowInference();
+    });
+  });
+
+  function updateNextEnabled(){
+    const btn = document.getElementById('wizNext');
+    const step = currentStep;
+    let ok = true;
+    if (step===1) ok = state.building.length>0;
+    if (step===2) ok = !!state.audience;
+    if (step===3) ok = state.compliance.length>0;
+    if (step===4) ok = !!state.teamsize;
+    if (step===5) ok = state.ai.length>0;
+    if (step===6) ok = true;
+    btn.disabled = !ok;
+  }
+
+  function maybeShowInference(){
+    const strip = document.getElementById('inferStrip');
+    if (currentStep===2 && state.audience==='internal'){
+      strip.innerHTML = '<b>Skipping the compliance question</b> — internal-only tools rarely carry the same regulatory scope, so we\'ll default to "none" and you can add detail at the end if that\'s wrong.';
+      strip.classList.add('show');
+    } else if (currentStep===1 && state.building.includes('chatbot')){
+      strip.innerHTML = '<b>Noted:</b> since you picked AI chatbot, we\'ll ask about your AI use case specifically in a later step.';
+      strip.classList.add('show');
+    } else {
+      strip.classList.remove('show');
+    }
+  }
+
+  function visibleSteps(){
+    // step 3 (compliance) is skipped when audience === internal
+    return STEP_ORDER.filter(s => !(s===3 && state.audience==='internal'));
+  }
+
+  function renderStep(){
+    document.querySelectorAll('.wiz-step').forEach(s => s.classList.remove('active'));
+    document.querySelector(`.wiz-step[data-step="${currentStep}"]`).classList.add('active');
+    const vis = visibleSteps();
+    const pos = vis.indexOf(currentStep) + 1;
+    document.getElementById('wizFill').style.width = (pos/vis.length*100) + '%';
+    document.getElementById('wizStepLabel').textContent = `Step ${pos} of ${vis.length}`;
+    document.getElementById('wizBack').style.visibility = pos===1 ? 'hidden' : 'visible';
+    document.getElementById('inferStrip').classList.remove('show');
+    updateNextEnabled();
+  }
+
+  function wizNext(){
+    const vis = visibleSteps();
+    const idx = vis.indexOf(currentStep);
+    if (idx < vis.length-1){
+      currentStep = vis[idx+1];
+      renderStep();
+    } else {
+      showResults();
+    }
+  }
+  function wizBack(){
+    const vis = visibleSteps();
+    const idx = vis.indexOf(currentStep);
+    if (idx > 0){ currentStep = vis[idx-1]; renderStep(); }
+    else { backToMode(); }
+  }
+
+  function showScreen(id){
+    ['screen-mode','screen-wizard','screen-freetext','screen-results'].forEach(s => {
+      document.getElementById(s).classList.toggle('active', s===id);
+    });
+  }
+  function startWizard(){ currentStep=1; renderStep(); showScreen('screen-wizard'); }
+  function startFreetext(){ showScreen('screen-freetext'); }
+  function showFreetext(){ showScreen('screen-freetext'); }
+  function backToMode(){ showScreen('screen-mode'); }
+  function showResults(){ showScreen('screen-results'); window.scrollTo(0,0); }
+  function reset(){ showScreen('screen-mode'); }
+
+  function toggleReveal(headEl){
+    headEl.closest('.reveal-item').classList.toggle('open');
+    const label = headEl.querySelector('.reveal-toggle');
+    const open = headEl.closest('.reveal-item').classList.contains('open');
+    label.innerHTML = open ? 'Hide <span class="arrow">▾</span>' : 'Show <span class="arrow">▾</span>';
+  }
+</script>
+</body>
+</html>

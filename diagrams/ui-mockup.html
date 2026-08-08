@@ -211,6 +211,14 @@
     </div>
   </div>
 
+  <div class="section-header" style="margin-top:20px;">Page 2b — Guided Input Mode <span class="tag">live, clickable sketch — not embedded here</span></div>
+  <div class="section-sub">A real, click-through-able alternative to frame 01's blank textarea, built as its own standalone file rather than a static mock like the frames above: <a href="design-sketch-v3-guided.html" style="color:var(--accent);">design-sketch-v3-guided.html</a> — open it directly to try the mode picker, the 6-question wizard (including the real "skip compliance if audience is internal" branch), and the progressive-reveal results screen described below. <a href="design-sketch-v2.html" style="color:var(--dark-muted);">design-sketch-v2.html</a> is the earlier tabbed-results direction it superseded, kept for history only — don't build against it.</div>
+  <div class="anno-list">
+    <div class="anno-item"><span class="anno-num">12</span> Landing decision (made 2026-08-08, see <code>KICKOFF_BRIEF.md</code>): the mode picker shown in the sketch is equal-weight — guided mode is not the default, free text is not the default, both are offered up front with neither pre-selected.</div>
+    <div class="anno-item"><span class="anno-num">13</span> Zero-backend-dependency by design, matching NFR-5: the wizard's branching (skip/show questions, chip and radio state) is client-side logic in the same class as <code>detectSignals()</code> — its job is to end up populating the exact same signals object free-text parsing already produces, then hand off to the existing in-browser <code>pickX()</code> engine. No point in the flow structurally needs a server round-trip; a "Refine with AI" step remains an optional enhancement layered on top afterward, same as free-text mode already has, not something guided mode requires of its own accord.</div>
+    <div class="anno-item"><span class="anno-num">14</span> Not yet real: the questions and branches in the sketch are hand-authored for one demo path, not wired to <code>detectSignals()</code>. Only one skip case (compliance question, audience=internal) exists as proof of concept — extending it to cover the rest of the signal set is the concrete next step, not a decided design.</div>
+  </div>
+
   <div class="section-header" style="margin-top:20px;">Page 3 — Component Library</div>
   <div class="section-sub">The reusable pieces every frame above is built from — for a designer picking this up, these are the primitives to keep consistent rather than reinvent per screen.</div>
 
