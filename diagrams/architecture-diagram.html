@@ -3629,41 +3629,41 @@ globalThis["mermaid"] = globalThis.__esbuild_esm_mermaid_nm["mermaid"].default;
 <body>
 <div class="wrap">
   <h1>🧭 AI Stack Advisor — Architecture Diagram</h1>
-  <div class="sub">C4-style Context and Container views, covering v1 (shipped, fully client-side) and v2 (designed, pending backend/desktop access). Solid colored boxes are built and running today; dashed gray boxes are designed but not yet built.</div>
+  <div class="sub">C4-style Context and Container views, covering v1 (shipped, fully client-side) and v2 (shipped — FastAPI + Postgres + Alembic backend, RAG-grounded). Solid colored boxes are built and running today; dashed gray boxes would be designed-but-not-built (none remain — kept in the legend as a still-valid convention for future additions).</div>
 
   <div class="legend">
     <span><span class="swatch" style="background:#2a5c9e; border:1px solid #5b8def;"></span> Shipped (v1)</span>
-    <span><span class="swatch" style="background:#2a2f3d; border:2px dashed #6b7688;"></span> Planned (v2)</span>
+    <span><span class="swatch" style="background:#2a5c9e; border:1px solid #5b8def;"></span> Shipped (v2)</span>
+    <span><span class="swatch" style="background:#2a2f3d; border:2px dashed #6b7688;"></span> Planned (none currently)</span>
     <span><span class="swatch" style="background:#3d3350; border:1px solid #7c5bef;"></span> External system</span>
     <span><span class="swatch" style="background:#1c2433; border:1px solid #3ecf8e; border-radius:50%;"></span> Person</span>
   </div>
 
   <div class="section-title">Level 1 — System Context</div>
-  <div class="section-desc">Who uses the system, and which external systems it talks to. In v1, there are no external systems at all — the entire interaction is a person and a static web page in their browser. v2 adds two.</div>
+  <div class="section-desc">Who uses the system, and which external systems it talks to. In v1, there are no external systems at all — the entire interaction is a person and a static web page in their browser. v2 adds two, both live.</div>
   <div class="card"><pre class="mermaid">
 graph TB
   User(["👤 User<br/>Founder / Architect / TPM / SDE<br/><i>describes a requirement in plain text</i>"])
 
   ASA["🧭 AI Stack Advisor<br/><b>Software System</b><br/>Detects signals in free-text requirements and<br/>recommends a full technical + AI architecture<br/>across 16 categories, with confidence and rationale"]
 
-  Claude["🤖 Anthropic API (Claude)<br/><b>External System</b><br/>Used for LLM-assisted refinement of<br/>ambiguous rule-engine output — v2, planned"]
+  Claude["🤖 Anthropic API (Claude)<br/><b>External System</b><br/>Used for LLM-assisted refinement of<br/>ambiguous rule-engine output, RAG-grounded — v2, shipped"]
 
-  MCPClient["💻 Claude Desktop / Claude Code<br/><b>External System</b><br/>MCP client calling recommend_stack()<br/>directly from an architecture conversation — v2, planned"]
+  MCPClient["💻 Claude Desktop / Claude Code<br/><b>External System</b><br/>MCP client calling recommend_stack()<br/>directly from an architecture conversation — v2, shipped"]
 
   User -- "Describes requirements,<br/>views recommendation" --> ASA
-  ASA -. "Sends ambiguous cases<br/>for refinement (v2)" .-> Claude
-  MCPClient -. "Calls recommend_stack()<br/>tool (v2)" .-> ASA
+  ASA -- "Sends ambiguous cases<br/>for refinement (v2)" --> Claude
+  MCPClient -- "Calls recommend_stack()<br/>tool (v2)" --> ASA
 
   classDef person fill:#1c2433,stroke:#3ecf8e,stroke-width:2px,color:#e7ecf3,rx:40,ry:40;
   classDef shipped fill:#2a5c9e,stroke:#5b8def,stroke-width:2px,color:#ffffff;
   classDef planned fill:#2a2f3d,stroke:#6b7688,stroke-width:2px,stroke-dasharray:6 4,color:#c3cad6;
   class User person;
-  class ASA shipped;
-  class Claude,MCPClient planned;
+  class ASA,Claude,MCPClient shipped;
   </pre></div>
 
   <div class="section-title">Level 2 — Containers</div>
-  <div class="section-desc">What "AI Stack Advisor" is actually made of. v1 is four in-browser JavaScript modules with no server. v2 adds a backend API, a database, and an MCP server — none of which exist yet, all designed in the companion v2 design document.</div>
+  <div class="section-desc">What "AI Stack Advisor" is actually made of. v1 is four in-browser JavaScript modules with no server. v2 adds a backend API, a database, an MCP server, and a RAG retrieval module over a knowledge-base corpus — all shipped and tested.</div>
   <div class="card"><pre class="mermaid">
 graph TB
   User(["👤 User"])
@@ -3671,25 +3671,27 @@ graph TB
   subgraph V1["AI Stack Advisor — v1, shipped (runs entirely in the browser)"]
     direction TB
     WebApp["📄 Web Application<br/><b>Static HTML / CSS / JS</b><br/>Input form, example presets,<br/>16-section result renderer,<br/>sticky nav, collapsible sections"]
-    SignalEngine["🔍 Signal Detection<br/><b>JS module — detectSignals()</b><br/>~35 signal flags from free text;<br/>negation-stripping; on-prem<br/>detection on raw text"]
-    RuleEngine["⚙️ Recommendation Rule Engine<br/><b>JS module — ~30 pickX() fns</b><br/>Maps signals → recommendation +<br/>rationale + confidence per category,<br/>across stack / trade-offs / AI-serving /<br/>cost / throughput / governance"]
-    Render["🖼️ Presentation Layer<br/><b>JS + CSS</b><br/>Confidence badges, persona tags,<br/>trade-off cards, VRAM table,<br/>governance grid"]
+    SignalEngine["🔍 Signal Detection<br/><b>JS module — detectSignals()</b><br/>65+ signal flags from free text;<br/>negation-stripping; on-prem<br/>detection on raw text"]
+    RuleEngine["⚙️ Recommendation Rule Engine<br/><b>JS module — 45 pickX() fns</b><br/>Maps signals → recommendation +<br/>rationale + confidence per category,<br/>across stack / vendor comparisons /<br/>trade-offs / AI-serving / cost / governance"]
+    Render["🖼️ Presentation Layer<br/><b>JS + CSS</b><br/>Confidence badges, persona tags,<br/>trade-off cards, compute-tier table,<br/>governance grid"]
   end
 
-  subgraph V2["AI Stack Advisor — v2, designed (pending backend/desktop access)"]
+  subgraph V2["AI Stack Advisor — v2, shipped (FastAPI + Postgres + Alembic)"]
     direction TB
     Backend["🖥️ Backend API<br/><b>FastAPI</b><br/>POST /api/refine — LLM refinement<br/>POST /api/ask — grounded follow-up Q&amp;A"]
     DB[("🗄️ Analyses Store<br/><b>PostgreSQL</b><br/>Share-link persistence for<br/>completed analyses")]
-    MCPServer["🔌 MCP Server<br/><b>recommend_stack() tool</b><br/>Wraps the v1 rule-engine logic<br/>(imported, not called over network)<br/>for use from MCP clients"]
+    MCPServer["🔌 MCP Server<br/><b>recommend_stack() tool</b><br/>Wraps app/rule_engine.py, a verified<br/>Python port of the v1 rule engine<br/>(imported, not called over network)"]
+    Retrieval["📚 RAG Retrieval<br/><b>app/retrieval.py — two-stage TF-IDF</b><br/>Grounds /api/refine and /api/ask in a<br/>12-file use-case knowledge-base corpus"]
   end
 
   Claude["🤖 Anthropic API<br/><b>External System</b>"]
 
   User -- "HTTPS (static page load)" --> WebApp
   WebApp --> SignalEngine --> RuleEngine --> Render
-  Render -. "Sends free text + v1 result,<br/>'Refine with AI' button (v2)" .-> Backend
-  Backend -. "Calls Claude with<br/>user's own API key (v2)" .-> Claude
-  Backend -. "Read / write shared<br/>analyses (v2)" .-> DB
+  Render -. "NOT WIRED YET: 'Refine with AI' button<br/>and follow-up box are UI mockup only" .-> Backend
+  Backend -- "Retrieves grounding context" --> Retrieval
+  Backend -- "Calls Claude with<br/>user's own API key (v2)" --> Claude
+  Backend -- "Read / write shared<br/>analyses (v2)" --> DB
 
   classDef person fill:#1c2433,stroke:#3ecf8e,stroke-width:2px,color:#e7ecf3,rx:40,ry:40;
   classDef shipped fill:#2a5c9e,stroke:#5b8def,stroke-width:2px,color:#ffffff;
@@ -3697,10 +3699,10 @@ graph TB
   classDef external fill:#3d3350,stroke:#7c5bef,stroke-width:2px,color:#ffffff;
   class User person;
   class WebApp,SignalEngine,RuleEngine,Render shipped;
-  class Backend,DB,MCPServer planned;
+  class Backend,DB,MCPServer,Retrieval shipped;
   class Claude external;
   style V1 fill:#0d1420,stroke:#2a5c9e,stroke-width:1.5px,color:#8fb2f7
-  style V2 fill:#0d1420,stroke:#6b7688,stroke-width:1.5px,stroke-dasharray:4 3,color:#9aa5b5
+  style V2 fill:#0d1420,stroke:#2a5c9e,stroke-width:1.5px,color:#8fb2f7
   </pre></div>
 
   <div class="section-title">Data Flow — v1 (Current, Client-Side Only)</div>
@@ -3716,15 +3718,15 @@ sequenceDiagram
   U->>W: Enters free-text requirement, clicks Analyze
   W->>S: detectSignals(text)
   S->>S: stripNegations(text)
-  S-->>W: signals object (~35 fields)
-  W->>R: pickX(signals) × ~30 category functions
+  S-->>W: signals object (65+ fields)
+  W->>R: pickX(signals) × 45 category functions
   R-->>W: recommendation + rationale + confidence, per category
   W->>P: render 16 sections
   P-->>U: Sticky nav + collapsible recommendation report
   Note over U,P: No network request at any point — fully client-side
   </pre></div>
 
-  <div class="footer-note">Reference: companion Business Requirements Document (BRD), Product Requirements Document (PRD), and v2 Design Document. This diagram documents the architecture as built and as designed — it does not represent validated production infrastructure, since v2 has not yet been implemented.</div>
+  <div class="footer-note">Reference: companion Business Requirements Document (BRD), Product Requirements Document (PRD), and v2 Design Document. This diagram documents the architecture as actually built — both v1 and v2 are implemented and tested (85 backend tests; see backend/README.md and docs/adr/0001-mcp-rule-engine-port.md for how the rule-engine port and MCP tool specifically were verified against the real JavaScript).</div>
 </div>
 
 <script>

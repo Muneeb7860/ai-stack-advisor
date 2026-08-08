@@ -171,8 +171,21 @@ the real (embedding-based) retrieval's quality.
 
 ## What's next
 
-Both design threads (frontend expansion, backend build-out) are now complete and merged. Per the
-design session's own note: **the next milestone is real users, not another architecture dimension or
+**Real, found-during-audit gap, not just a "nice to have": the v1 frontend has no UI wired up to
+call the v2 backend at all.** `index.html` has zero references to `/api/refine`, `/api/ask`, or any
+`fetch()` call — confirmed by grep, not assumed. The backend API layer (both endpoints, RAG-grounded,
+tested) is genuinely done; the "Refine with AI" button and follow-up-question box a user would
+actually click are still exactly what `diagrams/ui-mockup.html`'s "Page 2 — v2 Concepts (not yet
+built)" describes — a mockup, not a shipped feature. This is correct and intentional per PRD NFR-5
+(v1 must keep working with zero backend dependency, so the backend was never allowed to become a
+hard requirement for v1's UI) — but it means **"v2 is shipped" throughout this repo's docs means the
+backend API layer specifically, not an end-to-end product feature a user can click through today.**
+Wiring `index.html`'s "Refine with AI" button and follow-up box to the real endpoints (per
+`diagrams/ui-mockup.html`'s frame 03/04 annotations) is the concrete next step if the goal is a
+user-facing v2, not just a tested API.
+
+Both design threads (frontend expansion, backend build-out) are otherwise complete and merged. Per
+the design session's own note: **the next milestone is real users, not another architecture dimension or
 eval case.** Candidates from the BRD's own open items, none committed:
 - **BR-7 (not met):** get the tool in front of real external users.
 - **BR-8 (not met):** commit to one of the three target segments.

@@ -3634,7 +3634,7 @@ globalThis["mermaid"] = globalThis.__esbuild_esm_mermaid_nm["mermaid"].default;
 <body>
 <div class="wrap">
   <h1>🗄️ AI Stack Advisor — Entity Relationship Diagram</h1>
-  <div class="sub">Data model for v2 (backend not yet built — this is the design). No user-accounts table by design: v1/v2 are explicitly non-goals on multi-user accounts per the PRD, so access is via share links, not authentication.</div>
+  <div class="sub">Data model for v2 — implemented and tested, matching backend/app/models.py exactly (see docs/adr/0001 for how the backend as a whole was verified). No user-accounts table by design: v1/v2 are explicitly non-goals on multi-user accounts per the PRD, so access is via share links, not authentication.</div>
 
   <div class="note"><b>Scope note:</b> every table below exists only to support the three v2 features already committed in the BRD/PRD: LLM refinement, share links, and MCP tool invocation logging. Nothing here is speculative beyond that scope.</div>
 
@@ -3744,7 +3744,7 @@ erDiagram
     <div class="note"><b>No versioning/audit-log table beyond REFINEMENT_RESULT's natural history.</b> The rule engine itself (signals → recommendations) has no version tracking in this schema; if the engine changes and a user re-runs the same text, that's a new ANALYSIS row, not a diff against an old one. Add this only if the "disagreement rate" success metric (BRD Section 7) turns out to require it.</div>
   </div>
 
-  <div class="footer-note">Reference: companion PRD (FR-27–29), BRD (Section 8.2), and v2 Design Document (Section 5, data contracts). This is the target schema for v2 — no migration or table exists yet, since v2 is blocked on backend/desktop access.</div>
+  <div class="footer-note">Reference: companion PRD (FR-27–29), BRD (Section 8.2), and v2 Design Document (Section 5, data contracts). This schema is live: a single Alembic migration (b6376436f359) applies all four tables exactly as shown above — see backend/alembic/versions/.</div>
 </div>
 
 <script>

@@ -36,11 +36,14 @@ Citation format matches 00-INDEX-AND-INGESTION-GUIDE.md §2: every retrieved chu
 source document and decision-point/header name back to the caller, e.g.
 "01-realtime-collaborative-editing.md § Decision Point A (CRDT vs. OT)".
 """
+import logging
 import os
 import re
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+
+logger = logging.getLogger(__name__)
 
 KB_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "docs", "use-case-knowledge-base")
 
@@ -121,13 +124,39 @@ class _Index:
 
 
 _index: _Index | None = None
+_index_load_failed = False  # sentinel so a missing corpus fails fast, not on every call
 
 
-def _get_index() -> _Index:
-    global _index
+def _get_index() -> _Index | None:
+    """Returns None (not an exception) if the corpus can't be loaded — e.g. a deployment that
+    ships only backend/ without the sibling docs/use-case-knowledge-base/ (the Docker image
+    itself is exactly this case; docker-compose.yml mounts the corpus in separately for that
+    reason, but nothing guarantees every deployment path does). Found during audit: this used
+    to let a bare FileNotFoundError propagate out of retrieve() and 500 the whole /api/refine
+    or /api/ask request the first time it was called — directly contradicting this module's
+    own "best-effort grounding, never gates the core flow" design (which only actually covered
+    the "corpus loaded fine but nothing relevant matched" case, not "corpus isn't there at
+    all"). Logged once, not on every request, via the module-level sentinel below."""
+    global _index, _index_load_failed
+    if _index_load_failed:
+        return None
     if _index is None:
-        _index = _Index()
-        _index.build()
+        try:
+            built = _Index()
+            built.build()
+            _index = built
+        except OSError:
+            _index_load_failed = True
+            logger.warning(
+                "RAG knowledge-base corpus could not be loaded from %s — grounding will be "
+                "disabled for the rest of this process (best-effort, not a hard failure; "
+                "/api/refine and /api/ask still work without grounding). Check that "
+                "docs/use-case-knowledge-base/ is present relative to this file, or (in "
+                "Docker) that the volume mount in docker-compose.yml is active.",
+                KB_DIR,
+                exc_info=True,
+            )
+            return None
     return _index
 
 
@@ -146,11 +175,18 @@ def retrieve(query: str, top_k: int = 5) -> list[dict]:
     Signals/triggers chunk (see module docstring). `score` is the chunk's own content-relevance
     (0..1, TF-IDF cosine similarity) — used by callers (and the eval suite) as a confidence
     signal; routing only affects rank order, not the reported score itself.
+
+    Returns [] (not an exception) if the corpus itself can't be loaded at all — see
+    _get_index()'s docstring. Callers (refine.py/ask.py's _build_grounding_context()) already
+    treat an empty result as "no grounding this time," so a missing corpus degrades exactly
+    like a query with no relevant matches, not like an error.
     """
     if not query or not query.strip():
         return []
 
     idx = _get_index()
+    if idx is None:
+        return []
 
     route_vec = idx.routing_vectorizer.transform([query])
     route_sims = cosine_similarity(route_vec, idx.routing_matrix).flatten()

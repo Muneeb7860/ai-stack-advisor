@@ -171,3 +171,27 @@ def test_signals_chunks_are_never_returned():
                 f"Case {case['id']}: a Signals/triggers chunk was returned as content — "
                 f"{result['doc']} § {result['header']}"
             )
+
+
+def test_missing_corpus_degrades_gracefully_instead_of_crashing(monkeypatch):
+    """Audit finding: a genuinely missing corpus (not just 'no relevant match' — the actual
+    files aren't there, e.g. a deployment shipping only backend/ without the sibling
+    docs/use-case-knowledge-base/) used to let a bare FileNotFoundError propagate out of
+    retrieve() and 500 the whole /api/refine or /api/ask request. That directly contradicted
+    this module's own 'best-effort grounding, never gates the core flow' design — which only
+    actually covered the 'nothing relevant matched' case, not 'the corpus isn't there at
+    all'. Fixed: _get_index() catches the load failure, logs once, and returns None; retrieve()
+    treats that the same as an empty result set."""
+    import app.retrieval as retr
+
+    monkeypatch.setattr(retr, "DOC_FILES", ["nonexistent-file.md"])
+    monkeypatch.setattr(retr, "_index", None)
+    monkeypatch.setattr(retr, "_index_load_failed", False)
+
+    result = retr.retrieve("Video conferencing app", top_k=3)
+    assert result == []
+
+    # Second call must not re-attempt the (expensive, doomed) build every time.
+    result_again = retr.retrieve("Another query", top_k=3)
+    assert result_again == []
+    assert retr._index_load_failed is True

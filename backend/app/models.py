@@ -42,8 +42,9 @@ class Analysis(Base):
 
 class RefinementResult(Base):
     """Append-only by design (DDD 4.2) — a new refinement pass never overwrites a prior one.
-    NOT YET WIRED TO AN ENDPOINT. This table exists so share-link persistence (built first)
-    doesn't need a schema migration later when /api/refine (built second) lands.
+    Wired to POST /api/refine (see app/routers/refine.py). Predates that endpoint on purpose:
+    this table was added when share-link persistence (built first) shipped, so /api/refine
+    (built second) wouldn't need a schema migration of its own when it landed.
     """
 
     __tablename__ = "refinement_results"
@@ -60,7 +61,7 @@ class RefinementResult(Base):
 class ConversationMessage(Base):
     """Scoped to exactly one Analysis, never shared across analyses (DDD 4.3) — /api/ask must
     enforce this structurally (filter every query by analysis_id), not just via prompt wording.
-    NOT YET WIRED TO AN ENDPOINT.
+    Wired to POST /api/ask (see app/routers/ask.py).
     """
 
     __tablename__ = "conversation_messages"
@@ -75,7 +76,7 @@ class ConversationMessage(Base):
 class McpInvocation(Base):
     """analysis_id is nullable on purpose (DDD 4.4) — an MCP-originated call is logged the
     instant the tool is called, before Analysis Context has necessarily produced a row yet.
-    NOT YET WIRED TO AN ENDPOINT.
+    Wired to the recommend_stack() MCP tool (see app/mcp/server.py's _log_and_recommend()).
     """
 
     __tablename__ = "mcp_invocations"

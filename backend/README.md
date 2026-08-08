@@ -44,7 +44,7 @@ uvicorn app.main:app --reload
 pytest tests/ -v
 ```
 
-84 tests currently (82 passing, 1 xfailed by design, 1 xpassed):
+85 tests currently (83 passing, 1 xfailed by design, 1 xpassed):
 - `test_share.py` (7): health check, create/share/fetch round-trip, share idempotency (same
   slug on repeat calls), 404s on unknown analysis/slug, and a sanity check that the MCP
   server module is fully built (replaces the old import-time-stub tripwire now that there's
@@ -79,12 +79,14 @@ pytest tests/ -v
   swallowed by a broad exception handler instead of erroring, so no unit test calling the
   function with a hand-built argument could have caught it. Only driving a real stdio
   JSON-RPC session end-to-end and checking what actually landed in Postgres did.
-- `test_retrieval_eval.py` (22): the 21-case retrieval eval set from
+- `test_retrieval_eval.py` (23): the 21-case retrieval eval set from
   `../docs/use-case-knowledge-base/` (direct retrieval, anti-pattern "is X okay?" phrasing,
   cross-document queries, decision-point boundary cases, negative controls) wired to the real
   `app/retrieval.py` implementation — 20 genuine passes, 1 xfail (a disclosed TF-IDF-vs-real-
-  embeddings paraphrase limitation, not silently hidden), plus a structural check that a
-  Signals/triggers chunk is never returned as citable content for any of the 21 queries.
+  embeddings paraphrase limitation, not silently hidden), a structural check that a
+  Signals/triggers chunk is never returned as citable content for any of the 21 queries, and
+  a regression test (found during audit) confirming a genuinely missing corpus degrades to
+  "no grounding" instead of a 500 — see `app/retrieval.py`'s `_get_index()` docstring.
 
 `test_refine.py` and `test_ask.py` monkeypatch the real Anthropic call
 (`app.routers.refine._run_refinement` / `app.routers.ask._run_ask`) — no live API key or
