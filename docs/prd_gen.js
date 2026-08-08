@@ -37,7 +37,7 @@ children.push(reqTable(
 // ---------- Overview ----------
 children.push(h1('2. Product Overview'));
 children.push(p('AI Stack Advisor is a single-page web application. A user pastes a free-text description of their product or business requirement; the application detects signals in that text across 65+ dimensions (industry, scale, compliance, latency, data type, team size, existing vendor commitments, and more) and renders a full architecture recommendation organized into 16 navigable sections, covering both traditional infrastructure decisions and AI-native decisions.'));
-children.push(p('v1 runs entirely client-side: a JavaScript rule engine embedded in a single HTML file, with no server, no API calls, and no data leaving the browser. v2 (designed, not yet built) adds an optional backend for LLM-assisted refinement of ambiguous cases, persistence via share links, and an MCP tool wrapper for use from Claude Desktop/Code.'));
+children.push(p('v1 runs entirely client-side: a JavaScript rule engine embedded in a single HTML file, with no server, no API calls, and no data leaving the browser. v2 adds an optional backend for LLM-assisted refinement of ambiguous cases (grounded in a RAG knowledge-base corpus), persistence via share links, and an MCP tool wrapper for use from Claude Desktop/Code — all shipped.'));
 
 // ---------- Problem statement ----------
 children.push(h1('3. Problem Statement'));

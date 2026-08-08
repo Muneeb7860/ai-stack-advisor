@@ -1,4 +1,5 @@
 const fs = require('fs');
+const path = require('path');
 const {
   Packer, Paragraph, TextRun, AlignmentType, ImageRun,
   NAVY, ACCENT, LIGHT, MUTED, GOOD, WARN,
@@ -13,8 +14,8 @@ children.push(...coverTitle(
   'Domain-Driven Design Document',
   'Bounded contexts, ubiquitous language, and aggregates for v2',
   [
-    ['Document Version', '1.0'],
-    ['Status', 'Design only — no v2 code exists yet'],
+    ['Document Version', '1.2'],
+    ['Status', 'Implemented — all v2 contexts (Analysis, Refinement, Sharing, Integration) built and tested, including RAG grounding for the Refinement Context'],
     ['Prepared by', 'Muneeb, with Claude (Cowork)'],
     ['Date', new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })],
     ['Companion documents', 'BRD, PRD, v2 Design Doc, ERD, Architecture Diagram'],
@@ -49,7 +50,7 @@ children.push(reqTable(
 children.push(h1('3. Context Map'));
 children.push(p('One core domain, two supporting subdomains, and one generic subdomain. The relationships below use standard DDD context-mapping patterns (Customer/Supplier, Conformist, Anti-Corruption Layer).'));
 
-const imgBuf = fs.readFileSync('/home/claude/ai-stack-advisor/docs/img/context-map.png');
+const imgBuf = fs.readFileSync(path.join(__dirname, 'img', 'context-map.png'));
 children.push(new Paragraph({
   alignment: AlignmentType.CENTER,
   spacing: { before: 120, after: 200 },
@@ -57,7 +58,7 @@ children.push(new Paragraph({
 }));
 
 children.push(h3('3.1 Analysis Context — Core Domain'));
-children.push(p('Owns the entire "requirement text in, recommendation out" logic — this is the reason the product exists, and it is exactly the v1 rule engine (detectSignals() plus the ~30 pickX() functions), unchanged, reused rather than reimplemented behind a service boundary. Upstream of both supporting subdomains.'));
+children.push(p('Owns the entire "requirement text in, recommendation out" logic — this is the reason the product exists, and it is exactly the v1 rule engine (detectSignals() plus the 45 pickX() functions, up from ~30 after a two-round dimension-expansion pass), unchanged, reused rather than reimplemented behind a service boundary. Upstream of both supporting subdomains. A new adjacent asset — docs/use-case-knowledge-base/, a 12-file corpus written as RAG grounding content, not application code — is not itself part of this bounded context\'s runtime, but /api/refine and /api/ask (in the Refinement subdomain below) retrieve from it via app/retrieval.py, so its retrieval contract (00-INDEX-AND-INGESTION-GUIDE.md) is effectively a dependency of that subdomain.'));
 children.push(h3('3.2 Refinement Context — Supporting Subdomain'));
 children.push(p('Owns the LLM-assisted second pass. Downstream of Analysis Context in a Customer/Supplier relationship — it consumes Analysis Context\'s output as its input and cannot override its structure, only annotate/adjust specific picks with cited reasons. Talks to the Anthropic API through an Anti-Corruption Layer, so a future change of LLM provider does not leak provider-specific concepts (message formats, tool-call schemas) into this context\'s own model.'));
 children.push(h3('3.3 Sharing Context — Supporting Subdomain'));
@@ -112,6 +113,6 @@ const doc = baseDoc({
 });
 
 Packer.toBuffer(doc).then((buf) => {
-  fs.writeFileSync('/home/claude/ai-stack-advisor/docs/AI-Stack-Advisor-DDD.docx', buf);
+  fs.writeFileSync(path.join(__dirname, 'AI-Stack-Advisor-DDD.docx'), buf);
   console.log('DDD written');
 });
