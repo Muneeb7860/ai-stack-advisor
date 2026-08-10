@@ -171,23 +171,39 @@ the real (embedding-based) retrieval's quality.
 
 ## What's next
 
-**Real, found-during-audit gap, not just a "nice to have": the v1 frontend has no UI wired up to
-call the v2 backend at all.** `index.html` has zero references to `/api/refine`, `/api/ask`, or any
-`fetch()` call — confirmed by grep, not assumed. The backend API layer (both endpoints, RAG-grounded,
-tested) is genuinely done; the "Refine with AI" button and follow-up-question box a user would
-actually click are still exactly what `diagrams/ui-mockup.html`'s "Page 2 — v2 Concepts (not yet
-built)" describes — a mockup, not a shipped feature. This is correct and intentional per PRD NFR-5
-(v1 must keep working with zero backend dependency, so the backend was never allowed to become a
-hard requirement for v1's UI) — but it means **"v2 is shipped" throughout this repo's docs means the
-backend API layer specifically, not an end-to-end product feature a user can click through today.**
-Wiring `index.html`'s "Refine with AI" button and follow-up box to the real endpoints (per
-`diagrams/ui-mockup.html`'s frame 03/04 annotations) is the concrete next step if the goal is a
-user-facing v2, not just a tested API.
+**Update 2026-08-10: the gap below is closed.** `index.html` now has real UI wired to the v2
+backend — a mode picker, guided-input wizard, per-card "Refine with AI" buttons, inline follow-up
+Q&A, and a Share button, all calling the real `/api/refine`, `/api/ask`, `/api/analyses`, and
+`/api/analyses/{id}/share` endpoints. This was verified against the live backend (not mocked): real
+HTTP calls, a real Postgres row created from guided-mode's synthesized text, a real share slug
+created and opened via `?shared=SLUG` rendering read-only. **"v2 is shipped" now means an
+end-to-end, user-clickable feature, not just a tested API** — see the 13-decision record below for
+what was actually built, and `backend/tests/test_guided_synthesis.py` for the guided-mode signal
+mapping's own test coverage. The original gap-finding paragraph is kept below for history, since it
+accurately describes how this was discovered and why it mattered at the time:
 
-**Guided-input mode + backend wiring — fully scoped 2026-08-08, now in implementation.** Builds
-on the standalone click-through demo referenced from `diagrams/ui-mockup.html` (mode picker,
-6-question wizard, one real skip case) and the backend API layer (already shipped — see below).
-Thirteen decisions locked before implementation started:
+> Real, found-during-audit gap, not just a "nice to have": the v1 frontend has no UI wired up to
+> call the v2 backend at all. `index.html` has zero references to `/api/refine`, `/api/ask`, or any
+> `fetch()` call — confirmed by grep, not assumed. The backend API layer (both endpoints, RAG-grounded,
+> tested) is genuinely done; the "Refine with AI" button and follow-up-question box a user would
+> actually click are still exactly what `diagrams/ui-mockup.html`'s "Page 2 — v2 Concepts (not yet
+> built)" describes — a mockup, not a shipped feature. This is correct and intentional per PRD NFR-5
+> (v1 must keep working with zero backend dependency, so the backend was never allowed to become a
+> hard requirement for v1's UI) — but it means "v2 is shipped" throughout this repo's docs means the
+> backend API layer specifically, not an end-to-end product feature a user can click through today.
+
+**Known open gaps in the now-shipped guided-mode + backend-wiring milestone** (disclosed, not
+hidden): nobody has run a real refine/ask cycle with a genuine (non-invalid) Anthropic API key yet —
+every test so far, including the live manual browser pass, deliberately used an invalid key to
+prove error-handling, not a valid one to prove the happy path renders correctly end-to-end. That's
+the single biggest unverified claim left. Also: the follow-up Q&A box has real code and a real
+`/api/ask` wire-up but has never actually been manually clicked-and-typed-into by a human or a
+browser-driven test — only refine and share got that treatment.
+
+**Guided-input mode + backend wiring — shipped 2026-08-08/09.** Built on the standalone
+click-through demo referenced from `diagrams/ui-mockup.html` (mode picker, 6-question wizard, one
+real skip case) and the backend API layer (shipped earlier — see below). Thirteen decisions locked
+before implementation started, all now implemented in `index.html`:
 
 1. **Scope**: both guided mode and backend wiring (refine/ask/share) land in one milestone.
 2. **Frontend architecture**: stays a single `index.html`, progressive enhancement — NFR-5

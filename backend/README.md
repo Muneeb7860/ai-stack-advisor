@@ -44,11 +44,18 @@ uvicorn app.main:app --reload
 pytest tests/ -v
 ```
 
-85 tests currently (83 passing, 1 xfailed by design, 1 xpassed):
-- `test_share.py` (7): health check, create/share/fetch round-trip, share idempotency (same
-  slug on repeat calls), 404s on unknown analysis/slug, and a sanity check that the MCP
+93 tests currently (91 passing, 1 xfailed by design, 1 xpassed):
+- `test_guided_synthesis.py` (7): validates `index.html`'s guided-mode wizard synthesis
+  (`synthesizeRequirementText()`) via a Python mirror, verified byte-for-byte against the real
+  JS before being trusted — 7 scenarios covering every wizard branch including the skip-logic
+  case, multi-select compliance/AI, and a free-text override with negation.
+- `test_share.py` (8): health check, create/share/fetch round-trip, share idempotency (same
+  slug on repeat calls), 404s on unknown analysis/slug, a sanity check that the MCP
   server module is fully built (replaces the old import-time-stub tripwire now that there's
-  nothing left stubbed).
+  nothing left stubbed), and a CORS test confirming `/health` actually returns
+  `access-control-allow-origin` for a whitelisted origin — the frontend's guided-mode +
+  refine/ask/share wiring (see `../index.html`, `../KICKOFF_BRIEF.md` "What's next") depends on
+  this working, not just being configured.
 - `test_refine.py` (11): analysis creation-vs-reuse based on whether `analysis_id` is passed,
   the exact inputs forwarded to the model, the API key never appearing in the response,
   append-only persistence of `RefinementResult` across repeat calls, the input-length

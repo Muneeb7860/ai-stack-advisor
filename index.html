@@ -1894,9 +1894,11 @@ function renderRecommendations(s, rec){
         ${hosting.when?`<div class="when" style="margin-top:8px;"><b>Switch when:</b> ${hosting.when}</div>`:''}
       </div>
       <div class="subhead">If self-hosting: compute tier by device class <span style="color:var(--muted); font-weight:400;">(recommended tier for you: <span style="color:var(--good); font-weight:700;">${computeTier.tier}</span>)</span></div>
+      <div style="overflow-x:auto;">
       <table class="vram-table"><thead><tr><th>Compute tier</th><th>RAM / VRAM</th><th>Model fit (4-bit)</th><th>Example hardware</th><th>Notes</th></tr></thead><tbody>
         ${COMPUTE_TIER_TABLE.map(r=>`<tr class="${r.tier===computeTier.tier?'recommended':''}"><td class="tier">${r.tier}${r.tier===computeTier.tier?'<span class="rec-star">★ recommended</span>':''}</td><td>${r.ram}</td><td>${r.modelFit}</td><td>${r.examples}</td><td>${r.notes}</td></tr>`).join('')}
       </tbody></table>
+      </div>
       <div class="assumption">${computeTier.why} One size doesn't fit all here — the right tier depends on device target and scale, not a single default; re-check this table if your device target or team size changes.</div>
       <div class="subhead" style="margin-top:16px;">Local runtime vs. multi-model router <span style="color:var(--muted); font-weight:400;">— Ollama (self-hosted) vs. OpenRouter (cloud multi-provider) vs. a direct single-provider SDK</span></div>
       <div class="rag-pick"><div class="head" style="display:flex; justify-content:space-between; align-items:center;"><div class="name">${runtime.rec}</div><span class="conf conf-${runtime.conf||'low'}">${confLabel(runtime.conf)}</span></div><div class="why">${runtime.why}</div></div>
@@ -1946,9 +1948,11 @@ function renderRecommendations(s, rec){
       </div>
       ${costEstimate.llmBand && costEstimate.llmBand.table ? `
       <div class="subhead" style="margin-top:14px;">LLM cost by model tier <span style="color:var(--muted); font-weight:400;">— same volume assumption, different model choice</span></div>
+      <div style="overflow-x:auto;">
       <table class="tier-table"><thead><tr><th>Model tier</th><th>Est. $/mo</th></tr></thead><tbody>
         ${costEstimate.llmBand.table.map(r=>`<tr><td>${r.tier}</td><td>$${r.low.toLocaleString()}–$${r.high.toLocaleString()}</td></tr>`).join('')}
-      </tbody></table>` : ''}
+      </tbody></table>
+      </div>` : ''}
     </div>
     <div class="card">${cost.map(i=>`<div class="opt-item"><div class="t">${i.t}</div><div class="w">${i.w}</div></div>`).join('')}</div>`);
 
@@ -2517,7 +2521,7 @@ const STACK_CARD_CATEGORY = {
   'Backend Language(s)':'languages', 'Architecture Style':'architecture', 'Compute Model':'compute',
   'Messaging / Streaming':'messaging', 'Service Mesh':'mesh', 'Caching':'cache',
   'Primary Database(s)':'database', 'Containers / Orchestration':'containers',
-  'Observability':'observability', 'Frontend':'frontend', 'CI/CD & Deployment':'cicd',
+  'Observability':'observability', 'Frontend':'frontend', 'CI/CD & Deployment':'cicd', 'DNS':'dns',
 };
 
 function attachRefineUI(){
