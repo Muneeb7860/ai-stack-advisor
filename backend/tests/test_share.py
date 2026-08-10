@@ -76,3 +76,12 @@ def test_mcp_server_is_now_built_not_a_stub():
     import app.mcp.server as mcp_module
 
     assert mcp_module.mcp.name == "ai-stack-advisor"
+
+
+def test_cors_headers_on_api_endpoints():
+    """Verifies that CORS headers are returned for requests coming from browser environments."""
+    origin = "http://localhost:3000"
+    resp = client.get("/health", headers={"Origin": origin})
+    assert resp.status_code == 200
+    assert resp.headers.get("access-control-allow-origin") == origin
+
