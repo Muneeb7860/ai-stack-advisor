@@ -2588,8 +2588,16 @@ async function onRefineClick(cardKey, btnEl){
 
   if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Refining…'; }
   try {
+    // Bug found via manual testing (2026-08-10): the ask box used to only appear on a
+    // successful refine, but /api/ask only needs a real analysis_id — it doesn't require
+    // refine to have succeeded first. Creating the Analysis (which ensureAnalysisId() does)
+    // is enough to let a user ask a follow-up question even if the refine call itself fails
+    // (bad key, rate limit, etc). Revealing the ask box as soon as we have an analysis_id,
+    // before the refine call can fail, fixes that.
+    await ensureAnalysisId();
+    document.getElementById(`askBox-${cardKey}`).classList.add('show');
+
     if (!refineResultCache){
-      await ensureAnalysisId();
       const resp = await fetch(`${API_BASE}/api/refine`, {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
@@ -2607,7 +2615,6 @@ async function onRefineClick(cardKey, btnEl){
     } else {
       applyRefinementToCard(cardKey, category, resultEl);
     }
-    document.getElementById(`askBox-${cardKey}`).classList.add('show');
   } catch(e){
     resultEl.innerHTML = `<div class="refine-error">${e.message}</div>`;
   } finally {
