@@ -192,13 +192,20 @@ accurately describes how this was discovered and why it mattered at the time:
 > hard requirement for v1's UI) — but it means "v2 is shipped" throughout this repo's docs means the
 > backend API layer specifically, not an end-to-end product feature a user can click through today.
 
-**Known open gaps in the now-shipped guided-mode + backend-wiring milestone** (disclosed, not
+**Known open gap in the now-shipped guided-mode + backend-wiring milestone** (disclosed, not
 hidden): nobody has run a real refine/ask cycle with a genuine (non-invalid) Anthropic API key yet —
 every test so far, including the live manual browser pass, deliberately used an invalid key to
 prove error-handling, not a valid one to prove the happy path renders correctly end-to-end. That's
-the single biggest unverified claim left. Also: the follow-up Q&A box has real code and a real
-`/api/ask` wire-up but has never actually been manually clicked-and-typed-into by a human or a
-browser-driven test — only refine and share got that treatment.
+the single biggest unverified claim left. Requires a human to enter their own real key directly in
+the browser — not something an agent should do on their behalf.
+
+**Closed 2026-08-10**: the follow-up Q&A box had never been manually clicked-and-typed-into before
+this date. Doing so immediately surfaced a real bug — the ask box only appeared after a
+*successful* refine, even though `/api/ask` has no actual dependency on refine having succeeded
+(an Analysis row already exists by the time refine is attempted). Fixed: the ask box now appears
+as soon as an `analysis_id` exists, independent of whether the refine call itself succeeds or
+fails. Verified live with a real second `/api/ask` call (distinct `request_id` from the refine
+call) and confirmed no orphaned `conversation_messages` row when that call also failed.
 
 **Guided-input mode + backend wiring — shipped 2026-08-08/09.** Built on the standalone
 click-through demo referenced from `diagrams/ui-mockup.html` (mode picker, 6-question wizard, one
