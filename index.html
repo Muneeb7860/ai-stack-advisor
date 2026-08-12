@@ -327,6 +327,12 @@
   .infer-strip.show{display:block;}
   .infer-strip b{color:var(--accent2);}
 
+  /* ---- "Why this pick" signal chips — makes rule-engine reasoning inspectable per card ---- */
+  .why-signals{margin-top:9px; display:flex; flex-wrap:wrap; align-items:center; gap:5px; font-size:10.5px;}
+  .why-signals-label{color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.03em; font-size:9.5px; margin-right:1px;}
+  .why-signals-empty{color:var(--muted); font-style:italic;}
+  .why-sig{background:rgba(124,91,239,0.1); border-color:rgba(124,91,239,0.3); color:#c3b6f7;}
+
   /* ---- Backend wiring: refine button, ask box, API-key prompt (decisions #8-11) ---- */
   .refine-zone{margin-top:11px; padding-top:11px; border-top:1px solid var(--border);}
   .refine-btn{
@@ -2524,6 +2530,40 @@ const STACK_CARD_CATEGORY = {
   'Observability':'observability', 'Frontend':'frontend', 'CI/CD & Deployment':'cicd', 'DNS':'dns',
 };
 
+// "Why this pick" — maps each stack card to the exact signal keys its pickX() function actually
+// checks (read directly out of each function's if(s.xxx) conditions, not guessed). Intersected
+// against the CURRENTLY ACTIVE signals at render time to show which detected signals drove this
+// specific pick — makes the rule engine's reasoning inspectable per-card instead of only visible
+// as a single "why" paragraph. If this list drifts from a pickX() function after an edit, it's
+// stale, not wrong — no runtime harm, it just under/over-shows relevant signals for that card.
+const STACK_CARD_SIGNALS = {
+  cloud: ['onPrem','awsShop','gcpShop','agentic','azureShop','enterprise','startupMvp'],
+  gateway: ['onPrem','security','compliance','highScale','enterprise','largeTeam'],
+  iam: ['onPrem','oktaMentioned','entraMentioned','azureShop','gcpShop','awsShop','pingMentioned',
+    'forgerockMentioned','oracleIamMentioned','enterprise','largeTeam','compliance','security',
+    'deviceMgmt','startupMvp','smallTeam'],
+  languages: ['javaMentioned','enterprise','finance','pythonMentioned','agentic','dataHeavy','ragNeed','goMentioned','highScale'],
+  architecture: ['startupMvp','smallTeam','enterprise','compliance','largeTeam'],
+  compute: ['onPrem','startupMvp','smallTeam','highScale','enterprise','realtime','liveMultiplayer','videoConferencing'],
+  messaging: ['liveMultiplayer','collabEditing','highScale','realtime','finance','gcpShop','startupMvp'],
+  mesh: ['mtlsMentioned','compliance','enterprise','largeTeam'],
+  cache: [], // always Redis — no signal drives this one
+  database: ['liveMultiplayer','feedFanout','highScale','dataHeavy','structured','chatbot','ragNeed','finance','unstructured','iot','geospatial'],
+  containers: ['onPrem','startupMvp','enterprise','highScale'],
+  observability: ['onPrem','enterprise','compliance','highScale','startupMvp'],
+  frontend: ['web','mobile','enterprise'],
+  cicd: ['onPrem','startupMvp','enterprise'],
+  dns: ['onPrem','awsShop'],
+};
+
+function renderWhySignals(category){
+  const relevant = STACK_CARD_SIGNALS[category];
+  if (!relevant || !relevant.length || !lastSignals) return '';
+  const matched = relevant.filter(k => lastSignals[k]);
+  if (!matched.length) return '<div class="why-signals"><span class="why-signals-label">Based on:</span> <span class="why-signals-empty">no specific signal — this is the default pick</span></div>';
+  return `<div class="why-signals"><span class="why-signals-label">Based on:</span> ${matched.map(k => `<span class="sig why-sig">${k}</span>`).join('')}</div>`;
+}
+
 function attachRefineUI(){
   if (isReadOnlyView) return; // decision #13 — no refine buttons on a shared read-only view
   let idx = 0;
@@ -2538,6 +2578,11 @@ function attachRefineUI(){
 }
 
 function attachRefineToCard(card, category, label, cardKey){
+  // "Why this pick" signal chips — stack cards only (STACK_CARD_SIGNALS has no entries for
+  // trade-off cards' pseudo-category 'tradeoffs', so this is a no-op there).
+  const whyHtml = renderWhySignals(category);
+  if (whyHtml) card.insertAdjacentHTML('beforeend', whyHtml);
+
   const zone = document.createElement('div');
   zone.className = 'refine-zone';
   zone.dataset.cardKey = cardKey;
