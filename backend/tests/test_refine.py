@@ -39,7 +39,7 @@ def mock_anthropic(monkeypatch):
         calls.append(
             {"api_key": api_key, "requirement_text": requirement_text, "recommendations": recommendations}
         )
-        return FAKE_REFINEMENT_RESULT
+        return FAKE_REFINEMENT_RESULT, {"input_tokens": 512, "output_tokens": 128}
 
     monkeypatch.setattr(refine_module, "_run_refinement", _fake_run_refinement)
     return calls
@@ -71,6 +71,8 @@ def test_refine_without_analysis_id_creates_a_new_analysis(mock_anthropic, refin
     assert body["rationale"] == FAKE_REFINEMENT_RESULT["rationale"]
     assert body["open_questions"] == FAKE_REFINEMENT_RESULT["open_questions"]
     assert body["llm_model_used"] == refine_module.MODEL
+    # Real usage numbers flow through to the response (see mock_anthropic's fake tuple return).
+    assert body["usage"] == {"input_tokens": 512, "output_tokens": 128}
 
     # The Analysis really was persisted, not just echoed back.
     fetched = client.post(f"/api/analyses/{body['analysis_id']}/share")

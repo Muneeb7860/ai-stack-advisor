@@ -25,7 +25,7 @@ def mock_ask(monkeypatch):
 
     def _fake_run_ask(api_key, system_prompt, history):
         calls.append({"api_key": api_key, "system_prompt": system_prompt, "history": history})
-        return f"Canned answer #{len(calls)}"
+        return f"Canned answer #{len(calls)}", {"input_tokens": 300, "output_tokens": 64}
 
     monkeypatch.setattr(ask_module, "_run_ask", _fake_run_ask)
     return calls
@@ -88,6 +88,8 @@ def test_ask_persists_question_and_answer(mock_ask, existing_analysis):
     assert body["conversation"][0]["content"] == "Why Postgres over Mongo here?"
     assert body["conversation"][1]["role"] == "assistant"
     assert body["conversation"][1]["content"] == "Canned answer #1"
+    # Real usage numbers flow through to the response (see mock_ask's fake tuple return).
+    assert body["usage"] == {"input_tokens": 300, "output_tokens": 64}
 
 
 def test_ask_replays_conversation_history_on_second_turn(mock_ask, existing_analysis):

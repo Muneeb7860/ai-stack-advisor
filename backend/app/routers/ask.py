@@ -89,9 +89,12 @@ def _build_grounding_context(question: str) -> str:
     )
 
 
-def _run_ask(api_key: str, system_prompt: str, history: list[dict]) -> str:
+def _run_ask(api_key: str, system_prompt: str, history: list[dict]) -> tuple[str, dict]:
     """Isolated into its own function so tests can monkeypatch it instead of hitting the real
-    Anthropic API — mirrors refine.py's _run_refinement for the same reason."""
+    Anthropic API — mirrors refine.py's _run_refinement for the same reason.
+
+    Returns (answer, usage) — usage is {"input_tokens": int, "output_tokens": int} read
+    straight from message.usage, the real count for this one call, not an estimate."""
     client = Anthropic(api_key=api_key)
     try:
         message = client.messages.create(
@@ -103,9 +106,10 @@ def _run_ask(api_key: str, system_prompt: str, history: list[dict]) -> str:
     except APIError as exc:
         raise HTTPException(status_code=502, detail=f"Anthropic API error: {exc}") from exc
 
+    usage = {"input_tokens": message.usage.input_tokens, "output_tokens": message.usage.output_tokens}
     for block in message.content:
         if block.type == "text":
-            return block.text
+            return block.text, usage
     raise HTTPException(status_code=502, detail="Model did not return a text answer.")
 
 
@@ -131,7 +135,7 @@ def ask(payload: schemas.AskRequest, db: Session = Depends(get_db)):
     history = [{"role": m.role, "content": m.content} for m in prior_messages]
     history.append({"role": "user", "content": payload.question})
 
-    answer = _run_ask(payload.anthropic_api_key, system_prompt, history)
+    answer, usage = _run_ask(payload.anthropic_api_key, system_prompt, history)
 
     # Persisted only now that the model call actually succeeded — see module docstring.
     user_row = models.ConversationMessage(
@@ -148,6 +152,7 @@ def ask(payload: schemas.AskRequest, db: Session = Depends(get_db)):
     return schemas.AskResponse(
         analysis_id=analysis.id,
         answer=answer,
+        usage=schemas.UsageInfo(**usage),
         llm_model_used=MODEL,
         conversation=[schemas.ConversationMessageOut.model_validate(m) for m in all_messages],
     )

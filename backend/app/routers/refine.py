@@ -156,9 +156,12 @@ REFINEMENT_TOOL = {
 }
 
 
-def _run_refinement(api_key: str, requirement_text: str, recommendations: dict) -> dict:
+def _run_refinement(api_key: str, requirement_text: str, recommendations: dict) -> tuple[dict, dict]:
     """Isolated into its own function so tests can monkeypatch it instead of hitting the real
-    Anthropic API — no network calls, no real API key, needed to test this endpoint."""
+    Anthropic API — no network calls, no real API key, needed to test this endpoint.
+
+    Returns (result, usage) — usage is {"input_tokens": int, "output_tokens": int} read
+    straight from message.usage, the real count for this one call, not an estimate."""
     grounding = _build_grounding_context(requirement_text)
     client = Anthropic(api_key=api_key)
     try:
@@ -184,9 +187,10 @@ def _run_refinement(api_key: str, requirement_text: str, recommendations: dict) 
         # the LLM call itself failed (bad key, rate limit, outage, etc).
         raise HTTPException(status_code=502, detail=f"Anthropic API error: {exc}") from exc
 
+    usage = {"input_tokens": message.usage.input_tokens, "output_tokens": message.usage.output_tokens}
     for block in message.content:
         if block.type == "tool_use" and block.name == "submit_refinement":
-            return block.input
+            return block.input, usage
     raise HTTPException(status_code=502, detail="Model did not return a refinement result.")
 
 
@@ -210,7 +214,7 @@ def refine(payload: schemas.RefineRequest, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(analysis)
 
-    result = _run_refinement(
+    result, usage = _run_refinement(
         payload.anthropic_api_key, payload.requirement_text, payload.recommendations
     )
 
@@ -232,4 +236,5 @@ def refine(payload: schemas.RefineRequest, db: Session = Depends(get_db)):
         rationale=result["rationale"],
         open_questions=result["open_questions"],
         llm_model_used=MODEL,
+        usage=schemas.UsageInfo(**usage),
     )

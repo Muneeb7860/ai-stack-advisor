@@ -51,6 +51,17 @@ class AdjustedPick(BaseModel):
     changed_from_tier1: bool = True
 
 
+class UsageInfo(BaseModel):
+    """Real token counts straight from the Anthropic response (message.usage) — not an
+    estimate. Not persisted to any table (RefinementResult/ConversationMessage have no usage
+    column); this is response-only, computed fresh from whatever the SDK returned for that one
+    call. Added so the frontend can show real cost next to the existing directional cost
+    estimate in the Cost section, instead of only ever guessing."""
+
+    input_tokens: int
+    output_tokens: int
+
+
 class RefineResponse(BaseModel):
     """Returns adjusted picks AND the untouched original recommendations side by side
     (design-doc-v2.md Section 3.2 "Reasoning API") so the frontend can render 'AI suggested
@@ -62,6 +73,7 @@ class RefineResponse(BaseModel):
     rationale: str
     open_questions: list[str]
     llm_model_used: str
+    usage: UsageInfo
 
 
 class AskRequest(BaseModel):
@@ -85,3 +97,4 @@ class AskResponse(BaseModel):
     answer: str
     llm_model_used: str
     conversation: list[ConversationMessageOut]
+    usage: UsageInfo

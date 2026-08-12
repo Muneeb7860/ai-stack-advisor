@@ -333,6 +333,15 @@
   .why-signals-empty{color:var(--muted); font-style:italic;}
   .why-sig{background:rgba(124,91,239,0.1); border-color:rgba(124,91,239,0.3); color:#c3b6f7;}
 
+  /* ---- Real cost tracker (idea from SmythOS's "Cost Trace" panel) ---- */
+  .real-cost-block{
+    background:linear-gradient(180deg, rgba(52,201,138,0.08), rgba(52,201,138,0.03)); border:1px solid rgba(52,201,138,0.3);
+    border-radius:var(--radius-lg); padding:13px 16px; margin-bottom:16px;
+  }
+  .real-cost-label{font-size:10.5px; text-transform:uppercase; letter-spacing:0.04em; color:var(--good); font-weight:700; margin-bottom:4px;}
+  .real-cost-value{font-size:20px; font-weight:800; color:var(--text); letter-spacing:-0.01em; margin-bottom:5px;}
+  .real-cost-detail{font-size:11.5px; color:var(--muted); line-height:1.5;}
+
   /* ---- Backend wiring: refine button, ask box, API-key prompt (decisions #8-11) ---- */
   .refine-zone{margin-top:11px; padding-top:11px; border-top:1px solid var(--border);}
   .refine-btn{
@@ -1944,7 +1953,8 @@ function renderRecommendations(s, rec){
     </div>`);
 
   sec('cost', 'Cost', 'Cost &amp; Resource Optimization <span style="color:var(--muted); text-transform:none; letter-spacing:0; font-weight:400;">— Solution Architect / FinOps lens</span>',
-    `<div class="card">
+    `<div id="realCostSummary"></div>
+    <div class="card">
       <div class="subhead">Directional monthly cost estimate</div>
       <div class="assumption" style="margin-bottom:10px;">This is a planning-range estimate, not a quote — a static, zero-backend tool has no live pricing API and doesn't know your actual traffic. Bands are grounded in Aug-2026 vendor pricing (compute, managed databases, LLM APIs) and re-checked against official pricing pages where possible; verify against current pricing before budgeting a real commitment.</div>
       <div class="cost-grid">
@@ -2482,6 +2492,41 @@ document.querySelectorAll('#screenWizard .radio-list').forEach(list => {
 const API_BASE = 'http://localhost:8000'; // local dev default — see backend/README.md Quickstart. Update for a real deployment.
 let backendAvailable = null; // null = not checked yet, true/false after the one-time /health probe
 
+// Real cost tracking (idea pulled from reviewing SmythOS Studio's "Cost Trace" panel — see
+// KICKOFF_BRIEF.md). /api/refine and /api/ask now return real token counts (backend/app/schemas.py
+// UsageInfo, read straight from the Anthropic response, not estimated) — this turns that into an
+// actual dollar figure shown next to the existing static cost ESTIMATE in the Cost section, so the
+// user sees real spend once they've actually used AI features, not just a directional guess.
+// Pricing is Claude Sonnet's published per-million-token rate as of this writing — same "verify
+// against current pricing" caveat as the rest of the Cost section's estimates; this is not a live
+// pricing API call, just a documented constant.
+const CLAUDE_SONNET_PRICING = { inputPerM: 3.00, outputPerM: 15.00 }; // $/1M tokens
+let sessionUsage = { inputTokens: 0, outputTokens: 0, calls: 0 };
+
+function addSessionUsage(usage){
+  if (!usage) return;
+  sessionUsage.inputTokens += usage.input_tokens || 0;
+  sessionUsage.outputTokens += usage.output_tokens || 0;
+  sessionUsage.calls += 1;
+  renderRealCostSummary();
+}
+function sessionUsageCost(){
+  return (sessionUsage.inputTokens/1e6)*CLAUDE_SONNET_PRICING.inputPerM
+       + (sessionUsage.outputTokens/1e6)*CLAUDE_SONNET_PRICING.outputPerM;
+}
+function renderRealCostSummary(){
+  const el = document.getElementById('realCostSummary');
+  if (!el) return; // Cost section not rendered yet (e.g. still on the mode picker) — nothing to update
+  if (sessionUsage.calls === 0){ el.innerHTML = ''; return; }
+  const cost = sessionUsageCost();
+  el.innerHTML = `
+    <div class="real-cost-block">
+      <div class="real-cost-label">Real cost so far this session — ${sessionUsage.calls} AI call${sessionUsage.calls===1?'':'s'}</div>
+      <div class="real-cost-value">$${cost < 0.01 ? cost.toFixed(4) : cost.toFixed(2)}</div>
+      <div class="real-cost-detail">${sessionUsage.inputTokens.toLocaleString()} input + ${sessionUsage.outputTokens.toLocaleString()} output tokens, actual counts from the Anthropic API response — not an estimate. Priced at Claude Sonnet's published rate ($${CLAUDE_SONNET_PRICING.inputPerM}/M in, $${CLAUDE_SONNET_PRICING.outputPerM}/M out); verify against current pricing for a real budget.</div>
+    </div>`;
+}
+
 async function probeBackendHealth(){
   try {
     const ctrl = new AbortController();
@@ -2504,6 +2549,7 @@ let refineResultCache = null; // full RefineResponse, once fetched, reused by ev
 function resetRefineSession(){
   currentAnalysisId = null;
   refineResultCache = null;
+  sessionUsage = { inputTokens: 0, outputTokens: 0, calls: 0 }; // fresh cost tracking per analysis
 }
 
 async function ensureAnalysisId(){
@@ -2656,6 +2702,7 @@ async function onRefineClick(cardKey, btnEl){
       }
       refineResultCache = await resp.json();
       currentAnalysisId = refineResultCache.analysis_id;
+      addSessionUsage(refineResultCache.usage);
       applyRefinementToAllCards();
     } else {
       applyRefinementToCard(cardKey, category, resultEl);
@@ -2706,6 +2753,7 @@ async function onAskClick(cardKey){
       throw new Error(errBody.detail || `Ask failed (${resp.status})`);
     }
     const data = await resp.json();
+    addSessionUsage(data.usage);
     thread.insertAdjacentHTML('beforeend', `<div class="ask-msg answer">${data.answer}</div>`);
   } catch(e){
     thread.insertAdjacentHTML('beforeend', `<div class="ask-msg answer refine-error">${e.message}</div>`);
