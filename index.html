@@ -344,6 +344,7 @@
 
   /* ---- Backend wiring: refine button, ask box, API-key prompt (decisions #8-11) ---- */
   .refine-zone{margin-top:11px; padding-top:11px; border-top:1px solid var(--border);}
+  .refine-btns-row{display:flex; gap:8px; flex-wrap:wrap;}
   .refine-btn{
     background:linear-gradient(135deg, rgba(124,91,239,0.18), rgba(91,141,239,0.18)); border:1px solid rgba(124,91,239,0.4);
     color:#c3b6f7; padding:6px 11px; border-radius:7px; font-size:11.5px; font-weight:600; cursor:pointer;
@@ -351,6 +352,32 @@
   }
   .refine-btn:hover{filter:brightness(1.15);}
   .refine-btn:disabled{opacity:0.5; cursor:default;}
+  .ask-toggle-btn{
+    background:rgba(91,141,239,0.1); border:1px solid rgba(91,141,239,0.35);
+    color:#8fb2f7; padding:6px 11px; border-radius:7px; font-size:11.5px; font-weight:600; cursor:pointer;
+    transition:filter .15s var(--ease);
+  }
+  .ask-toggle-btn:hover{filter:brightness(1.15);}
+  .ask-toggle-btn.active{background:rgba(91,141,239,0.22); border-color:rgba(91,141,239,0.6);}
+  /* ---- Refinement pass history ---- */
+  .refine-history-toggle{
+    background:transparent; border:1px solid var(--border); color:var(--muted); padding:6px 12px;
+    border-radius:7px; font-size:11.5px; cursor:pointer; transition:border-color .15s var(--ease);
+  }
+  .refine-history-toggle:hover{border-color:var(--accent2); color:var(--text);}
+  .refine-history-panel{
+    display:none; margin-top:10px; background:var(--panel2); border:1px solid var(--border);
+    border-radius:var(--radius); padding:10px 13px;
+  }
+  .refine-history-panel.show{display:block;}
+  .refine-history-item{
+    padding:8px 0; border-bottom:1px solid var(--border); font-size:11.5px; cursor:pointer;
+  }
+  .refine-history-item:last-child{border-bottom:none;}
+  .refine-history-item:hover .refine-history-rationale{color:var(--text);}
+  .refine-history-item.current{opacity:0.55; cursor:default;}
+  .refine-history-time{color:var(--accent2); font-weight:700; font-size:10px; text-transform:uppercase; letter-spacing:0.03em;}
+  .refine-history-rationale{color:var(--muted); margin-top:2px; line-height:1.5; transition:color .15s var(--ease);}
   .refine-result{margin-top:9px; font-size:11.5px; line-height:1.5;}
   .refine-adjusted{background:rgba(52,201,138,0.07); border:1px solid rgba(52,201,138,0.25); border-radius:7px; padding:8px 10px; margin-bottom:6px;}
   .refine-adjusted b{color:var(--good);}
@@ -546,7 +573,7 @@
   <div class="results-col">
     <div id="sharedBanner"></div>
     <div class="results-header" id="resultsHeader" style="display:none;">
-      <div></div>
+      <div id="refineHistoryControls" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
       <button class="share-btn" id="shareBtn" onclick="onShareClick()">📎 Share this analysis</button>
     </div>
     <div id="results"></div>
@@ -2549,7 +2576,10 @@ let refineResultCache = null; // full RefineResponse, once fetched, reused by ev
 function resetRefineSession(){
   currentAnalysisId = null;
   refineResultCache = null;
+  refineHistory = []; // fresh refinement-pass history per analysis
   sessionUsage = { inputTokens: 0, outputTokens: 0, calls: 0 }; // fresh cost tracking per analysis
+  const controls = document.getElementById('refineHistoryControls');
+  if (controls) controls.innerHTML = '';
 }
 
 async function ensureAnalysisId(){
@@ -2634,7 +2664,10 @@ function attachRefineToCard(card, category, label, cardKey){
   zone.dataset.cardKey = cardKey;
   zone.dataset.category = category || '';
   zone.innerHTML = `
-    <button class="refine-btn" onclick="onRefineClick('${cardKey}', this)">✨ Refine with AI</button>
+    <div class="refine-btns-row">
+      <button class="refine-btn" onclick="onRefineClick('${cardKey}', this)">✨ Refine with AI</button>
+      <button class="ask-toggle-btn" id="askToggleBtn-${cardKey}" onclick="onAskToggleClick('${cardKey}')">💬 Ask a question</button>
+    </div>
     <div class="refine-result" id="refineResult-${cardKey}"></div>
     <div class="ask-box" id="askBox-${cardKey}">
       <div class="ask-thread" id="askThread-${cardKey}"></div>
@@ -2647,19 +2680,72 @@ function attachRefineToCard(card, category, label, cardKey){
   card.appendChild(zone);
 }
 
-function renderRefineKeyPrompt(cardKey){
+function renderRefineKeyPrompt(cardKey, intent){
   const el = document.getElementById(`refineResult-${cardKey}`);
   el.innerHTML = `
-    <div class="refine-keyprompt">
+    <div class="refine-keyprompt" data-intent="${intent || 'refine'}">
       <input type="password" id="apiKeyInput-${cardKey}" placeholder="Paste your Anthropic API key (never stored on our server)">
-      <button onclick="onSaveKeyClick('${cardKey}')">Save &amp; Refine</button>
+      <button onclick="onSaveKeyClick('${cardKey}')">Save &amp; Continue</button>
     </div>`;
 }
-function onSaveKeyClick(cardKey){
+async function onSaveKeyClick(cardKey){
+  const promptEl = document.querySelector(`#refineResult-${cardKey} .refine-keyprompt`);
+  const intent = promptEl?.dataset.intent || 'refine';
   const val = document.getElementById(`apiKeyInput-${cardKey}`).value.trim();
   if (!val) return;
   setApiKey(val);
-  onRefineClick(cardKey);
+  if (intent === 'ask'){
+    // Resume the ask flow directly rather than re-toggling (onAskToggleClick would close the
+    // box if it happened to already be open — e.g. the "missing key at send time" path).
+    const ready = await ensureAskReady(cardKey);
+    if (ready){
+      document.getElementById(`askBox-${cardKey}`).classList.add('show');
+      document.getElementById(`askToggleBtn-${cardKey}`)?.classList.add('active');
+      document.getElementById(`askInput-${cardKey}`).focus();
+    }
+  } else {
+    onRefineClick(cardKey);
+  }
+}
+
+// Shared readiness gate for the ask flow (backend up, key present, analysis exists) — does NOT
+// touch the ask box's visibility itself, so it's safe to call from both "open the box" and
+// "resume after entering a key mid-send" call sites without accidentally toggling anything closed.
+async function ensureAskReady(cardKey){
+  if (backendAvailable === null) await probeBackendHealth();
+  if (!backendAvailable){
+    document.getElementById(`refineResult-${cardKey}`).innerHTML = `<div class="refine-error">Backend unavailable — run <code>docker compose up</code> in <code>/backend</code> to enable AI features.</div>`;
+    return false;
+  }
+  if (!getApiKey()){
+    renderRefineKeyPrompt(cardKey, 'ask');
+    return false;
+  }
+  try {
+    await ensureAnalysisId();
+    return true;
+  } catch(e){
+    document.getElementById(`refineResult-${cardKey}`).innerHTML = `<div class="refine-error">${e.message}</div>`;
+    return false;
+  }
+}
+
+// Decision (2026-08-12): the ask box no longer requires a successful "Refine with AI" click
+// first — /api/ask only needs a real analysis_id, which ensureAskReady() creates on its own.
+// Makes the follow-up Q&A feature independently discoverable instead of hidden behind refine.
+async function onAskToggleClick(cardKey){
+  const askBox = document.getElementById(`askBox-${cardKey}`);
+  const btn = document.getElementById(`askToggleBtn-${cardKey}`);
+  if (askBox.classList.contains('show')){
+    askBox.classList.remove('show');
+    btn?.classList.remove('active');
+    return;
+  }
+  const ready = await ensureAskReady(cardKey);
+  if (!ready) return;
+  askBox.classList.add('show');
+  btn?.classList.add('active');
+  document.getElementById(`askInput-${cardKey}`).focus();
 }
 
 async function onRefineClick(cardKey, btnEl){
@@ -2687,22 +2773,10 @@ async function onRefineClick(cardKey, btnEl){
     // before the refine call can fail, fixes that.
     await ensureAnalysisId();
     document.getElementById(`askBox-${cardKey}`).classList.add('show');
+    document.getElementById(`askToggleBtn-${cardKey}`)?.classList.add('active');
 
     if (!refineResultCache){
-      const resp = await fetch(`${API_BASE}/api/refine`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({
-          requirement_text: lastRequirementText, recommendations: lastRecommendations,
-          anthropic_api_key: getApiKey(), analysis_id: currentAnalysisId,
-        }),
-      });
-      if (!resp.ok){
-        const errBody = await resp.json().catch(()=>({detail:resp.statusText}));
-        throw new Error(errBody.detail || `Refine failed (${resp.status})`);
-      }
-      refineResultCache = await resp.json();
-      currentAnalysisId = refineResultCache.analysis_id;
-      addSessionUsage(refineResultCache.usage);
+      await fetchNewRefinePass();
       applyRefinementToAllCards();
     } else {
       applyRefinementToCard(cardKey, category, resultEl);
@@ -2712,6 +2786,80 @@ async function onRefineClick(cardKey, btnEl){
   } finally {
     if (btnEl) { btnEl.disabled = false; btnEl.textContent = '✨ Refine with AI'; }
   }
+}
+
+// Refinement pass history (idea from reviewing SmythOS Studio's versioned deploy modal — see
+// KICKOFF_BRIEF.md): every successful /api/refine call is kept, not just the latest, so a user
+// can see how the model's reasoning changed across repeated passes instead of only ever seeing
+// the most recent one silently overwrite the last.
+let refineHistory = []; // [{ts: Date, result: RefineResponse}], oldest first
+
+async function fetchNewRefinePass(){
+  const resp = await fetch(`${API_BASE}/api/refine`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      requirement_text: lastRequirementText, recommendations: lastRecommendations,
+      anthropic_api_key: getApiKey(), analysis_id: currentAnalysisId,
+    }),
+  });
+  if (!resp.ok){
+    const errBody = await resp.json().catch(()=>({detail:resp.statusText}));
+    throw new Error(errBody.detail || `Refine failed (${resp.status})`);
+  }
+  const result = await resp.json();
+  currentAnalysisId = result.analysis_id;
+  refineHistory.push({ts: new Date(), result});
+  refineResultCache = result;
+  addSessionUsage(result.usage);
+  renderRefineHistoryUI();
+  return result;
+}
+
+async function onRefineAgainClick(){
+  const btn = document.getElementById('refineAgainBtn');
+  if (backendAvailable === null) await probeBackendHealth();
+  if (!backendAvailable || !getApiKey()) return; // both already required to have gotten a first pass
+  if (btn) { btn.disabled = true; btn.textContent = 'Refining…'; }
+  try {
+    await fetchNewRefinePass();
+    applyRefinementToAllCards();
+  } catch(e){
+    alert(e.message); // global action, no single card's result slot to render the error into
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 Refine again (new pass)'; }
+  }
+}
+
+function viewHistoryPass(index){
+  const entry = refineHistory[index];
+  if (!entry) return;
+  refineResultCache = entry.result;
+  applyRefinementToAllCards();
+  renderRefineHistoryUI();
+}
+
+function renderRefineHistoryUI(){
+  const controls = document.getElementById('refineHistoryControls');
+  if (!controls) return;
+  if (refineHistory.length === 0){ controls.innerHTML = ''; return; }
+  const panel = document.getElementById('refineHistoryPanel');
+  const wasOpen = panel && panel.classList.contains('show');
+  controls.innerHTML = `
+    <button class="refine-history-toggle" onclick="toggleRefineHistoryPanel()">📜 Refinement history (${refineHistory.length})</button>
+    <button class="refine-history-toggle" id="refineAgainBtn" onclick="onRefineAgainClick()">🔄 Refine again (new pass)</button>
+    <div class="refine-history-panel${wasOpen ? ' show' : ''}" id="refineHistoryPanel">
+      ${refineHistory.map((entry, i) => {
+        const isCurrent = entry.result === refineResultCache;
+        const n = i + 1; // oldest = Pass 1; .reverse() below only changes display order, not numbering
+        return `<div class="refine-history-item${isCurrent ? ' current' : ''}" ${isCurrent ? '' : `onclick="viewHistoryPass(${i})"`}>
+          <span class="refine-history-time">Pass ${n}${isCurrent ? ' — viewing now' : ''} · ${entry.ts.toLocaleTimeString()}</span>
+          <div class="refine-history-rationale">${entry.result.rationale}</div>
+        </div>`;
+      }).reverse().join('')}
+    </div>`;
+}
+function toggleRefineHistoryPanel(){
+  document.getElementById('refineHistoryPanel')?.classList.toggle('show');
 }
 
 function applyRefinementToCard(cardKey, category, resultEl){
@@ -2730,6 +2878,7 @@ function applyRefinementToAllCards(){
     const cardKey = zone.dataset.cardKey, category = zone.dataset.category;
     applyRefinementToCard(cardKey, category, document.getElementById(`refineResult-${cardKey}`));
     document.getElementById(`askBox-${cardKey}`).classList.add('show');
+    document.getElementById(`askToggleBtn-${cardKey}`)?.classList.add('active');
   });
 }
 
@@ -2737,7 +2886,7 @@ async function onAskClick(cardKey){
   const input = document.getElementById(`askInput-${cardKey}`);
   const question = input.value.trim();
   if (!question) return;
-  if (!getApiKey()){ renderRefineKeyPrompt(cardKey); return; }
+  if (!getApiKey()){ renderRefineKeyPrompt(cardKey, 'ask'); return; }
 
   const thread = document.getElementById(`askThread-${cardKey}`);
   thread.insertAdjacentHTML('beforeend', `<div class="ask-msg user">${question}</div>`);
