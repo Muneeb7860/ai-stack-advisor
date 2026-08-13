@@ -3663,42 +3663,48 @@ graph TB
   </pre></div>
 
   <div class="section-title">Level 2 — Containers</div>
-  <div class="section-desc">What "AI Stack Advisor" is actually made of. v1 is four in-browser JavaScript modules with no server. v2 adds a backend API, a database, an MCP server, and a RAG retrieval module over a knowledge-base corpus — all shipped and tested.</div>
+  <div class="section-desc">What "AI Stack Advisor" is actually made of. v1 is four in-browser JavaScript modules with no server. v2 adds a backend API, a database, an MCP server, and a RAG retrieval module over a knowledge-base corpus — and as of the guided-mode + backend-wiring milestone, the frontend actually calls it: per-card refine, independent ask, refinement-pass history, and real per-call cost are all live, not mockups.</div>
   <div class="card"><pre class="mermaid">
 graph TB
   User(["👤 User"])
 
   subgraph V1["AI Stack Advisor — v1, shipped (runs entirely in the browser)"]
     direction TB
+    ModePicker["🚪 Mode Picker<br/><b>JS + CSS</b><br/>Equal-weight choice: guided wizard<br/>or paste-your-own free text"]
+    Wizard["🧙 Guided Wizard<br/><b>JS module — 6 questions</b><br/>One real skip case (compliance<br/>skipped if audience=internal);<br/>synthesizes free-text paragraph"]
     WebApp["📄 Web Application<br/><b>Static HTML / CSS / JS</b><br/>Input form, example presets,<br/>16-section result renderer,<br/>sticky nav, collapsible sections"]
     SignalEngine["🔍 Signal Detection<br/><b>JS module — detectSignals()</b><br/>65+ signal flags from free text;<br/>negation-stripping; on-prem<br/>detection on raw text"]
     RuleEngine["⚙️ Recommendation Rule Engine<br/><b>JS module — 45 pickX() fns</b><br/>Maps signals → recommendation +<br/>rationale + confidence per category,<br/>across stack / vendor comparisons /<br/>trade-offs / AI-serving / cost / governance"]
-    Render["🖼️ Presentation Layer<br/><b>JS + CSS</b><br/>Confidence badges, persona tags,<br/>trade-off cards, compute-tier table,<br/>governance grid"]
+    Render["🖼️ Presentation Layer<br/><b>JS + CSS</b><br/>Confidence badges, persona tags, per-card<br/>'Why this pick' signal chips, trade-off cards,<br/>compute-tier table, governance grid"]
   end
 
-  subgraph V2["AI Stack Advisor — v2, shipped (FastAPI + Postgres + Alembic)"]
+  subgraph V2["AI Stack Advisor — v2, shipped and frontend-wired (FastAPI + Postgres + Alembic)"]
     direction TB
-    Backend["🖥️ Backend API<br/><b>FastAPI</b><br/>POST /api/refine — LLM refinement<br/>POST /api/ask — grounded follow-up Q&amp;A"]
-    DB[("🗄️ Analyses Store<br/><b>PostgreSQL</b><br/>Share-link persistence for<br/>completed analyses")]
+    Backend["🖥️ Backend API<br/><b>FastAPI</b><br/>POST /api/refine — LLM refinement, returns real usage<br/>POST /api/ask — grounded follow-up Q&amp;A, returns real usage<br/>POST /api/analyses(/{id}/share) — lazy create + share links"]
+    DB[("🗄️ Analyses Store<br/><b>PostgreSQL</b><br/>Analyses, RefinementResults (every pass,<br/>not just latest), ConversationMessages")]
     MCPServer["🔌 MCP Server<br/><b>recommend_stack() tool</b><br/>Wraps app/rule_engine.py, a verified<br/>Python port of the v1 rule engine<br/>(imported, not called over network)"]
     Retrieval["📚 RAG Retrieval<br/><b>app/retrieval.py — two-stage TF-IDF</b><br/>Grounds /api/refine and /api/ask in a<br/>12-file use-case knowledge-base corpus"]
   end
 
-  Claude["🤖 Anthropic API<br/><b>External System</b>"]
+  Claude["🤖 Anthropic API<br/><b>External System</b><br/>Real token usage returned per call"]
 
-  User -- "HTTPS (static page load)" --> WebApp
+  User -- "HTTPS (static page load)" --> ModePicker
+  ModePicker -- "guided" --> Wizard
+  ModePicker -- "paste own text" --> WebApp
+  Wizard -- "synthesized paragraph" --> WebApp
   WebApp --> SignalEngine --> RuleEngine --> Render
-  Render -. "NOT WIRED YET: 'Refine with AI' button<br/>and follow-up box are UI mockup only" .-> Backend
+  Render -- "✨ Refine / 🔄 Refine again / 💬 Ask<br/>(lazy Analysis creation, user's own API key)" --> Backend
   Backend -- "Retrieves grounding context" --> Retrieval
   Backend -- "Calls Claude with<br/>user's own API key (v2)" --> Claude
-  Backend -- "Read / write shared<br/>analyses (v2)" --> DB
+  Backend -- "Read / write shared<br/>analyses + refinement history (v2)" --> DB
+  Backend -. "real token usage → real $ cost<br/>shown next to the estimate" .-> Render
 
   classDef person fill:#1c2433,stroke:#3ecf8e,stroke-width:2px,color:#e7ecf3,rx:40,ry:40;
   classDef shipped fill:#2a5c9e,stroke:#5b8def,stroke-width:2px,color:#ffffff;
   classDef planned fill:#2a2f3d,stroke:#6b7688,stroke-width:2px,stroke-dasharray:6 4,color:#c3cad6;
   classDef external fill:#3d3350,stroke:#7c5bef,stroke-width:2px,color:#ffffff;
   class User person;
-  class WebApp,SignalEngine,RuleEngine,Render shipped;
+  class ModePicker,Wizard,WebApp,SignalEngine,RuleEngine,Render shipped;
   class Backend,DB,MCPServer,Retrieval shipped;
   class Claude external;
   style V1 fill:#0d1420,stroke:#2a5c9e,stroke-width:1.5px,color:#8fb2f7
@@ -3726,7 +3732,43 @@ sequenceDiagram
   Note over U,P: No network request at any point — fully client-side
   </pre></div>
 
-  <div class="footer-note">Reference: companion Business Requirements Document (BRD), Product Requirements Document (PRD), and v2 Design Document. This diagram documents the architecture as actually built — both v1 and v2 are implemented and tested (85 backend tests; see backend/README.md and docs/adr/0001-mcp-rule-engine-port.md for how the rule-engine port and MCP tool specifically were verified against the real JavaScript).</div>
+  <div class="section-title">Data Flow — v2 (Refine / Ask, Backend-Wired)</div>
+  <div class="section-desc">Opt-in only — nothing here runs unless the user clicks a "✨ Refine with AI" or "💬 Ask a question" button, both independently available on every stack card. The user's Anthropic API key is entered once client-side (sessionStorage only), never persisted server-side.</div>
+  <div class="card"><pre class="mermaid">
+sequenceDiagram
+  actor U as User
+  participant P as Presentation Layer
+  participant B as Backend API
+  participant RG as RAG Retrieval
+  participant C as Anthropic API
+  participant DB as PostgreSQL
+
+  U->>P: Click Refine with AI (any card)
+  P->>P: ensureApiKey - inline prompt if not cached
+  P->>B: POST /api/analyses - lazy, first AI action only
+  B->>DB: INSERT Analysis
+  P->>B: POST /api/refine - requirement, recommendations, key
+  B->>RG: retrieve requirement_text
+  RG-->>B: grounding chunks, score at or above 0.03
+  B->>C: messages.create - forced tool_choice, with grounding
+  C-->>B: adjusted_picks, rationale, real token usage
+  B->>DB: INSERT RefinementResult - append-only, every pass kept
+  B-->>P: RefineResponse including usage - input and output tokens
+  P->>P: Push to refineHistory, render Real cost so far
+  P-->>U: Adjusted pick shown per matching card, plus history entry
+
+  U->>P: Click Ask a question - independent of refine
+  P->>B: POST /api/ask - analysis_id, question, key
+  B->>DB: SELECT prior ConversationMessages, analysis_id scoped
+  B->>C: messages.create - full history replayed
+  C-->>B: answer, real token usage
+  B->>DB: INSERT ConversationMessage, user and assistant rows
+  B-->>P: AskResponse including usage
+  P-->>U: Answer rendered inline, cost accumulated
+  Note over U,DB: Any Anthropic API error surfaces as a clean 502, never a crash - verified live with an invalid key at every step shown here
+  </pre></div>
+
+  <div class="footer-note">Reference: companion Business Requirements Document (BRD), Product Requirements Document (PRD), and v2 Design Document. This diagram documents the architecture as actually built — both v1 and v2 are implemented, tested, and wired end-to-end (93 backend tests; see backend/README.md and docs/adr/0001-mcp-rule-engine-port.md for how the rule-engine port and MCP tool specifically were verified against the real JavaScript). Frontend AI features (per-card refine, independent ask, refinement-pass history, real per-call token cost, "why this pick" signal chips) were added after the initial v2 milestone and verified live against the running backend — see KICKOFF_BRIEF.md for the full decision/verification record.</div>
 </div>
 
 <script>
