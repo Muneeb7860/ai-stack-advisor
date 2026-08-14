@@ -14,8 +14,8 @@ children.push(...coverTitle(
   'Business Requirements Document',
   'Rule-based multi-role architecture advisor',
   [
-    ['Document Version', '1.1'],
-    ['Status', 'Draft — for internal review (v2 backend now shipped; see Section 8.2 and Section 12)'],
+    ['Document Version', '1.2'],
+    ['Status', 'Draft — for internal review (v2 backend + frontend wiring both shipped; see Section 8.2 and Section 12)'],
     ['Prepared by', 'Muneeb, with Claude (Cowork)'],
     ['Date', new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })],
     ['Classification', 'Internal'],
@@ -33,6 +33,7 @@ children.push(reqTable(
     ['0.5', 'Same session', 'Muneeb / Claude', 'Expanded to full architecture advisor: cost, throughput, governance, AI serving layer, trade-off decisions'],
     ['1.0', 'Same session', 'Muneeb / Claude', 'This BRD formalizes the business case for the product built and validated to date'],
     ['1.1', 'Later session', 'Muneeb / Claude', 'v2 backend built and tested (share links, /api/refine, /api/ask, MCP tool wrapper). Updated BR-9 and the roadmap (Section 12) to reflect shipped status; BR-7/BR-8 remain not met — no functional requirement content changed otherwise.'],
+    ['1.2', 'Later session (audit)', 'Muneeb / Claude', 'Found via a documentation-vs-code validation pass: Section 8.2 previously listed only the backend API as shipped, without stating whether the frontend actually called it (it didn\'t, for a stretch of this project). Rewrote Section 8.2 to separate backend-shipped from frontend-wired, and added four features that existed in code but nowhere in this document: guided input mode, per-card "why this pick" signal inspection, refinement-pass history, and real (not just estimated) LLM cost display. Also corrected the signal-dimension count (was "30+", actual is 65+).'],
   ]
 ));
 children.push(h2('1.2 Related Documents'));
@@ -129,7 +130,7 @@ children.push(reqTable(
 // ---------- Scope ----------
 children.push(h1('8. Scope'));
 children.push(h2('8.1 In Scope (v1 — Delivered)'));
-children.push(bullet('Free-text requirement input with signal detection across 30+ business/technical dimensions'));
+children.push(bullet('Free-text or guided-wizard requirement input with signal detection across 65+ business/technical dimensions — the wizard synthesizes the same free-text paragraph shape the rule engine already parses, so there is no separate signal-mapping code path'));
 children.push(bullet('Full core technical stack recommendation (15 categories: cloud, gateway, IAM, languages, architecture style, compute, messaging, mesh, cache, database, containers, observability, frontend, CI/CD, DNS)'));
 children.push(bullet('Explicit head-to-head trade-off decisions with "why" and "switch when" framing'));
 children.push(bullet('AI/LLM strategy: model orchestration, local-vs-cloud hosting with VRAM sizing, interface topology, MCP-vs-API, RAG architecture (14-variant taxonomy), vector DB placement, guardrail pipeline placement'));
@@ -138,9 +139,13 @@ children.push(bullet('Governance output: KRA, KPI, SLA, and reliability/continuo
 children.push(bullet('Confidence scoring on every recommendation'));
 children.push(bullet('Sticky navigation and collapsible sections for usability at full scope'));
 children.push(h2('8.2 In Scope (v2 — Shipped)'));
-children.push(bullet('LLM-powered refinement pass for ambiguous/conflicting requirements, using the user\'s own Anthropic API key — shipped as POST /api/refine'));
-children.push(bullet('Share links (persistence) for completed analyses — shipped'));
-children.push(bullet('MCP tool wrapper for use from inside Claude Desktop/Code — shipped, plus a grounded follow-up Q&A endpoint (POST /api/ask) added during the build'));
+children.push(p('Two layers here, stated separately on purpose: the backend API shipping is not the same claim as a user being able to click something. Earlier revisions of this document conflated the two — the frontend had zero UI wired to the backend for a stretch of this project\'s history (confirmed by grep: no fetch() calls at all) even after every endpoint below was built and tested. Both layers are now true as of the guided-mode + backend-wiring milestone.', { italics: true, color: MUTED, size: 19 }));
+children.push(bulletBold('Backend API — ', 'LLM-powered refinement (POST /api/refine), grounded follow-up Q&A (POST /api/ask), share-link persistence, and an MCP tool wrapper (recommend_stack) — all shipped and tested, using the user\'s own Anthropic API key, never a shared server-side key.'));
+children.push(bulletBold('Frontend wiring — ', 'a per-card "✨ Refine with AI" button and independent "💬 Ask a question" button on every stack card (asking never requires having clicked refine first), a "📎 Share this analysis" button, and a read-only shared-link view (?shared=SLUG) — all actually clickable in index.html, calling the real endpoints above.'));
+children.push(bulletBold('Guided input mode — ', 'an equal-weight mode picker (guided wizard vs. paste-your-own free text, neither the default) and a 6-question wizard that synthesizes the same kind of free-text paragraph the rule engine already parses — no separate signal-mapping logic.'));
+children.push(bulletBold('"Why this pick," made inspectable — ', 'every stack card shows exactly which detected signals drove that specific recommendation, not just a confidence badge.'));
+children.push(bulletBold('Refinement history, not just the latest pass — ', 'every "Refine with AI" pass is kept, not overwritten, so a user can compare how the reasoning changed across repeated passes (this is also what makes the BRD Section 7 "disagreement rate" metric measurable later).'));
+children.push(bulletBold('Real cost, not just estimated cost — ', 'real Anthropic token usage from the refine/ask response is shown next to the existing directional cost estimate, not just guessed.'));
 children.push(h2('8.3 Out of Scope'));
 children.push(bullet('Provisioning or executing infrastructure changes — this is an advisory tool only, never a "terraform apply" tool'));
 children.push(bullet('Multi-user accounts, team collaboration, or role-based access control'));

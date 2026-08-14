@@ -3697,7 +3697,7 @@ erDiagram
         <tr><td>signals</td><td>jsonb</td><td>Output of detectSignals() at analysis time — kept for audit/reproducibility as the rule engine evolves</td></tr>
         <tr><td>recommendations</td><td>jsonb</td><td>The full v1 rule-engine output (all 16 sections), as rendered to the user</td></tr>
         <tr><td>share_slug</td><td>varchar, unique, nullable</td><td>Set only when the user explicitly creates a share link — null means "never shared," not "not yet shared," since sharing is opt-in per analysis</td></tr>
-        <tr><td>created_at / updated_at</td><td>timestamptz</td><td>updated_at changes only if a refinement pass alters the stored recommendations snapshot</td></tr>
+        <tr><td>created_at / updated_at</td><td>timestamptz</td><td>updated_at changes only when share_slug is set (routers/share.py) — a refinement pass never touches this row at all; it writes a separate REFINEMENT_RESULT row instead, per the DDD's Analysis-immutability invariant (Section 4.1)</td></tr>
       </table>
     </div>
 

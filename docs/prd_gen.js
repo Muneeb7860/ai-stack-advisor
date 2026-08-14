@@ -14,8 +14,8 @@ children.push(...coverTitle(
   'Product Requirements Document',
   'Functional & technical specification',
   [
-    ['Document Version', '1.2'],
-    ['Status', 'v1 and v2 both shipped — see Section 9.2 and Release Plan (Section 11)'],
+    ['Document Version', '1.3'],
+    ['Status', 'v1 and v2 shipped, frontend actually wired to the backend — see Section 7.7, Section 9.2, and Release Plan (Section 11)'],
     ['Prepared by', 'Muneeb, with Claude (Cowork)'],
     ['Date', new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })],
     ['Companion document', 'Business Requirements Document (BRD)'],
@@ -31,6 +31,7 @@ children.push(reqTable(
     ['1.0', 'Initial PRD, written to document v1 (shipped) and v2 (designed, pending backend access) — this PRD was written after v1 was built and validated, not before, and reflects the actual implementation rather than a forward-looking spec alone.'],
     ['1.1', 'Updated after a two-pass rule-engine expansion (separate session, frontend-only): signal count grew from ~35 to 65+, pickX() functions from ~30 to 45, spanning 8 new use-case domains, a directional cost estimator, a semantic-routing/guardrail-service dimension, and governance/security dimensions. Also new: a 12-file RAG knowledge-base corpus (docs/use-case-knowledge-base/) and a 21-case retrieval evaluation set. Section counts (16) and the core client-side-only architecture (NFR-5) are unchanged.'],
     ['1.2', 'v2 backend built and tested in a later session (FastAPI + Postgres + Alembic; share links, /api/refine, /api/ask, and the MCP tool wrapper — FR-27/28/29 all shipped, /api/refine and /api/ask grounded in the 1.1 RAG corpus). Updated Section 7.7, 9.2, and the Release Plan (Section 11) to reflect that; no functional requirement content changed, only status.'],
+    ['1.3', 'Found via a documentation-vs-code validation pass: FR-27–29 marked "Shipped" based on the backend alone, without ever stating whether index.html actually called those endpoints — for a real stretch of this project it didn\'t (confirmed by grep: zero fetch() calls). Rewrote Section 7.7 to state both layers explicitly, added FR-27a (independent ask), FR-30 (why-this-pick signal inspection), and FR-31 (real cost display) — all shipped but previously undocumented. Corrected the Release Plan\'s stale "44 passing tests" to the actual 93 (verified via a live pytest run, not the prior static count).'],
   ]
 ));
 
@@ -140,10 +141,14 @@ children.push(reqTable(['ID', 'Requirement'], [1000, 7400], [
 ]));
 
 children.push(h2('7.7 v2 — Shipped'));
+children.push(p('"Shipped" below means both layers: the backend endpoint is built and tested, AND index.html has a real, clickable UI element wired to call it. Earlier revisions of this table only asserted the first layer — for a stretch of this project\'s history the backend was fully shipped while index.html had zero fetch() calls to it at all. That gap is closed as of the guided-mode + backend-wiring milestone; both are true now.', { italics: true, color: MUTED, size: 19 }));
 children.push(reqTable(['ID', 'Requirement', 'Status'], [1000, 5600, 1800], [
-  ['FR-27', 'An optional "Refine with AI" pass that sends the free-text input and the v1 rule-engine output to an LLM (user\'s own Anthropic API key) for cases where the rules are uncertain or the user wants to ask a follow-up question about a recommendation.', 'Shipped — POST /api/refine + POST /api/ask'],
-  ['FR-28', 'Share links: persist a completed analysis to a shareable URL.', 'Shipped'],
+  ['FR-27', 'An optional "Refine with AI" pass that sends the free-text input and the v1 rule-engine output to an LLM (user\'s own Anthropic API key) for cases where the rules are uncertain. Adjustments are only made when the model can cite a specific reason; every pass is kept, not overwritten, so the reasoning history is comparable across repeated passes.', 'Shipped — POST /api/refine, per-card "✨ Refine with AI" button in index.html, refinement history retained client-side'],
+  ['FR-27a', 'Follow-up Q&A scoped to a recommendation, independent of whether refine has been used on that card first.', 'Shipped — POST /api/ask, independent "💬 Ask a question" button in index.html'],
+  ['FR-28', 'Share links: persist a completed analysis to a shareable URL, rendered read-only with the input form and AI buttons removed.', 'Shipped — POST /api/analyses/{id}/share, "📎 Share this analysis" button, ?shared=SLUG read-only view'],
   ['FR-29', 'MCP tool wrapper (recommend_stack(...)) callable from Claude Desktop/Code directly.', 'Shipped'],
+  ['FR-30', 'Show which specific detected signals drove each stack card\'s recommendation, not just a confidence badge, so the "why" is inspectable per pick rather than only stated as prose.', 'Shipped — client-side only, no backend dependency'],
+  ['FR-31', 'Show real LLM token cost (from the Anthropic response) alongside the existing directional cost estimate once a refine/ask call has been made.', 'Shipped — backend returns real usage from message.usage; not persisted to any table'],
 ]));
 
 // ---------- Non-functional ----------
@@ -182,7 +187,8 @@ children.push(reqTable(['Release', 'Contents', 'Status'], [1600, 6000, 1800], [
   ['v1.3', 'Sticky nav + collapsible sections', 'Shipped'],
   ['v1.4', 'Validation/QA pass — negation handling, on-prem support, warehouse detection, conflict-resolution fixes', 'Shipped'],
   ['v1.5', 'Flow View: node-canvas visualization of the recommendation (n8n/Voiceflow/VectorShift-style pan/zoom/drag graph, alternate to the card view); recursive logic audit — fixed several false-positive signal matches and a same-report contradiction between the Compute Model card and the Kubernetes-vs-Serverless trade-off card', 'Shipped'],
-  ['v2.0', 'Share links, LLM refinement endpoint (/api/refine), grounded follow-up Q&A (/api/ask), MCP tool wrapper (recommend_stack) — FastAPI + Postgres + Alembic backend, 44 passing tests', 'Shipped'],
+  ['v2.0', 'Share links, LLM refinement endpoint (/api/refine), grounded follow-up Q&A (/api/ask), MCP tool wrapper (recommend_stack) — FastAPI + Postgres + Alembic backend, 93 passing/xfailed tests', 'Shipped'],
+  ['v2.1', 'Frontend wiring: guided-input wizard, per-card Refine/Ask buttons actually calling the v2.0 backend, share button, ?shared=SLUG read-only view, why-this-pick signal inspection, refinement-pass history, real LLM cost display', 'Shipped'],
 ]));
 
 // ---------- Known limitations ----------

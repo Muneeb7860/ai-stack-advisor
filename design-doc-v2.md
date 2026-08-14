@@ -1,8 +1,21 @@
 # AI Stack Advisor — v2 Design Document
 
-**Status:** Design complete, ready for development
+> **⚠️ SUPERSEDED — this is the original pre-implementation planning draft, frozen since the
+> project's first commit. Everything proposed below has since been built, tested, deployed to
+> a real backend, and extended well past this document's original scope** (guided-input wizard,
+> per-card refine/ask buttons actually wired into `index.html`, refinement-pass history, real
+> LLM cost display, why-this-pick signal inspection — none of which this document anticipated).
+> Field names in Section 5's data-contract sketch are camelCase placeholders; the real API uses
+> snake_case (`requirement_text`, `adjusted_picks`, etc. — see `backend/app/schemas.py`).
+> **For current state, read [`KICKOFF_BRIEF.md`](KICKOFF_BRIEF.md) and
+> [`diagrams/architecture-diagram.html`](diagrams/architecture-diagram.html) instead of this
+> file.** Kept here as a historical record of the original design intent, not as a spec to
+> build against — found stale via a documentation-vs-code validation pass that checked every
+> claim against real code rather than against other docs.
+
+**Status (historical, at time of writing):** Design complete, ready for development
 **v1 (shipped):** single-file HTML, client-side rule engine, no backend
-**v2 (this doc):** hybrid rule + LLM reasoning engine, with an optional backend for persistence, sharing, and MCP exposure
+**v2 (this doc, historical):** hybrid rule + LLM reasoning engine, with an optional backend for persistence, sharing, and MCP exposure
 
 ---
 
@@ -109,6 +122,8 @@ Applying the tool to itself:
 3. **Then:** persistence (share links) and MCP tool wrapper, in either order depending on which you'd use first.
 
 I'll hold development on steps 2–3 until you're on a desktop session where I can set up and run a backend properly (a browser-only session can't host a live API). Step 1 I can do right now in this session if you want it — say the word and I'll add confidence badges to the existing file today.
+
+*(Historical note: all three steps above are long since done — desktop access arrived, the backend was built and tested, and the frontend was later wired to actually call it. This paragraph is left as-written rather than edited, per this project's "disclosed limitations over hidden ones" convention — it's a snapshot of a real constraint at the time, not a claim about current state. See the superseded-notice at the top of this file.)*
 
 ---
 
