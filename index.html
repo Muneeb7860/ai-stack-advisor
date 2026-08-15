@@ -220,6 +220,17 @@
   .conf-medium::before{opacity:0.55;}
   .conf-low{color:var(--muted);}
   .conf-low::before{background:var(--muted); opacity:0.5;}
+  /* Exit-cost badge (playbook gap A) — flags the handful of stack-card categories that are
+     genuinely expensive to reverse (cloud provider, IAM, primary datastore, API contract style,
+     event backbone, observability). Reuses the .conf visual vocabulary (small pill, uppercase,
+     chip background) rather than inventing a new alarming red banner — this is "worth extra
+     review time", not "you made a mistake". Sits in the card head next to the confidence pill. */
+  .exit-cost-badge{
+    flex-shrink:0; display:inline-flex; align-items:center; gap:4px;
+    font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em;
+    padding:2px 7px 2px 6px; border-radius:5px; white-space:nowrap; margin-top:1px;
+    background:var(--chip); color:var(--warn); border:1px solid var(--border); cursor:help;
+  }
   .badge{
     display:inline-block; background:rgba(91,141,239,0.13); color:#8fb2f7;
     border:1px solid rgba(91,141,239,0.3); border-radius:5px; padding:1px 7px;
@@ -640,7 +651,7 @@
 <div id="screenWizard">
   <div class="wiz-progress">
     <div class="wiz-track"><div class="wiz-fill" id="wizFill" style="width:16.6%"></div></div>
-    <div class="wiz-step-label" id="wizStepLabel">Step 1 of 6</div>
+    <div class="wiz-step-label" id="wizStepLabel">Step 1 of 7</div>
   </div>
 
   <div class="wiz-step active" data-step="1">
@@ -694,6 +705,19 @@
   </div>
 
   <div class="wiz-step" data-step="5">
+    <div class="wiz-q">What does your team already know?</div>
+    <div class="wiz-sub">This matters more than any other question here — a stack your team already ships in beats a "better" one they'd need to learn, on almost any timeline. Pick as many as apply.</div>
+    <div class="chip-grid" data-group="teamskills">
+      <div class="pick-chip" data-val="none"><span>—</span>No strong preference</div>
+      <div class="pick-chip" data-val="java"><span>☕</span>Java / Spring</div>
+      <div class="pick-chip" data-val="python"><span>🐍</span>Python</div>
+      <div class="pick-chip" data-val="node"><span>🟩</span>Node.js / JavaScript</div>
+      <div class="pick-chip" data-val="dotnet"><span>🔷</span>.NET / C#</div>
+      <div class="pick-chip" data-val="go"><span>🐹</span>Go</div>
+    </div>
+  </div>
+
+  <div class="wiz-step" data-step="6">
     <div class="wiz-q">Any AI or LLM component?</div>
     <div class="wiz-sub">Pick as many as apply — or none, if this is a fairly traditional build.</div>
     <div class="chip-grid" data-group="ai">
@@ -706,7 +730,7 @@
     </div>
   </div>
 
-  <div class="wiz-step" data-step="6">
+  <div class="wiz-step" data-step="7">
     <div class="wiz-q">Anything else worth knowing?</div>
     <div class="wiz-sub">Optional — existing cloud provider, latency needs, budget constraints, anything the questions above didn't cover.</div>
     <textarea id="wizFreetext" style="width:100%; min-height:90px; resize:vertical; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); padding:12px; font-size:13px; font-family:inherit;" placeholder="e.g. We're already on AWS, need to launch in 6 weeks, budget is tight..."></textarea>
@@ -760,6 +784,7 @@
     <div id="sharedBanner"></div>
     <div class="results-header" id="resultsHeader" style="display:none;">
       <div id="refineHistoryControls" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
+      <button class="share-btn" id="exportAdrBtn" onclick="onExportAdrClick()">📄 Export as ADR</button>
       <button class="share-btn" id="shareBtn" onclick="onShareClick()">📎 Share this analysis</button>
     </div>
     <div id="results"></div>
@@ -888,6 +913,9 @@ function detectSignals(text){
     // Avoid matching the common English word "go" (e.g. "go live", "let's go fast") —
     // only count it when phrased as the language (golang, "go lang", "written/using in Go").
     goMentioned: has(['golang']) || /\bgo\s*(lang|language)\b/.test(t) || /\b(written in|using|in)\s+go\b/.test(t),
+    // Multi-word phrasings only — plain "node" alone is ambiguous (k8s node, a graph node).
+    nodeMentioned: has(['node.js','nodejs','node js']),
+    dotnetMentioned: has(['.net','dotnet','asp.net','c#']),
     smallTeam: has(['small team','2 engineers','3 engineers','4 engineers','5 engineers','6 engineers','solo founder','few engineers'])
       || /\b([1-9]|1[0-2])[- ]?(person|people)\b/.test(t) || /team of\s*([1-9]|1[0-2])\b/.test(t),
     largeTeam: has(['large team','many teams','multiple teams','platform team']),
@@ -1301,8 +1329,14 @@ function pickLanguages(s){
   if(s.javaMentioned || s.enterprise || s.finance){ picks.push('Java (Spring Boot) for core transactional services'); if(s.javaMentioned) hits++; }
   if(s.pythonMentioned || s.agentic || s.dataHeavy || s.ragNeed){ picks.push('Python (FastAPI) for AI/ML, RAG, and agent orchestration services'); if(s.pythonMentioned) hits++; }
   if(s.goMentioned || s.highScale){ picks.push('Go for high-throughput, low-latency infrastructure services'); if(s.goMentioned) hits++; }
+  // Team-gravity signal (from the "what does your team already know?" wizard step): only
+  // fires on an explicit team-skill match, same style as java/python/go above — this is the
+  // single largest predictor of delivery per the source playbook, so it's worth its own
+  // language entries rather than folding into an existing one.
+  if(s.nodeMentioned){ picks.push('Node.js (TypeScript) for services your team already knows'); hits++; }
+  if(s.dotnetMentioned){ picks.push('.NET (C#) for services your team already knows'); hits++; }
   if(picks.length===0) picks.push('Python (FastAPI) for AI-heavy services, Java (Spring Boot) or Go for core backend');
-  return {v:picks.join(' · '), why:'Split by workload: Java/Go for performance-critical transactional paths, Python for AI/ML and RAG pipelines where the ecosystem (LangChain, LlamaIndex, etc.) lives.', conf: hits>=1?'high':picks.length? 'medium':'low'};
+  return {v:picks.join(' · '), why:'Split by workload: Java/Go for performance-critical transactional paths, Python for AI/ML and RAG pipelines where the ecosystem (LangChain, LlamaIndex, etc.) lives. Any language your team already ships in is included even absent a workload-based reason to pick it — matching existing team skills beats a theoretically-better choice on most timelines.', conf: hits>=1?'high':picks.length? 'medium':'low'};
 }
 function pickArchitecture(s){
   // Team size is the primary driver of monolith-vs-microservices (Conway's law) — a 3-person team
@@ -2083,7 +2117,7 @@ function renderRecommendations(s, rec){
   const sec = (id, navLabel, titleHtml, bodyHtml) => sections.push({id, navLabel, titleHtml, bodyHtml});
 
   sec('stack', 'Stack', 'Core Technical Stack', `<div class="grid">${stackCards.map(([title, pick, why, conf, persona, altToggle])=>
-    `<div class="stack-card card-conf-${conf||'low'}"><div class="head"><h3>${title}</h3><span class="conf conf-${conf||'low'}">${confLabel(conf)}</span></div><div class="pick">${pick}</div><div class="why">${why}</div><div class="persona">${persona}</div>${altToggle||''}</div>`
+    `<div class="stack-card card-conf-${conf||'low'}"><div class="head"><h3>${title}</h3><div style="display:flex; align-items:flex-start; gap:6px; flex-shrink:0;">${renderExitCostBadge(title)}<span class="conf conf-${conf||'low'}">${confLabel(conf)}</span></div></div><div class="pick">${pick}</div><div class="why">${why}</div><div class="persona">${persona}</div>${altToggle||''}</div>`
   ).join('')}</div>`);
 
   sec('iamcompare', 'IAM Options', 'Identity Provider Options <span style="color:var(--muted); text-transform:none; letter-spacing:0; font-weight:400;">— Okta vs. Entra ID vs. Ping/ForgeRock vs. OneLogin vs. JumpCloud, plus PAM/IGA</span>',
@@ -2557,9 +2591,9 @@ syncThemeToggleIcon(); // reflect whatever the <head> inline script already appl
    ================================================================================ */
 
 // ---------------- Mode picker + wizard (decisions #3, #5, #6, #7) ----------------
-const wizState = { building:[], audience:null, compliance:[], teamsize:null, ai:[] };
+const wizState = { building:[], audience:null, compliance:[], teamsize:null, teamskills:[], ai:[] };
 let wizCurrentStep = 1;
-const WIZ_STEP_ORDER = [1,2,3,4,5,6];
+const WIZ_STEP_ORDER = [1,2,3,4,5,6,7];
 
 function wizVisibleSteps(){
   // Decision #7: the ONLY skip case — compliance question skipped when audience=internal.
@@ -2574,8 +2608,9 @@ function wizUpdateNextEnabled(){
   if (step===2) ok = !!wizState.audience;
   if (step===3) ok = wizState.compliance.length>0;
   if (step===4) ok = !!wizState.teamsize;
-  if (step===5) ok = wizState.ai.length>0;
-  if (step===6) ok = true;
+  if (step===5) ok = wizState.teamskills.length>0;
+  if (step===6) ok = wizState.ai.length>0;
+  if (step===7) ok = true;
   btn.disabled = !ok;
 }
 
@@ -2659,6 +2694,22 @@ function synthesizeRequirementText(state){
     '50+': 'This is a large engineering organization of 50+ people with multiple teams.',
   };
   if (state.teamsize && teamMap[state.teamsize]) parts.push(teamMap[state.teamsize]);
+
+  // Team-gravity signal (playbook gap #1): "what can this team ship without a training
+  // budget" is the single largest predictor of delivery per the source material — bias
+  // picks toward what the team already knows rather than treating every recommendation as
+  // if starting from a skills blank slate. Phrasings deliberately match detectSignals()'s
+  // existing javaMentioned/pythonMentioned/goMentioned/nodeMentioned/dotnetMentioned keyword
+  // lists, same reuse pattern as the rest of this function.
+  const teamSkillMap = {
+    java: 'Our team already knows Java and Spring Boot.',
+    python: 'Our team already knows Python.',
+    node: 'Our team already knows Node.js and JavaScript.',
+    dotnet: 'Our team already knows .NET and C#.',
+    go: 'Our team already knows Go.',
+  };
+  const teamSkillSel = (state.teamskills||[]).filter(x => x!=='none');
+  if (teamSkillSel.length) parts.push(teamSkillSel.map(x => teamSkillMap[x]).filter(Boolean).join(' '));
 
   const aiMap = {
     chatbot: 'It needs a customer-facing chatbot.',
@@ -2866,6 +2917,22 @@ const STACK_CARD_CATEGORY = {
   'Observability':'observability', 'Frontend':'frontend', 'CI/CD & Deployment':'cicd', 'DNS':'dns',
 };
 
+// Exit-cost filter (playbook gap A) — of the 15 stack-card categories, these six are genuinely
+// expensive to reverse once committed: swapping cloud provider, re-platforming identity/auth,
+// migrating the primary datastore, changing your public API contract style, replacing an event
+// backbone, or ripping out observability all touch every downstream service, not just one card.
+// Everything else in the grid (compute model, caching, CI/CD, DNS, service mesh, containers) is
+// comparatively cheap to change later. Driven off STACK_CARD_CATEGORY (the same title->key map
+// used for the refine-UI) rather than a second hardcoded list of title strings, so this can't
+// silently drift from that map if a card gets renamed.
+const EXIT_COST_CATEGORIES = new Set(['cloud', 'iam', 'database', 'gateway', 'messaging', 'observability']);
+
+function renderExitCostBadge(title){
+  const category = STACK_CARD_CATEGORY[title] || null;
+  if (!category || !EXIT_COST_CATEGORIES.has(category)) return '';
+  return `<span class="exit-cost-badge" title="Expensive to change later — worth the extra review time before committing">⚠️ Hard to reverse</span>`;
+}
+
 // "Why this pick" — maps each stack card to the exact signal keys its pickX() function actually
 // checks (read directly out of each function's if(s.xxx) conditions, not guessed). Intersected
 // against the CURRENTLY ACTIVE signals at render time to show which detected signals drove this
@@ -2878,7 +2945,7 @@ const STACK_CARD_SIGNALS = {
   iam: ['onPrem','oktaMentioned','entraMentioned','azureShop','gcpShop','awsShop','pingMentioned',
     'forgerockMentioned','oracleIamMentioned','enterprise','largeTeam','compliance','security',
     'deviceMgmt','startupMvp','smallTeam'],
-  languages: ['javaMentioned','enterprise','finance','pythonMentioned','agentic','dataHeavy','ragNeed','goMentioned','highScale'],
+  languages: ['javaMentioned','enterprise','finance','pythonMentioned','agentic','dataHeavy','ragNeed','goMentioned','highScale','nodeMentioned','dotnetMentioned'],
   architecture: ['startupMvp','smallTeam','enterprise','compliance','largeTeam'],
   compute: ['onPrem','startupMvp','smallTeam','highScale','enterprise','realtime','liveMultiplayer','videoConferencing'],
   messaging: ['liveMultiplayer','collabEditing','highScale','realtime','finance','gcpShop','startupMvp'],
@@ -3169,6 +3236,198 @@ async function onAskClick(cardKey){
   }
 }
 
+// ---------------- Export as ADR (playbook gap B) ----------------
+// Turns the current analysis into MADR-format ADRs / arc42 sections / a Mermaid C4 diagram /
+// a trade-off table, powered by the companion knowledge-base package (data/stack-kb.json +
+// src/adr-export.js from https://github.com — inlined verbatim near the end of this file as
+// #stackKbData + window.AdrExport, see the comment there for why). This app's rule engine only
+// ever has to produce `recommendations[]` — everything else (citations, "why not the
+// alternatives", the trade-off scoring, the C4 diagram) is derived from the KB with zero
+// export-side authoring per technology.
+
+// Confidence-basis mapping (judgment call — flagged in the ship summary, sanity-check this).
+// The app's conf levels (high/medium/low) are a rule-engine confidence signal, not literally
+// the KB's four bases (stated / constraint-derived / consensus / heuristic-default), so this is
+// an honest best-fit rather than a verified equivalence:
+//   - `explicit` true (the requirement text or wizard literally named this — e.g. "Java" was
+//     typed, or the team-skills wizard step selected it) -> 'stated': the user said it outright.
+//   - conf 'high' without an explicit literal mention (a detected workload/constraint forced the
+//     pick, e.g. compliance -> Java) -> 'constraint-derived'.
+//   - conf 'medium' (best general fit, not forced by a hard constraint) -> 'consensus'.
+//   - conf 'low' (no real signal, generic fallback) -> 'heuristic-default'.
+function confToBasis(conf, explicit){
+  if (explicit) return 'stated';
+  if (conf === 'high') return 'constraint-derived';
+  if (conf === 'medium') return 'consensus';
+  return 'heuristic-default';
+}
+
+function getKbData(){
+  if (window.__stackKbCache) return window.__stackKbCache;
+  const el = document.getElementById('stackKbData');
+  if (!el) throw new Error('Knowledge-base data block (#stackKbData) is missing from the page.');
+  window.__stackKbCache = JSON.parse(el.textContent);
+  return window.__stackKbCache;
+}
+
+// Category -> techId mapping layer (Gap B.2). The KB covers ~31 technologies across languages,
+// frontend, database, messaging, IAM, admin-tools and workflow — it explicitly does NOT yet
+// cover cloud providers or LLM/AI strategy (see the KB's own "Known gaps"). This function maps
+// only the app's stack-card categories that genuinely overlap that coverage, matching against
+// each pick's own rendered text (so it tracks whatever pickX() actually decided) rather than
+// guessing from raw signals. Anything without a real KB entry is reported via `omitted` instead
+// of being forced onto the nearest techId — matching the KB's own "visible gap, not silent
+// omission" design (see CLAUDE.md's expansion_backlog invariant).
+function mapAppPicksToKb(rec, s){
+  const recs = [];
+  const omitted = [];
+  const has = (str, kw) => (str || '').toLowerCase().includes(kw.toLowerCase());
+
+  // Backend language(s) — spring-boot / python-fastapi / dotnet are authored in the KB. Node.js
+  // and Go are named in the KB's own meta.expansion_backlog.ids (referenced as alternatives, not
+  // yet authored) — reported as omitted rather than mapped to a nonexistent techId.
+  const langText = rec.lang.v || '';
+  if (has(langText, 'Java')) recs.push({techId:'spring-boot', role:'Backend Language', basis: confToBasis(rec.lang.conf, !!s.javaMentioned), ruleIds:[]});
+  if (has(langText, 'Python')) recs.push({techId:'python-fastapi', role:'Backend Language', basis: confToBasis(rec.lang.conf, !!s.pythonMentioned), ruleIds:[]});
+  if (has(langText, '.NET')) recs.push({techId:'dotnet', role:'Backend Language', basis: confToBasis(rec.lang.conf, !!s.dotnetMentioned), ruleIds:[]});
+  if (has(langText, 'Node.js')) omitted.push({category:'Backend Language(s)', detail:'Node.js is in the KB expansion backlog (id "nodejs-nest") but not yet authored as a full entry — "why not Node" can\'t be answered from the KB yet.'});
+  if (/\bGo\b/.test(langText)) omitted.push({category:'Backend Language(s)', detail:'Go is in the KB expansion backlog but not yet authored as a full entry.'});
+
+  // Architecture Style — decomposition category.
+  const archText = rec.arch.v || '';
+  if (has(archText, 'Modular monolith')) recs.push({techId:'modular-monolith', role:'Architecture Style', basis: confToBasis(rec.arch.conf, !!(s.startupMvp || s.smallTeam)), ruleIds:[]});
+  else if (has(archText, 'Microservices')) recs.push({techId:'microservices', role:'Architecture Style', basis: confToBasis(rec.arch.conf, !!(s.enterprise || s.largeTeam)), ruleIds:[]});
+
+  // Messaging / Streaming — the KB's eventing coverage is Kafka and the transactional-outbox
+  // pattern; RabbitMQ/SQS/Pub-Sub/Redis-pub-sub picks (the app's other messaging outcomes) have
+  // no KB entry and are reported as omitted rather than force-mapped onto "outbox-pattern",
+  // which is a specific design pattern, not a generic stand-in for "not Kafka".
+  const msgText = rec.msg.v || '';
+  if (has(msgText, 'Kafka')) recs.push({techId:'kafka', role:'Messaging / Streaming', basis: confToBasis(rec.msg.conf, !!(s.highScale && s.realtime)), ruleIds:[]});
+  else omitted.push({category:'Messaging / Streaming', detail:`Picked "${msgText.split(' · ')[0] || msgText}" — no direct KB entry (KB eventing coverage is Kafka and the transactional-outbox pattern only).`});
+
+  // Primary Database(s) — postgres is authored; MongoDB/Cassandra/warehouse picks are not.
+  const dbText = rec.db.v || '';
+  if (has(dbText, 'PostgreSQL')) recs.push({techId:'postgres', role:'Primary Database', basis: confToBasis(rec.db.conf, !!(s.structured || s.finance)), ruleIds:[]});
+  else omitted.push({category:'Primary Database(s)', detail:`Picked "${dbText.split(' · ')[0] || dbText}" — no direct KB entry (KB database coverage is PostgreSQL and a dedicated-vector-DB category only).`});
+  if (rec.vectorDb && rec.vectorDb.needed){
+    if (has(rec.vectorDb.dbChoice, 'dedicated vector database')){
+      recs.push({techId:'dedicated-vector-db', role:'Vector Database', basis: confToBasis('high', false), ruleIds:[]});
+    } else {
+      omitted.push({category:'Vector Database', detail:'pgvector-as-an-extension-on-Postgres was the pick — the KB does not yet separately model "pgvector on existing Postgres" versus a dedicated vector-DB product.'});
+    }
+  }
+
+  // Identity & Access (IAM) — self-hosted maps to keycloak; every SaaS IdP the app can pick
+  // (Okta/Entra/Ping/Oracle/JumpCloud/OneLogin) maps to the KB's single generic "managed-idp"
+  // entry, which the KB itself names as covering "Entra ID / Auth0 / Cognito / Okta" — it has no
+  // vendor-level granularity beyond that, which the export note below says explicitly.
+  const iamId = rec.iam.primaryId;
+  if (iamId === 'selfhosted'){
+    recs.push({techId:'keycloak', role:'Identity & Access', basis: confToBasis(rec.iam.conf, !!s.onPrem), ruleIds:[]});
+  } else if (['okta','entra','ping','oracle','jumpcloud','onelogin'].includes(iamId)){
+    const explicitVendor = !!(s.oktaMentioned || s.entraMentioned || s.pingMentioned || s.forgerockMentioned || s.oracleIamMentioned || s.jumpcloudMentioned || s.oneloginMentioned);
+    recs.push({techId:'managed-idp', role:'Identity & Access', basis: confToBasis(rec.iam.conf, explicitVendor), ruleIds:[],
+      note:`Specific vendor pick was "${rec.iam.v}" — the KB's "managed-idp" entry covers this category generically, without vendor-level granularity.`});
+  }
+
+  // Observability — the app always pairs OpenTelemetry with a specific APM/logging vendor; the
+  // KB only authors the OTel instrumentation standard itself, not individual SaaS APM vendors.
+  recs.push({techId:'otel', role:'Observability', basis: confToBasis(rec.obs.conf, false), ruleIds:[],
+    note:`Full pick was "${rec.obs.v}" — the KB's observability coverage is the OpenTelemetry instrumentation standard, not individual APM/logging vendors (Datadog/Splunk/Dynatrace/Grafana stack).`});
+
+  // Frontend — react-ts / flutter are authored; plain "React" (no TS distinction in the app's
+  // pick) is mapped to the KB's closest entry with a note; Angular has no KB entry yet.
+  const feText = rec.fe.v || '';
+  if (has(feText, 'Flutter')) recs.push({techId:'flutter', role:'Frontend', basis: confToBasis(rec.fe.conf, !!s.mobile), ruleIds:[]});
+  if (has(feText, 'Angular')) omitted.push({category:'Frontend', detail:'Angular is in the KB expansion backlog but not yet authored as a full entry.'});
+  else if (has(feText, 'React')) recs.push({techId:'react-ts', role:'Frontend', basis: confToBasis(rec.fe.conf, !!s.web), ruleIds:[],
+    note:'App pick was plain "React" — mapped to the KB\'s closest entry, "React + TypeScript", which is a slightly more specific stack than what was actually recommended.'});
+
+  // Categories the KB does not model at all yet (per its own "Known gaps") — never guessed at,
+  // always surfaced so the gap is visible rather than silently absent from the export.
+  ['Cloud Provider','API Gateway / Edge','Compute Model','Service Mesh','Caching',
+   'Containers / Orchestration','CI/CD & Deployment','DNS'].forEach(cat => {
+    omitted.push({category:cat, detail:'Not covered by the current knowledge base — no entries exist yet for cloud providers, API gateways, compute platforms, service mesh, caching, container orchestration, CI/CD, or DNS.'});
+  });
+  omitted.push({category:'AI / LLM Strategy', detail:'Not covered by the current knowledge base — its own "Known gaps" section states there are no cloud-provider or LLM-strategy entries yet, though the demo UI surfaces this category.'});
+
+  return {recommendations: recs, omitted};
+}
+
+// Assembles the KB exporter's `input` object from whatever the user actually told the wizard —
+// falls back to sensible generic defaults (documented inline) when the free-text path was used
+// instead of the wizard, since wizState stays at its initial empty values in that case.
+function buildAdrInput(){
+  const buildingLabels = {web:'a web application', mobile:'a mobile app', api:'an API/backend service',
+    chatbot:'an AI chatbot', data:'a data/analytics platform', internal:'an internal tool',
+    admin:'an admin dashboard', ecommerce:'an e-commerce platform'};
+  // Priority order matters more than exhaustiveness here — mobile/admin are the most specific
+  // KB surface ids, business-app/platform are reasonable general fallbacks.
+  const surfaceMap = {mobile:'mobile', admin:'admin', web:'web-app', ecommerce:'web-app',
+    chatbot:'business-app', data:'platform', api:'platform', internal:'business-app'};
+  let surface = 'business-app';
+  for (const b of (wizState.building || [])) { if (surfaceMap[b]) { surface = surfaceMap[b]; break; } }
+
+  const complianceMap = {hipaa:'hipaa', pci:'pci', soc2:'soc2', gov:'gov'};
+  const compliance = (wizState.compliance || []).filter(c => c !== 'none').map(c => complianceMap[c] || c);
+
+  const teamSkillMap = {java:'java', python:'python', node:'node.js', dotnet:'.net', go:'go'};
+  const existingStack = (wizState.teamskills || []).filter(x => x !== 'none').map(x => teamSkillMap[x] || x);
+
+  const buildLabels = (wizState.building || []).map(b => buildingLabels[b]).filter(Boolean);
+  const productName = buildLabels.length
+    ? `Recommended stack for ${buildLabels.join(' + ')}`
+    : 'Recommended stack (AI Stack Advisor)'; // generic default — no wizard/product-name field exists to derive a real name from
+
+  return {
+    productName, surface,
+    audience: wizState.audience || 'enterprise', // KB weight_hint_by_audience ids match wizState.audience values exactly (internal/smb/enterprise/consumer)
+    compliance,
+    teamSize: wizState.teamsize || undefined,
+    existingStack,
+    deciders: 'Architect, Engineering Lead',
+    notes: 'Generated from AI Stack Advisor, a heuristic rule-engine tool — validate every recommendation against real constraints before adopting it.'
+  };
+}
+
+function onExportAdrClick(){
+  const btn = document.getElementById('exportAdrBtn');
+  if (!lastRecommendations || !lastSignals){ alert('Run an analysis first, then export as ADR.'); return; }
+  const original = btn.textContent;
+  try {
+    if (!window.AdrExport || typeof window.AdrExport.buildExports !== 'function'){
+      throw new Error('ADR exporter did not load correctly.');
+    }
+    const kb = getKbData();
+    const {recommendations, omitted} = mapAppPicksToKb(lastRecommendations, lastSignals);
+    if (!recommendations.length){
+      alert('None of the current recommendations are covered by the ADR knowledge base yet (it covers languages, frontend, database, messaging, IAM, and observability) — nothing to export.');
+      return;
+    }
+    const input = buildAdrInput();
+    const out = window.AdrExport.buildExports({kb, input, recommendations});
+
+    // Gap B.4 — the KB's own design philosophy is "visible gap, not silent omission" (see its
+    // CLAUDE.md). Categories this app recommends that the KB doesn't yet cover are appended
+    // honestly rather than papered over.
+    const omittedSection = [
+      '', '## Categories not covered by this knowledge base', '',
+      '_AI Stack Advisor recommends more categories than the current ADR knowledge base models. Per the knowledge base\'s own design, gaps are listed explicitly rather than dropped silently:_', '',
+      ...omitted.map(o => `- **${o.category}** — ${o.detail}`), ''
+    ].join('\n');
+
+    const finalBundle = out.bundle + '\n---\n' + omittedSection;
+    window.AdrExport.downloadText(`architecture-decision-pack-${new Date().toISOString().slice(0,10)}.md`, finalBundle);
+    btn.textContent = '✅ Downloaded';
+  } catch(e){
+    console.error('ADR export failed:', e);
+    alert('ADR export failed: ' + e.message);
+  } finally {
+    setTimeout(() => { btn.textContent = original; }, 2500);
+  }
+}
+
 // ---------------- Share button + shared read-only view (decisions #12, #13) ----------------
 let isReadOnlyView = false;
 
@@ -3225,6 +3484,1467 @@ async function loadSharedAnalysis(slug){
     showScreen('screenMode');
   }
 })();
+</script>
+<!-- ---------------------------------------------------------------------------------------
+     Embedded ADR-export knowledge base (Gap B). Single-file architecture principle: instead of
+     linking to data/stack-kb.json and src/adr-export.js as separate fetched files (which would
+     require a build step or a same-origin fetch() this app doesn't otherwise need), both are
+     inlined verbatim. The KB is a data script tag (never executed, just parsed via JSON.parse
+     on demand); adr-export.js is inlined as a plain script with its `export` keywords stripped
+     and its public surface attached to `window.AdrExport` instead of using ES module import/
+     export — verified to behave identically to the module version via the Node syntax check and
+     a live browser Export-as-ADR run (see verification notes in the commit this shipped with).
+     Do not hand-edit stack-kb.json's content here — regenerate this block from the upstream
+     companion package if the KB changes; edits here alone will drift from the source of truth. -->
+<script type="application/json" id="stackKbData">
+{
+  "meta": {
+    "schema_version": "0.1.0",
+    "name": "Architect Stack Advisor — Knowledge Base",
+    "generated": "2026-08-15",
+    "note": "Seed KB. Every recommendation must resolve to at least one source_id so the UI can render a citation and a freshness date. Rings and survey positions go stale — see meta.refresh_policy.",
+    "expansion_backlog": {
+      "note": "Technology ids referenced in alternatives[] that do not yet have their own entry. These are the next entries to author — each one that stays unresolved is a 'why not X?' the UI cannot answer.",
+      "ids": ["vue", "angular", "svelte", "remix", "nuxt", "vite-spa", "hugo", "vaadin", "native", "budibase", "looker", "nodejs-nest", "go", "custom-state-machine", "config-tables", "code", "mysql", "dynamodb", "mongodb", "sqs-servicebus", "rabbitmq", "entra-id", "auth0", "cognito"]
+    },
+    "refresh_policy": {
+      "radar_sources": "re-check each Thoughtworks Radar volume (~2x/year, Apr + Nov)",
+      "survey_sources": "annual",
+      "stale_after_days": 270,
+      "ui_behaviour_when_stale": "show amber freshness badge, do not suppress the recommendation"
+    }
+  },
+
+  "confidence_model": {
+    "note": "Confidence is not one number. It is a BASIS plus a STRENGTH. The UI should render the basis, because architects trust a tool that says why it is sure, not how sure it is.",
+    "bases": [
+      {
+        "id": "stated",
+        "label": "You told us",
+        "strength": "high",
+        "ui_hint": "solid badge, quote the user's own phrase back",
+        "example": "Explicit AWS usage detected in your input"
+      },
+      {
+        "id": "constraint-derived",
+        "label": "Forced by a constraint",
+        "strength": "high",
+        "ui_hint": "solid badge, name the constraint",
+        "example": "PCI scope rules out non-self-hostable internal tooling"
+      },
+      {
+        "id": "consensus",
+        "label": "Industry consensus",
+        "strength": "medium",
+        "ui_hint": "badge + citation chip with source and date",
+        "example": "Adopt ring, Thoughtworks Radar Vol 34 (Apr 2026)"
+      },
+      {
+        "id": "heuristic-default",
+        "label": "Safe default — no signal in your input",
+        "strength": "low",
+        "ui_hint": "outline badge, and PROMPT the user for the missing input",
+        "example": "No compliance regime specified; assuming none"
+      }
+    ]
+  },
+
+  "sources": [
+    { "id": "twr34", "name": "Thoughtworks Technology Radar Vol 34", "url": "https://www.thoughtworks.com/en-us/radar", "published": "2026-04", "type": "radar", "trust": "high" },
+    { "id": "twr33", "name": "Thoughtworks Technology Radar Vol 33", "url": "https://www.thoughtworks.com/content/dam/thoughtworks/documents/radar/2025/11/tr_technology_radar_vol_33_en.pdf", "published": "2025-11", "type": "radar", "trust": "high" },
+    { "id": "so2025", "name": "Stack Overflow Developer Survey 2025", "url": "https://survey.stackoverflow.co/2025/technology", "published": "2025-07", "type": "survey", "trust": "high", "use_for": "hiring pool and staffing arguments only" },
+    { "id": "infoq-arch", "name": "InfoQ Architecture & Design Trends", "url": "https://www.infoq.com/articles/architecture-trends-2025/", "published": "2025", "type": "adoption-curve", "trust": "medium-high" },
+    { "id": "infoq-cloud", "name": "InfoQ Cloud & DevOps Trends 2026", "url": "https://www.infoq.com/articles/cloud-devops-trends-2026/", "published": "2026", "type": "adoption-curve", "trust": "medium-high" },
+    { "id": "cncf", "name": "CNCF Reports & Landscape Radar", "url": "https://www.cncf.io/reports/", "published": "2026-03", "type": "adoption-data", "trust": "high" },
+    { "id": "aws-wa", "name": "AWS Well-Architected Framework", "url": "https://docs.aws.amazon.com/wellarchitected/latest/framework/welcome.html", "type": "reference-architecture", "trust": "high", "bias": "vendor" },
+    { "id": "azure-wa", "name": "Azure Well-Architected + Architecture Center", "url": "https://learn.microsoft.com/en-us/azure/architecture/", "type": "reference-architecture", "trust": "high", "bias": "vendor" },
+    { "id": "gcp-wa", "name": "Google Cloud Well-Architected Framework", "url": "https://docs.cloud.google.com/architecture/framework", "type": "reference-architecture", "trust": "high", "bias": "vendor" },
+    { "id": "boring", "name": "Choose Boring Technology — Dan McKinley", "url": "https://mcfunley.com/choose-boring-technology", "published": "2015", "type": "essay", "trust": "high", "use_for": "innovation-token budgeting" },
+    { "id": "adr-repo", "name": "joelparkerhenderson/architecture-decision-record", "url": "https://github.com/joelparkerhenderson/architecture-decision-record", "type": "template-library", "trust": "high" },
+    { "id": "madr", "name": "MADR — Markdown Any Decision Records", "url": "https://github.com/adr/madr", "type": "template", "trust": "high" },
+    { "id": "arc42", "name": "arc42 architecture documentation template", "url": "https://arc42.org/", "type": "template", "trust": "high" },
+    { "id": "c4", "name": "C4 model", "url": "https://c4model.com/", "type": "template", "trust": "high" },
+    { "id": "atam", "name": "ATAM — SEI Architecture Tradeoff Analysis Method", "url": "https://en.wikipedia.org/wiki/Architecture_tradeoff_analysis_method", "type": "method", "trust": "high" },
+    { "id": "msvc-io", "name": "microservices.io pattern catalogue", "url": "https://microservices.io/patterns/", "type": "pattern-catalogue", "trust": "high" },
+    { "id": "eip", "name": "Enterprise Integration Patterns", "url": "https://www.enterpriseintegrationpatterns.com/", "type": "pattern-catalogue", "trust": "high" },
+    { "id": "scalability", "name": "awesome-scalability", "url": "https://github.com/binhnguyennus/awesome-scalability", "type": "case-studies", "trust": "medium", "use_for": "real-world scaling evidence" }
+  ],
+
+  "quality_attributes": [
+    { "id": "ttm", "name": "Time to market", "probe": "What is the hard date, and what happens if you miss it?", "weight_hint_by_audience": { "consumer": 3, "smb": 3, "enterprise": 2, "internal": 2 } },
+    { "id": "scale", "name": "Scale ceiling", "probe": "Peak concurrent users and growth multiple over 24 months?", "weight_hint_by_audience": { "consumer": 3, "smb": 2, "enterprise": 2, "internal": 1 } },
+    { "id": "team_fit", "name": "Team fit", "probe": "What can this team ship on Monday with no training budget?", "weight_hint_by_audience": { "consumer": 3, "smb": 3, "enterprise": 3, "internal": 3 } },
+    { "id": "tco", "name": "3-year TCO", "probe": "Licence + infra + ops headcount + upgrade treadmill.", "weight_hint_by_audience": { "consumer": 2, "smb": 3, "enterprise": 2, "internal": 3 } },
+    { "id": "exit", "name": "Exit cost", "probe": "If this is wrong in 2 years, what does reversing it cost?", "weight_hint_by_audience": { "consumer": 2, "smb": 2, "enterprise": 3, "internal": 1 } },
+    { "id": "compliance", "name": "Compliance fit", "probe": "Which regime, and does it constrain data residency or audit?", "weight_hint_by_audience": { "consumer": 1, "smb": 1, "enterprise": 3, "internal": 2 } },
+    { "id": "hiring", "name": "Hiring pool", "probe": "Can any single person be replaced in 60 days at your budget and location?", "weight_hint_by_audience": { "consumer": 2, "smb": 3, "enterprise": 2, "internal": 2 } },
+    { "id": "ops", "name": "Operability", "probe": "Who is on call, and have they run this before?", "weight_hint_by_audience": { "consumer": 3, "smb": 2, "enterprise": 3, "internal": 1 } }
+  ],
+
+  "surfaces": [
+    { "id": "web-app", "label": "Customer-facing web app" },
+    { "id": "mobile", "label": "Mobile app" },
+    { "id": "admin", "label": "Admin page / internal tool" },
+    { "id": "business-app", "label": "Business / back-office application" },
+    { "id": "platform", "label": "Cross-cutting platform layer" }
+  ],
+
+  "technologies": [
+    {
+      "id": "react-ts",
+      "name": "React + TypeScript",
+      "category": "frontend-framework",
+      "surfaces": ["web-app", "admin"],
+      "maturity": { "ring": "adopt", "source_id": "twr34" },
+      "hiring_pool": "very-high", "hiring_source_id": "so2025",
+      "license": "MIT", "hosting": ["any"],
+      "exit_cost": "medium", "tco_shape": "eng-heavy",
+      "best_when": ["default choice", "large hiring pool needed", "long component-library tail matters"],
+      "avoid_when": ["team has no JS specialists and org cannot hire them", "app is 90% server-rendered CRUD"],
+      "alternatives": ["vue", "angular", "svelte", "htmx-hotwire"],
+      "innovation_token_cost": 0
+    },
+    {
+      "id": "nextjs",
+      "name": "Next.js",
+      "category": "meta-framework",
+      "surfaces": ["web-app"],
+      "maturity": { "ring": "adopt", "source_id": "twr34" },
+      "hiring_pool": "high", "hiring_source_id": "so2025",
+      "license": "MIT", "hosting": ["vercel", "self", "any"],
+      "exit_cost": "medium-high", "tco_shape": "eng-heavy",
+      "best_when": ["SEO or first-paint is a binding NFR", "content-heavy public surface", "want SSR without building it"],
+      "avoid_when": ["pure authenticated dashboard with no SEO need", "team wants zero build-chain complexity"],
+      "alternatives": ["remix", "astro", "nuxt", "vite-spa"],
+      "innovation_token_cost": 0
+    },
+    {
+      "id": "astro",
+      "name": "Astro",
+      "category": "meta-framework",
+      "surfaces": ["web-app"],
+      "maturity": { "ring": "trial", "source_id": "twr34" },
+      "hiring_pool": "medium", "license": "MIT", "hosting": ["any"],
+      "exit_cost": "low", "tco_shape": "light",
+      "best_when": ["content/marketing site", "islands of interactivity only"],
+      "avoid_when": ["highly stateful application UI"],
+      "alternatives": ["nextjs", "hugo"],
+      "innovation_token_cost": 0.5
+    },
+    {
+      "id": "htmx-hotwire",
+      "name": "HTMX / Hotwire (server-rendered)",
+      "category": "frontend-approach",
+      "surfaces": ["web-app", "admin", "business-app"],
+      "maturity": { "ring": "trial", "source_id": "twr34" },
+      "hiring_pool": "medium", "license": "open", "hosting": ["any"],
+      "exit_cost": "low", "tco_shape": "light",
+      "best_when": ["small team", "mostly CRUD", "backend-heavy org", "want to delete the frontend build chain"],
+      "avoid_when": ["rich client-side state", "offline support needed"],
+      "alternatives": ["react-ts", "vaadin"],
+      "innovation_token_cost": 0.5,
+      "note": "Genuinely underrated for internal-facing products. Removes a second language and an entire toolchain."
+    },
+    {
+      "id": "vaadin-jhipster",
+      "name": "Vaadin / JHipster (Java-native UI)",
+      "category": "frontend-framework",
+      "surfaces": ["web-app", "business-app", "admin"],
+      "maturity": { "ring": "assess", "source_id": "infoq-arch" },
+      "hiring_pool": "low-medium", "license": "mixed", "hosting": ["any"],
+      "exit_cost": "high", "tco_shape": "light-eng",
+      "best_when": ["Java/Spring shop with no frontend specialists", "internal business application", "hiring JS talent is not viable"],
+      "avoid_when": ["consumer-facing product", "design-led UI"],
+      "alternatives": ["react-ts", "htmx-hotwire"],
+      "innovation_token_cost": 0.5
+    },
+
+    {
+      "id": "react-native",
+      "name": "React Native (Expo)",
+      "category": "mobile-framework",
+      "surfaces": ["mobile"],
+      "maturity": { "ring": "adopt", "source_id": "twr34" },
+      "hiring_pool": "high", "hiring_source_id": "so2025",
+      "license": "MIT", "hosting": ["any"],
+      "exit_cost": "medium", "tco_shape": "eng-heavy",
+      "best_when": ["web team already on React", "skill transfer is the priority"],
+      "avoid_when": ["pixel-identical design system across platforms is critical", "heavy custom rendering"],
+      "alternatives": ["flutter", "kmp", "native"],
+      "innovation_token_cost": 0
+    },
+    {
+      "id": "flutter",
+      "name": "Flutter",
+      "category": "mobile-framework",
+      "surfaces": ["mobile"],
+      "maturity": { "ring": "adopt", "source_id": "twr34" },
+      "hiring_pool": "medium-high", "license": "BSD", "hosting": ["any"],
+      "exit_cost": "high", "tco_shape": "eng-heavy",
+      "best_when": ["design-led app", "pixel consistency across platforms", "heavy custom UI"],
+      "avoid_when": ["team is React-centric", "deep per-platform OS integration"],
+      "alternatives": ["react-native", "kmp", "native"],
+      "innovation_token_cost": 0.5
+    },
+    {
+      "id": "kmp",
+      "name": "Kotlin Multiplatform",
+      "category": "mobile-framework",
+      "surfaces": ["mobile"],
+      "maturity": { "ring": "trial", "source_id": "twr34" },
+      "hiring_pool": "medium", "license": "Apache-2.0", "hosting": ["any"],
+      "exit_cost": "medium", "tco_shape": "eng-heavy",
+      "best_when": ["existing JVM/Android team", "share business logic but keep native UI", "Spring/Kotlin backend org"],
+      "avoid_when": ["no JVM skills in the org", "want a single UI codebase too"],
+      "alternatives": ["flutter", "react-native"],
+      "innovation_token_cost": 1
+    },
+    {
+      "id": "native-mobile",
+      "name": "Native Swift / Kotlin",
+      "category": "mobile-framework",
+      "surfaces": ["mobile"],
+      "maturity": { "ring": "adopt", "source_id": "twr34" },
+      "hiring_pool": "high", "license": "n/a", "hosting": ["any"],
+      "exit_cost": "high", "tco_shape": "2x-teams",
+      "best_when": ["deep OS integration", "AR", "background hardware access", "gaming", "the app IS the product differentiator"],
+      "avoid_when": ["standard CRUD app", "one team, tight budget"],
+      "alternatives": ["flutter", "react-native", "kmp"],
+      "innovation_token_cost": 0
+    },
+    {
+      "id": "pwa",
+      "name": "PWA / mobile web",
+      "category": "mobile-framework",
+      "surfaces": ["mobile", "admin"],
+      "maturity": { "ring": "adopt", "source_id": "twr34" },
+      "hiring_pool": "very-high", "license": "n/a", "hosting": ["any"],
+      "exit_cost": "low", "tco_shape": "light",
+      "best_when": ["internal or field-workforce app", "app-store distribution is the real cost", "no native hardware needs"],
+      "avoid_when": ["consumer app needing store discovery", "push-critical on iOS legacy"],
+      "alternatives": ["react-native", "flutter"],
+      "innovation_token_cost": 0
+    },
+
+    {
+      "id": "refine",
+      "name": "Refine",
+      "category": "admin-framework",
+      "surfaces": ["admin"],
+      "maturity": { "ring": "trial", "source_id": "twr34" },
+      "hiring_pool": "medium", "license": "MIT", "hosting": ["self", "any"],
+      "exit_cost": "medium", "tco_shape": "light-eng",
+      "best_when": ["React shop", "CRUD admin", "want code you own, not a SaaS"],
+      "avoid_when": ["non-engineers must build screens"],
+      "alternatives": ["react-admin", "retool", "appsmith"],
+      "innovation_token_cost": 0.5
+    },
+    {
+      "id": "react-admin",
+      "name": "React-Admin",
+      "category": "admin-framework",
+      "surfaces": ["admin"],
+      "maturity": { "ring": "adopt", "source_id": "infoq-arch" },
+      "hiring_pool": "medium", "license": "MIT (OSS) / commercial tiers", "hosting": ["self"],
+      "exit_cost": "medium", "tco_shape": "light-eng",
+      "best_when": ["React shop", "standard resource CRUD", "self-host required"],
+      "avoid_when": ["heavily bespoke workflows"],
+      "alternatives": ["refine", "appsmith"],
+      "innovation_token_cost": 0.5
+    },
+    {
+      "id": "retool",
+      "name": "Retool",
+      "category": "low-code-internal",
+      "surfaces": ["admin"],
+      "maturity": { "ring": "adopt", "source_id": "infoq-arch" },
+      "hiring_pool": "n/a", "license": "commercial", "hosting": ["saas", "self-host-enterprise"],
+      "exit_cost": "high", "tco_shape": "licence-heavy",
+      "compliance": { "data_residency": "check-tier", "air_gapped": false },
+      "best_when": ["non-engineers must build and modify screens", "speed over ownership", "no residency constraint"],
+      "avoid_when": ["air-gapped", "strict data residency", "cost scales with seats you cannot control"],
+      "alternatives": ["appsmith", "tooljet", "budibase", "refine"],
+      "innovation_token_cost": 0
+    },
+    {
+      "id": "appsmith",
+      "name": "Appsmith",
+      "category": "low-code-internal",
+      "surfaces": ["admin"],
+      "maturity": { "ring": "trial", "source_id": "infoq-arch" },
+      "hiring_pool": "n/a", "license": "Apache-2.0", "hosting": ["self", "saas"],
+      "exit_cost": "medium-high", "tco_shape": "ops-light",
+      "compliance": { "data_residency": "self-host-ok", "air_gapped": true },
+      "best_when": ["self-host required", "regulated environment", "non-engineers build screens"],
+      "avoid_when": ["no ops capacity to run it"],
+      "alternatives": ["tooljet", "budibase", "retool"],
+      "innovation_token_cost": 0.5
+    },
+    {
+      "id": "tooljet",
+      "name": "ToolJet",
+      "category": "low-code-internal",
+      "surfaces": ["admin"],
+      "maturity": { "ring": "assess", "source_id": "infoq-arch" },
+      "hiring_pool": "n/a", "license": "AGPL/commercial", "hosting": ["self", "saas"],
+      "exit_cost": "medium-high", "tco_shape": "ops-light",
+      "compliance": { "data_residency": "self-host-ok", "air_gapped": true },
+      "best_when": ["self-host required", "cost-sensitive"],
+      "avoid_when": ["AGPL is a blocker for your legal team"],
+      "alternatives": ["appsmith", "budibase"],
+      "innovation_token_cost": 1
+    },
+    {
+      "id": "metabase",
+      "name": "Metabase / Superset",
+      "category": "bi-tool",
+      "surfaces": ["admin"],
+      "maturity": { "ring": "adopt", "source_id": "infoq-arch" },
+      "hiring_pool": "n/a", "license": "AGPL / Apache-2.0", "hosting": ["self", "saas"],
+      "exit_cost": "low", "tco_shape": "ops-light",
+      "best_when": ["the request is really 'look at the data', not 'build an app'"],
+      "avoid_when": ["users need to write back / mutate records"],
+      "alternatives": ["retool", "looker"],
+      "innovation_token_cost": 0,
+      "note": "Roughly half of admin-panel requests are actually reporting requests. Probe for this before recommending an app framework."
+    },
+
+    {
+      "id": "spring-boot",
+      "name": "Java / Spring Boot",
+      "category": "backend-framework",
+      "surfaces": ["business-app", "web-app", "platform"],
+      "maturity": { "ring": "adopt", "source_id": "twr34" },
+      "hiring_pool": "very-high", "hiring_source_id": "so2025",
+      "license": "Apache-2.0", "hosting": ["any"],
+      "exit_cost": "high", "tco_shape": "eng-heavy",
+      "best_when": ["enterprise/BFSI", "complex differentiating domain rules", "long-lived system", "existing JVM estate"],
+      "avoid_when": ["tiny team optimising purely for time-to-market", "serverless-first cost model"],
+      "alternatives": ["dotnet", "nodejs-nest", "go", "python-fastapi"],
+      "innovation_token_cost": 0
+    },
+    {
+      "id": "dotnet",
+      "name": ".NET",
+      "category": "backend-framework",
+      "surfaces": ["business-app", "web-app", "platform"],
+      "maturity": { "ring": "adopt", "source_id": "twr34" },
+      "hiring_pool": "high", "license": "MIT", "hosting": ["any"],
+      "exit_cost": "high", "tco_shape": "eng-heavy",
+      "best_when": ["Microsoft estate", "Azure-first", "enterprise line-of-business"],
+      "avoid_when": ["non-Microsoft org with no .NET skills"],
+      "alternatives": ["spring-boot", "nodejs-nest"],
+      "innovation_token_cost": 0
+    },
+    {
+      "id": "python-fastapi",
+      "name": "Python / FastAPI",
+      "category": "backend-framework",
+      "surfaces": ["platform", "web-app"],
+      "maturity": { "ring": "adopt", "source_id": "twr34" },
+      "hiring_pool": "very-high", "license": "MIT", "hosting": ["any"],
+      "exit_cost": "medium", "tco_shape": "eng-light",
+      "best_when": ["AI/ML-adjacent workloads", "data pipelines", "fast iteration"],
+      "avoid_when": ["CPU-bound high-throughput transactional core"],
+      "alternatives": ["spring-boot", "go", "nodejs-nest"],
+      "innovation_token_cost": 0
+    },
+    {
+      "id": "camunda-temporal",
+      "name": "Workflow engine (Camunda / Temporal / Flowable)",
+      "category": "workflow-orchestration",
+      "surfaces": ["business-app"],
+      "maturity": { "ring": "adopt", "source_id": "twr34" },
+      "hiring_pool": "low-medium", "license": "mixed", "hosting": ["self", "saas"],
+      "exit_cost": "high", "tco_shape": "ops-medium",
+      "best_when": ["long-running processes", "human-in-the-loop steps", "audit trail required", "retries/timers/compensation"],
+      "avoid_when": ["short synchronous request/response only"],
+      "alternatives": ["custom-state-machine"],
+      "innovation_token_cost": 1,
+      "note": "The most common avoidable rebuild in enterprise work is reimplementing state machines, retries, timers and audit trails in application code."
+    },
+    {
+      "id": "rules-engine",
+      "name": "Rules engine (DMN / Drools)",
+      "category": "decisioning",
+      "surfaces": ["business-app"],
+      "maturity": { "ring": "trial", "source_id": "infoq-arch" },
+      "hiring_pool": "low", "license": "Apache-2.0", "hosting": ["self"],
+      "exit_cost": "medium", "tco_shape": "ops-medium",
+      "best_when": ["decision logic changes faster than release cadence", "compliance-driven quarterly rule changes", "business users must read the rules"],
+      "avoid_when": ["rules are stable and few — config tables are simpler"],
+      "alternatives": ["config-tables", "code"],
+      "innovation_token_cost": 1
+    },
+    {
+      "id": "buy-cots",
+      "name": "Buy COTS / SaaS and integrate",
+      "category": "build-vs-buy",
+      "surfaces": ["business-app"],
+      "maturity": { "ring": "adopt", "source_id": "infoq-arch" },
+      "exit_cost": "high", "tco_shape": "licence-heavy",
+      "best_when": ["the process is an industry commodity — payroll, GL, CRM, ITSM", "no competitive advantage in the process"],
+      "avoid_when": ["the process IS the differentiator"],
+      "alternatives": ["spring-boot", "dotnet"],
+      "innovation_token_cost": 0,
+      "note": "When this fires, the architecture effort moves entirely to the integration layer. Recommend an integration pattern alongside it."
+    },
+
+    {
+      "id": "postgres",
+      "name": "PostgreSQL",
+      "category": "database",
+      "surfaces": ["platform"],
+      "maturity": { "ring": "adopt", "source_id": "twr34" },
+      "hiring_pool": "very-high", "hiring_source_id": "so2025",
+      "license": "PostgreSQL", "hosting": ["managed-all-clouds", "self"],
+      "exit_cost": "medium", "tco_shape": "ops-light",
+      "best_when": ["default — until proven otherwise", "relational + JSON + full-text + vector in one engine"],
+      "avoid_when": ["proven need for a specialised store at a scale you can demonstrate"],
+      "alternatives": ["mysql", "dynamodb", "mongodb"],
+      "innovation_token_cost": 0,
+      "note": "pgvector often removes the need for a separate vector DB below ~10M embeddings. Probe scale before recommending a dedicated one."
+    },
+    {
+      "id": "dedicated-vector-db",
+      "name": "Dedicated vector DB (Pinecone / Weaviate / Qdrant / Milvus)",
+      "category": "database",
+      "surfaces": ["platform"],
+      "maturity": { "ring": "trial", "source_id": "twr34" },
+      "hiring_pool": "low", "license": "mixed", "hosting": ["saas", "self"],
+      "exit_cost": "medium", "tco_shape": "licence+ops",
+      "best_when": ["very large embedding corpus", "hybrid search with heavy filtering at scale", "multi-tenant isolation of indexes"],
+      "avoid_when": ["under ~10M vectors and you already run Postgres"],
+      "alternatives": ["postgres"],
+      "innovation_token_cost": 1
+    },
+    {
+      "id": "kafka",
+      "name": "Kafka / event backbone",
+      "category": "eventing",
+      "surfaces": ["platform", "business-app"],
+      "maturity": { "ring": "adopt", "source_id": "cncf" },
+      "hiring_pool": "medium", "license": "Apache-2.0", "hosting": ["managed", "self"],
+      "exit_cost": "high", "tco_shape": "ops-heavy",
+      "best_when": ["many systems of record", "integration-heavy enterprise", "event sourcing / audit replay"],
+      "avoid_when": ["fewer than ~3 services — a queue or outbox pattern is enough"],
+      "alternatives": ["sqs-servicebus", "rabbitmq", "outbox-pattern"],
+      "innovation_token_cost": 1,
+      "note": "Frequently over-recommended. Gate this behind an explicit integration-count or replay-requirement signal."
+    },
+    {
+      "id": "outbox-pattern",
+      "name": "Transactional outbox + queue",
+      "category": "eventing",
+      "surfaces": ["platform", "business-app"],
+      "maturity": { "ring": "adopt", "source_id": "msvc-io" },
+      "hiring_pool": "high", "license": "n/a", "hosting": ["any"],
+      "exit_cost": "low", "tco_shape": "ops-light",
+      "best_when": ["few integrations", "need reliable event publishing without a streaming platform"],
+      "avoid_when": ["replay or event-sourcing is a real requirement"],
+      "alternatives": ["kafka"],
+      "innovation_token_cost": 0
+    },
+    {
+      "id": "keycloak",
+      "name": "Keycloak (self-hosted IAM)",
+      "category": "identity",
+      "surfaces": ["platform"],
+      "maturity": { "ring": "adopt", "source_id": "cncf" },
+      "hiring_pool": "medium", "license": "Apache-2.0", "hosting": ["self"],
+      "exit_cost": "high", "tco_shape": "ops-medium",
+      "compliance": { "data_residency": "self-host-ok", "air_gapped": true },
+      "best_when": ["data residency constraints", "no per-MAU billing tolerance", "existing ops capacity"],
+      "avoid_when": ["small team with no ops capacity"],
+      "alternatives": ["entra-id", "auth0", "cognito"],
+      "innovation_token_cost": 0.5
+    },
+    {
+      "id": "managed-idp",
+      "name": "Managed IdP (Entra ID / Auth0 / Cognito / Okta)",
+      "category": "identity",
+      "surfaces": ["platform"],
+      "maturity": { "ring": "adopt", "source_id": "twr34" },
+      "hiring_pool": "n/a", "license": "commercial", "hosting": ["saas"],
+      "exit_cost": "very-high", "tco_shape": "per-mau",
+      "best_when": ["small team", "speed matters", "enterprise SSO federation needed"],
+      "avoid_when": ["per-MAU cost at consumer scale", "residency constraints"],
+      "alternatives": ["keycloak"],
+      "innovation_token_cost": 0,
+      "note": "Highest exit cost of any decision in the platform layer. Flag it as such in the UI."
+    },
+    {
+      "id": "otel",
+      "name": "OpenTelemetry",
+      "category": "observability",
+      "surfaces": ["platform"],
+      "maturity": { "ring": "adopt", "source_id": "cncf" },
+      "hiring_pool": "medium", "license": "Apache-2.0", "hosting": ["any"],
+      "exit_cost": "low", "tco_shape": "ops-light",
+      "best_when": ["always — this is the non-negotiable"],
+      "avoid_when": [],
+      "alternatives": [],
+      "innovation_token_cost": 0,
+      "note": "Recommend unconditionally. Instrumenting with OTel keeps the backend choice reversible, which is the actual architectural value."
+    },
+    {
+      "id": "modular-monolith",
+      "name": "Modular monolith",
+      "category": "decomposition",
+      "surfaces": ["business-app", "web-app"],
+      "maturity": { "ring": "adopt", "source_id": "twr34" },
+      "exit_cost": "low", "tco_shape": "ops-light",
+      "best_when": ["default for teams under ~30 engineers", "domain boundaries not yet proven", "single deployment cadence is acceptable"],
+      "avoid_when": ["independent scaling or independent release cadence is a demonstrated requirement"],
+      "alternatives": ["microservices"],
+      "innovation_token_cost": 0
+    },
+    {
+      "id": "microservices",
+      "name": "Microservices",
+      "category": "decomposition",
+      "surfaces": ["business-app", "platform"],
+      "maturity": { "ring": "adopt-with-prerequisites", "source_id": "msvc-io" },
+      "exit_cost": "very-high", "tco_shape": "ops-heavy",
+      "best_when": ["multiple teams needing independent release cadence", "proven differential scaling need", "platform + CI/CD + observability maturity already exists"],
+      "avoid_when": ["under ~30 engineers", "no platform team", "boundaries still being discovered"],
+      "alternatives": ["modular-monolith"],
+      "innovation_token_cost": 2,
+      "note": "Gate hard on team size AND platform maturity. Recommending this to a 6-person team is the fastest way to lose an architect's trust in the tool."
+    }
+  ],
+
+  "rules": [
+    {
+      "id": "r-residency-blocks-saas-admin",
+      "when": { "surface": "admin", "compliance_any": ["hipaa", "pci", "gov", "data-residency"] },
+      "then": { "promote": ["appsmith", "tooljet", "refine", "react-admin"], "demote": ["retool"] },
+      "because": "Many SaaS internal-tool vendors cannot meet financial-services or government data-residency and air-gap requirements. Verify tier-level residency terms before designing around a hosted tool.",
+      "confidence_basis": "constraint-derived",
+      "cite": ["infoq-arch"]
+    },
+    {
+      "id": "r-admin-is-really-reporting",
+      "when": { "surface": "admin", "signals_absent": ["write-back", "mutate-records", "workflow"] },
+      "then": { "promote": ["metabase"], "ask": "Do admin users need to change data, or only view it?" },
+      "because": "Roughly half of admin-panel requests are reporting requests. A BI tool is an order of magnitude cheaper to build and maintain than an app.",
+      "confidence_basis": "heuristic-default",
+      "cite": ["infoq-arch"]
+    },
+    {
+      "id": "r-java-shop-no-js",
+      "when": { "existing_stack_any": ["java", "spring", "jvm"], "team_size_max": 15, "frontend_specialists": false },
+      "then": { "promote": ["htmx-hotwire", "vaadin-jhipster"], "demote": ["nextjs"] },
+      "because": "Adding a JS frontend stack creates a hiring dependency the org may not be able to staff. Team gravity is the largest single predictor of delivery on timelines under 18 months.",
+      "confidence_basis": "constraint-derived",
+      "cite": ["boring", "so2025"]
+    },
+    {
+      "id": "r-jvm-org-mobile",
+      "when": { "surface": "mobile", "existing_stack_any": ["java", "spring", "kotlin", "android"] },
+      "then": { "promote": ["kmp"], "note": "Shares business logic with your JVM backend while keeping native UI." },
+      "because": "Kotlin Multiplatform lets an existing JVM team own the shared layer without learning Dart or a second UI paradigm.",
+      "confidence_basis": "consensus",
+      "cite": ["twr34"]
+    },
+    {
+      "id": "r-react-web-then-rn",
+      "when": { "surface": "mobile", "existing_stack_any": ["react", "typescript"] },
+      "then": { "promote": ["react-native"] },
+      "because": "Skill transfer is the entire argument for React Native. Expo has removed most of the historical native-build friction.",
+      "confidence_basis": "consensus",
+      "cite": ["twr34"]
+    },
+    {
+      "id": "r-design-led-mobile",
+      "when": { "surface": "mobile", "signals_any": ["design-system", "pixel-consistency", "custom-ui-heavy"] },
+      "then": { "promote": ["flutter"] },
+      "because": "Flutter's own rendering engine produces identical output across platforms, which is the binding requirement for design-led apps.",
+      "confidence_basis": "consensus",
+      "cite": ["twr34"]
+    },
+    {
+      "id": "r-internal-mobile-pwa",
+      "when": { "surface": "mobile", "audience": "internal", "signals_absent": ["native-hardware", "offline-heavy"] },
+      "then": { "promote": ["pwa"] },
+      "because": "For internal and field-workforce apps, app-store distribution and MDM are usually the real cost, not development.",
+      "confidence_basis": "heuristic-default",
+      "cite": ["infoq-arch"]
+    },
+    {
+      "id": "r-commodity-process-buy",
+      "when": { "surface": "business-app", "process_type": "commodity" },
+      "then": { "promote": ["buy-cots"], "then_recommend": ["kafka", "eip-patterns"] },
+      "because": "You will not out-build a vendor at a non-differentiating process. When this fires the architecture effort moves to the integration layer.",
+      "confidence_basis": "constraint-derived",
+      "cite": ["infoq-arch", "eip"]
+    },
+    {
+      "id": "r-longrunning-workflow",
+      "when": { "surface": "business-app", "signals_any": ["approval", "human-in-loop", "multi-day", "audit-trail", "compensation"] },
+      "then": { "promote": ["camunda-temporal"] },
+      "because": "Reimplementing state machines, retries, timers and audit trails in application code is the most common avoidable rebuild in enterprise work.",
+      "confidence_basis": "consensus",
+      "cite": ["twr34", "msvc-io"]
+    },
+    {
+      "id": "r-volatile-rules",
+      "when": { "surface": "business-app", "signals_any": ["rules-change-quarterly", "regulatory-thresholds", "business-user-editable"] },
+      "then": { "promote": ["rules-engine"] },
+      "because": "When decision logic changes faster than the release cadence, deployments become the bottleneck for compliance changes.",
+      "confidence_basis": "constraint-derived",
+      "cite": ["infoq-arch"]
+    },
+    {
+      "id": "r-microservices-gate",
+      "when": { "requested": ["microservices"], "team_size_max": 30 },
+      "then": { "promote": ["modular-monolith"], "demote": ["microservices"], "warn": true },
+      "because": "Microservices require platform, CI/CD and observability maturity plus multiple teams with independent release cadence. Below that, they add operational cost without the benefit. Extract services on evidence, not on principle.",
+      "confidence_basis": "consensus",
+      "cite": ["msvc-io", "twr34"]
+    },
+    {
+      "id": "r-kafka-gate",
+      "when": { "requested": ["kafka"], "integration_count_max": 3, "signals_absent": ["replay", "event-sourcing"] },
+      "then": { "demote": ["kafka"], "promote": ["outbox-pattern"], "warn": true },
+      "because": "An event backbone is frequently over-recommended. Below roughly three integrations with no replay requirement, a queue or transactional outbox is sufficient and far cheaper to operate.",
+      "confidence_basis": "consensus",
+      "cite": ["eip", "cncf"]
+    },
+    {
+      "id": "r-vector-db-gate",
+      "when": { "ai_need_any": ["rag", "knowledge-assistant", "semantic-search"], "corpus_size_max_vectors": 10000000 },
+      "then": { "promote": ["postgres"], "demote": ["dedicated-vector-db"] },
+      "because": "pgvector handles most corpora below ~10M embeddings. Adding a dedicated vector store spends an innovation token and an ops surface for no measured benefit at that scale.",
+      "confidence_basis": "consensus",
+      "cite": ["twr34"]
+    },
+    {
+      "id": "r-otel-always",
+      "when": {},
+      "then": { "promote": ["otel"] },
+      "because": "Instrumenting with OpenTelemetry keeps the observability backend choice reversible, which is the actual architectural value.",
+      "confidence_basis": "consensus",
+      "cite": ["cncf"]
+    },
+    {
+      "id": "r-idp-exit-cost-warning",
+      "when": { "recommends_any": ["managed-idp"] },
+      "then": { "flag": "highest-exit-cost" },
+      "because": "Identity is the most expensive platform decision to reverse. Surface this before the user commits, not after.",
+      "confidence_basis": "consensus",
+      "cite": ["azure-wa"]
+    },
+    {
+      "id": "r-innovation-token-budget",
+      "when": { "total_innovation_token_cost_min": 3 },
+      "then": { "warn": true, "message": "This stack spends {n} innovation tokens. McKinley's rule of thumb is roughly 3 across an entire company. Identify which of these is genuinely differentiating and revert the rest to boring defaults." },
+      "because": "Novel technology cost compounds across a stack. Budgeting it explicitly is what separates a considered stack from an enthusiastic one.",
+      "confidence_basis": "consensus",
+      "cite": ["boring"]
+    },
+    {
+      "id": "r-no-compliance-signal",
+      "when": { "compliance_absent": true },
+      "then": { "ask": "Is there a compliance regime in play (HIPAA, PCI, SOC2, GDPR, sector regulator)?", "confidence_cap": "low" },
+      "because": "Compliance is the constraint most likely to invalidate an entire recommendation set. Never infer 'none' silently.",
+      "confidence_basis": "heuristic-default"
+    },
+    {
+      "id": "r-no-team-signal",
+      "when": { "team_size_absent": true },
+      "then": { "ask": "How many engineers will own this in year two?", "confidence_cap": "low" },
+      "because": "Team size gates decomposition, ops-heavy choices, and build-vs-buy. Without it every structural recommendation is a guess.",
+      "confidence_basis": "heuristic-default"
+    }
+  ],
+
+  "output_templates": {
+    "note": "The highest-value export. Turning a recommendation into a document the architect can paste into a repo is what moves this from a toy to a tool.",
+    "adr": {
+      "format": "MADR",
+      "source_id": "madr",
+      "fields": ["title", "status", "date", "deciders", "context_and_problem_statement", "decision_drivers", "considered_options", "decision_outcome", "consequences", "confirmation"],
+      "mapping": {
+        "decision_drivers": "selected quality_attributes + stated constraints",
+        "considered_options": "recommended technology + its alternatives[] with the reason each was not chosen",
+        "consequences": "exit_cost + tco_shape + innovation_token_cost, rendered as prose",
+        "confirmation": "the fitness function"
+      }
+    },
+    "arc42_sections": { "source_id": "arc42", "emit": ["4. Solution Strategy", "9. Architecture Decisions", "10. Quality Requirements"] },
+    "c4_container": { "source_id": "c4", "emit": "Structurizr DSL or Mermaid C4 for the recommended stack" },
+    "tradeoff_table": { "emit": "candidates x weighted quality_attributes, weights shown" }
+  },
+
+  "fitness_functions": [
+    { "for": "modular-monolith", "check": "No module imports another module's internal package; enforced by ArchUnit / dependency-cruiser in CI." },
+    { "for": "postgres", "check": "Alert when p95 vector search latency exceeds target OR corpus passes 10M embeddings — the trigger to revisit a dedicated store." },
+    { "for": "managed-idp", "check": "Monthly cost per MAU tracked against the threshold where self-hosting becomes cheaper." },
+    { "for": "microservices", "check": "Deployment independence measured — if services are always released together, the decomposition is not paying for itself." },
+    { "for": "otel", "check": "Every service emits traces with a shared trace-id; CI fails on an uninstrumented new service." },
+    { "for": "buy-cots", "check": "Percentage of customisation vs configuration tracked — heavy customisation signals the buy decision was wrong." },
+    { "for": "camunda-temporal", "check": "No business process state is persisted outside the engine; a CI check fails on new status/state columns in application tables." },
+    { "for": "camunda-temporal", "check": "Percentage of process definitions changed without a code deploy — if it is near zero, the engine is not earning its operational cost." },
+    { "for": "keycloak", "check": "Realm and client config is version-controlled and applied declaratively; drift between environments fails the pipeline." },
+    { "for": "spring-boot", "check": "Build fails on dependencies more than one major version behind, so the upgrade treadmill stays visible rather than accumulating silently." },
+    { "for": "htmx-hotwire", "check": "Client-side JavaScript budget enforced in CI — crossing it is the signal that a real frontend framework is now warranted." },
+    { "for": "react-ts", "check": "Bundle-size budget enforced in CI, tracked against a first-paint target." },
+    { "for": "kafka", "check": "Every topic has a named owner and a documented replay procedure that has been exercised in the last two quarters." },
+    { "for": "rules-engine", "check": "Rule changes deployed without an application release, tracked per quarter — if it is zero, revert to config tables." },
+    { "for": "retool", "check": "Seat count and monthly cost tracked against the threshold where an owned admin framework becomes cheaper." },
+    { "for": "dedicated-vector-db", "check": "Recall@k measured against a pgvector baseline — if the gap is not material, the extra ops surface is not justified." },
+    { "for": "outbox-pattern", "check": "Outbox lag and dead-letter depth alerted on; sustained growth is the signal to move to a streaming platform." },
+    { "for": "kmp", "check": "Percentage of code actually shared across platforms tracked — below a threshold the multiplatform complexity is not paying for itself." },
+    { "for": "react-native", "check": "Count of platform-specific native modules tracked; steady growth signals the cross-platform assumption is breaking down." },
+    { "for": "flutter", "check": "Startup time and jank measured on the lowest-spec target device in CI, not on a developer machine." },
+    { "for": "native-mobile", "check": "Feature parity gap between iOS and Android tracked per release — a widening gap is the cost of two codebases becoming visible." },
+    { "for": "appsmith", "check": "App definitions exported to version control on a schedule, so the tool is not the only copy of your internal software." },
+    { "for": "metabase", "check": "Query cost against production replicas monitored; heavy ad-hoc load is the signal to move to a dedicated analytics store." },
+    { "for": "vaadin-jhipster", "check": "Framework version currency tracked — Java-native UI frameworks carry more upgrade risk than the hiring saving suggests." },
+    { "for": "nextjs", "check": "Core Web Vitals measured in the field, not just in the lab; regression fails the deploy." },
+    { "for": "pwa", "check": "Install and re-engagement rate tracked — if both are near zero, the PWA assumption failed and a native shell is warranted." },
+    { "for": "python-fastapi", "check": "p95 latency under load tested against the transactional path; CPU-bound regressions are the signal to move that path elsewhere." },
+    { "for": "dotnet", "check": "LTS version currency enforced in CI; running past end-of-support is a compliance finding, not a technical debt item." }
+  ]
+}
+
+</script>
+<script>
+/**
+ * adr-export.js — turn a stack recommendation into documents an architect commits to a repo.
+ *
+ * Zero dependencies. Works as an ES module in the browser and in Node.
+ * Reads the KB shape defined in stack-kb.json v0.1.0.
+ *
+ *   import { buildExports } from './adr-export.js';
+ *   const out = buildExports({ kb, input, recommendations });
+ *   out.adrs          -> [{ number, title, filename, markdown }]
+ *   out.arc42         -> markdown (sections 4, 9, 10)
+ *   out.c4Mermaid     -> Mermaid C4Container source
+ *   out.tradeoff      -> markdown table
+ *   out.bundle        -> everything in one document
+ *   out.warnings      -> [{ level, message }]
+ *   out.files         -> [{ path, content }]  ready for a zip / download-all
+ */
+
+/* ------------------------------------------------------------------ *
+ * Small helpers
+ * ------------------------------------------------------------------ */
+
+const slug = (s) =>
+  String(s).toLowerCase().trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+const pad4 = (n) => String(n).padStart(4, '0');
+
+const sentence = (s) => {
+  if (!s) return '';
+  const t = String(s).trim();
+  return t.charAt(0).toUpperCase() + t.slice(1) + (/[.!?]$/.test(t) ? '' : '.');
+};
+
+const joinList = (arr, conj = 'and') => {
+  const a = (arr || []).filter(Boolean);
+  if (a.length === 0) return '';
+  if (a.length === 1) return a[0];
+  if (a.length === 2) return `${a[0]} ${conj} ${a[1]}`;
+  return `${a.slice(0, -1).join(', ')} ${conj} ${a[a.length - 1]}`;
+};
+
+const today = (d) => (d ? new Date(d) : new Date()).toISOString().slice(0, 10);
+
+// "a enterprise audience" is the kind of detail that makes generated docs feel generated.
+const article = (word) => (/^[aeiou]/i.test(String(word || '')) ? 'an' : 'a');
+
+/* ------------------------------------------------------------------ *
+ * Human-readable vocabularies for KB enum fields
+ * ------------------------------------------------------------------ */
+
+const EXIT_COST_PROSE = {
+  'low': 'Reversing this decision is cheap — expect days, not quarters.',
+  'medium': 'Reversing this is a bounded project — plan for weeks of migration work.',
+  'medium-high': 'Reversing this is expensive; treat it as a one-way door unless proven otherwise.',
+  'high': 'This is effectively a one-way door. Reversing it means a rewrite of everything that touches it.',
+  'very-high': 'This is the most expensive class of decision to reverse in the stack. Revisit the assumptions before committing.'
+};
+
+const TCO_PROSE = {
+  'light': 'Ongoing cost is dominated by nothing in particular — this is the cheap option to keep running.',
+  'ops-light': 'Ongoing cost is mostly infrastructure; operational burden is low.',
+  'ops-medium': 'Ongoing cost includes real operational attention — budget for someone who owns it.',
+  'ops-heavy': 'Ongoing cost is dominated by operations. This needs a named owner and on-call coverage.',
+  'eng-light': 'Ongoing cost is mostly engineering time, at a modest level.',
+  'eng-heavy': 'Ongoing cost is dominated by engineering time rather than licences or infrastructure.',
+  'light-eng': 'Ongoing cost is modest engineering time — the framework absorbs most of the work.',
+  'licence-heavy': 'Ongoing cost is dominated by licence fees, which typically scale with seats or usage.',
+  'licence+ops': 'Ongoing cost is both licence fees and operational attention.',
+  'per-mau': 'Ongoing cost scales with monthly active users — model this against your growth curve before committing.',
+  '2x-teams': 'Ongoing cost is two parallel teams. This is a staffing decision as much as a technical one.'
+};
+
+const HIRING_PROSE = {
+  'very-high': 'Hiring pool is very large; any individual is replaceable quickly.',
+  'high': 'Hiring pool is healthy.',
+  'medium-high': 'Hiring pool is adequate in most markets.',
+  'medium': 'Hiring pool is narrower — allow extra time to backfill.',
+  'low-medium': 'Hiring pool is thin. Expect to train rather than hire.',
+  'low': 'Hiring pool is very thin. Assume you will train internally and carry key-person risk.'
+};
+
+const BASIS_PROSE = {
+  'stated': 'stated directly in the requirements',
+  'constraint-derived': 'forced by a hard constraint',
+  'consensus': 'supported by industry adoption data',
+  'heuristic-default': 'a default applied in the absence of a signal'
+};
+
+const RING_PROSE = {
+  'adopt': 'Adopt',
+  'trial': 'Trial',
+  'assess': 'Assess',
+  'hold': 'Hold',
+  'adopt-with-prerequisites': 'Adopt, with prerequisites'
+};
+
+/* ------------------------------------------------------------------ *
+ * KB indexing
+ * ------------------------------------------------------------------ */
+
+function indexKb(kb) {
+  const tech = new Map((kb.technologies || []).map((t) => [t.id, t]));
+  const src = new Map((kb.sources || []).map((s) => [s.id, s]));
+  const rules = new Map((kb.rules || []).map((r) => [r.id, r]));
+  const qa = new Map((kb.quality_attributes || []).map((q) => [q.id, q]));
+  const fit = new Map();
+  for (const f of kb.fitness_functions || []) {
+    if (!fit.has(f.for)) fit.set(f.for, []);
+    fit.get(f.for).push(f.check);
+  }
+  const backlog = new Set(kb.meta?.expansion_backlog?.ids || []);
+  return { tech, src, rules, qa, fit, backlog };
+}
+
+function citation(ix, sourceId) {
+  const s = ix.src.get(sourceId);
+  if (!s) return null;
+  const when = s.published ? ` (${s.published})` : '';
+  return { text: `${s.name}${when}`, url: s.url, bias: s.bias, trust: s.trust };
+}
+
+function renderCitations(cites) {
+  const seen = new Set();
+  const out = [];
+  for (const c of cites) {
+    if (!c || seen.has(c.text)) continue;
+    seen.add(c.text);
+    out.push(c.url ? `[${c.text}](${c.url})` : c.text);
+  }
+  return out;
+}
+
+/* ------------------------------------------------------------------ *
+ * Decision drivers — quality attributes weighted by audience,
+ * plus anything the user stated explicitly.
+ * ------------------------------------------------------------------ */
+
+function decisionDrivers(kb, ix, input) {
+  const audience = input.audience || 'enterprise';
+  const explicit = input.weights || null;
+
+  const scored = (kb.quality_attributes || []).map((q) => {
+    const w = explicit?.[q.id] ?? q.weight_hint_by_audience?.[audience] ?? 2;
+    return { id: q.id, name: q.name, weight: w, probe: q.probe };
+  }).sort((a, b) => b.weight - a.weight);
+
+  const drivers = scored.filter((d) => d.weight >= 3);
+  const secondary = scored.filter((d) => d.weight === 2);
+
+  const constraints = [];
+  if (input.compliance?.length) {
+    constraints.push(`Compliance regime: ${joinList(input.compliance.map((c) => c.toUpperCase()))}`);
+  }
+  if (input.teamSize) constraints.push(`Engineering team size: ${input.teamSize}`);
+  if (input.existingStack?.length) constraints.push(`Existing estate: ${joinList(input.existingStack)}`);
+  if (input.aiNeeds?.length) constraints.push(`AI/LLM requirement: ${joinList(input.aiNeeds)}`);
+  for (const c of input.constraints || []) constraints.push(c);
+
+  return { scored, drivers, secondary, constraints, audience };
+}
+
+/* ------------------------------------------------------------------ *
+ * Considered options — the "why not X" the UI must be able to answer
+ * ------------------------------------------------------------------ */
+
+function consideredOptions(ix, chosen) {
+  const options = [{
+    id: chosen.id,
+    name: chosen.name,
+    chosen: true,
+    pros: chosen.best_when || [],
+    cons: chosen.avoid_when || []
+  }];
+
+  for (const altId of chosen.alternatives || []) {
+    const alt = ix.tech.get(altId);
+    if (alt) {
+      // The strongest "why not" is the alternative's own avoid_when overlapping our situation,
+      // falling back to its trade-off shape.
+      const why = alt.avoid_when?.length
+        ? `Not chosen — ${alt.avoid_when[0]}.`
+        : `Not chosen — no advantage over ${chosen.name} against the drivers above.`;
+      options.push({
+        id: alt.id,
+        name: alt.name,
+        chosen: false,
+        why,
+        exit_cost: alt.exit_cost,
+        tokens: alt.innovation_token_cost
+      });
+    } else if (ix.backlog.has(altId)) {
+      options.push({
+        id: altId,
+        name: altId,
+        chosen: false,
+        why: 'Not evaluated in this pass — no entry in the knowledge base yet.',
+        unevaluated: true
+      });
+    }
+  }
+  return options;
+}
+
+/* ------------------------------------------------------------------ *
+ * Consequences — the section reviewers actually read
+ * ------------------------------------------------------------------ */
+
+function consequences(ix, tech, rec) {
+  const good = [];
+  const bad = [];
+  const neutral = [];
+
+  if (tech.best_when?.length) {
+    good.push(`Fits the situation: ${joinList(tech.best_when.slice(0, 3))}.`);
+  }
+  if (HIRING_PROSE[tech.hiring_pool]) {
+    (['very-high', 'high', 'medium-high'].includes(tech.hiring_pool) ? good : bad)
+      .push(HIRING_PROSE[tech.hiring_pool]);
+  }
+  if (TCO_PROSE[tech.tco_shape]) neutral.push(TCO_PROSE[tech.tco_shape]);
+  if (EXIT_COST_PROSE[tech.exit_cost]) {
+    (['low', 'medium'].includes(tech.exit_cost) ? neutral : bad)
+      .push(EXIT_COST_PROSE[tech.exit_cost]);
+  }
+
+  const tokens = tech.innovation_token_cost ?? 0;
+  if (tokens === 0) {
+    good.push('Spends no innovation token — this is a boring, well-understood choice.');
+  } else {
+    bad.push(`Spends ${tokens} innovation token${tokens === 1 ? '' : 's'}. Confirm this is where the product differentiates.`);
+  }
+
+  if (tech.avoid_when?.length) {
+    bad.push(`Becomes the wrong choice if: ${joinList(tech.avoid_when, 'or')}.`);
+  }
+  if (tech.compliance?.data_residency === 'check-tier') {
+    bad.push('Data-residency terms vary by commercial tier — verify before designing around it.');
+  }
+  if (tech.note) neutral.push(tech.note);
+  if (rec.note) neutral.push(rec.note);
+
+  return { good, bad, neutral, tokens };
+}
+
+/* ------------------------------------------------------------------ *
+ * MADR renderer
+ * ------------------------------------------------------------------ */
+
+function renderAdr({ number, tech, rec, ix, drivers, input, date }) {
+  const title = rec.role
+    ? `${rec.role}: use ${tech.name}`
+    : `Use ${tech.name}`;
+
+  const options = consideredOptions(ix, tech);
+  const cons = consequences(ix, tech, rec);
+
+  const cites = [];
+  if (tech.maturity?.source_id) cites.push(citation(ix, tech.maturity.source_id));
+  if (tech.hiring_source_id) cites.push(citation(ix, tech.hiring_source_id));
+  for (const rid of rec.ruleIds || []) {
+    const rule = ix.rules.get(rid);
+    for (const c of rule?.cite || []) cites.push(citation(ix, c));
+  }
+  const citeLines = renderCitations(cites);
+
+  const firedRules = (rec.ruleIds || [])
+    .map((rid) => ix.rules.get(rid))
+    .filter(Boolean);
+
+  const basis = rec.basis || 'heuristic-default';
+  const L = [];
+
+  L.push(`# ${pad4(number)}. ${title}`);
+  L.push('');
+  L.push(`- Status: proposed`);
+  L.push(`- Date: ${date}`);
+  L.push(`- Deciders: ${input.deciders || 'TBD'}`);
+  if (tech.maturity?.ring) {
+    const ring = RING_PROSE[tech.maturity.ring] || tech.maturity.ring;
+    const c = citation(ix, tech.maturity.source_id);
+    L.push(`- Maturity signal: **${ring}**${c ? ` — ${c.text}` : ''}`);
+  }
+  L.push(`- Confidence basis: **${basis}** (${BASIS_PROSE[basis] || basis})`);
+  L.push('');
+
+  L.push('## Context and Problem Statement');
+  L.push('');
+  L.push(
+    `${input.productName || 'This product'} is ${article(input.surfaceLabel || input.surface)} ${input.surfaceLabel || input.surface || 'system'}` +
+    `${input.audience ? ` for ${article(input.audience)} ${input.audience} audience` : ''}. ` +
+    `We need to decide ${rec.role ? `the ${rec.role.toLowerCase()}` : `whether to adopt ${tech.name}`}.`
+  );
+  if (input.notes) { L.push(''); L.push(`> ${input.notes}`); }
+  L.push('');
+
+  L.push('## Decision Drivers');
+  L.push('');
+  for (const d of drivers.drivers) L.push(`- **${d.name}** (weight ${d.weight}) — ${d.probe}`);
+  for (const d of drivers.secondary) L.push(`- ${d.name} (weight ${d.weight})`);
+  for (const c of drivers.constraints) L.push(`- Constraint — ${c}`);
+  if (basis === 'heuristic-default') {
+    L.push(`- ⚠️ No explicit signal for this choice; it is a default. Confirm before committing.`);
+  }
+  L.push('');
+
+  L.push('## Considered Options');
+  L.push('');
+  for (const o of options) {
+    L.push(`- ${o.chosen ? `**${o.name}** — chosen` : `${o.name}`}`);
+  }
+  L.push('');
+
+  L.push('## Decision Outcome');
+  L.push('');
+  L.push(`Chosen option: **${tech.name}**, because ${
+    basis === 'constraint-derived'
+      ? `it is the only option in the set that satisfies ${joinList(drivers.constraints.slice(0, 2), 'and') || 'the stated constraints'}`
+      : basis === 'stated'
+        ? 'it was specified in the requirements'
+        : basis === 'consensus'
+          ? `it scores best against ${joinList(drivers.drivers.map((d) => d.name.toLowerCase()).slice(0, 3), 'and')}, and carries the strongest adoption signal of the candidates`
+          : `it is the safe default for this shape of system, absent a signal pointing elsewhere`
+  }.`);
+  L.push('');
+
+  if (firedRules.length) {
+    L.push('### Reasoning applied');
+    L.push('');
+    for (const r of firedRules) {
+      L.push(`- \`${r.id}\` — ${sentence(r.because)}`);
+    }
+    L.push('');
+  }
+
+  L.push('### Why not the alternatives');
+  L.push('');
+  const rejected = options.filter((o) => !o.chosen);
+  if (!rejected.length) {
+    L.push('_No alternatives recorded in the knowledge base for this decision — treat that as a gap, not as an absence of options._');
+  } else {
+    for (const o of rejected) {
+      L.push(`- **${o.name}** — ${o.why}${o.unevaluated ? '' : o.tokens ? ` Spends ${o.tokens} innovation token${o.tokens === 1 ? '' : 's'}.` : ''}`);
+    }
+  }
+  L.push('');
+
+  L.push('## Consequences');
+  L.push('');
+  for (const g of cons.good) L.push(`- Good, because ${g.charAt(0).toLowerCase() + g.slice(1)}`);
+  for (const b of cons.bad) L.push(`- Bad, because ${b.charAt(0).toLowerCase() + b.slice(1)}`);
+  for (const n of cons.neutral) L.push(`- Neutral — ${n}`);
+  L.push('');
+
+  L.push('## Confirmation');
+  L.push('');
+  const fits = ix.fit.get(tech.id) || [];
+  if (fits.length) {
+    L.push('This decision is verified by the following fitness function(s):');
+    L.push('');
+    for (const f of fits) L.push(`- ${f}`);
+  } else {
+    L.push('_No fitness function defined. Before this ADR is accepted, define an automated check that will tell you when this decision has gone stale._');
+  }
+  L.push('');
+
+  if (citeLines.length) {
+    L.push('## Sources');
+    L.push('');
+    for (const c of citeLines) L.push(`- ${c}`);
+    L.push('');
+  }
+
+  return {
+    number,
+    title,
+    filename: `${pad4(number)}-${slug(title)}.md`,
+    markdown: L.join('\n'),
+    tokens: cons.tokens
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * Trade-off table
+ * ------------------------------------------------------------------ */
+
+const SCORE_MAP = {
+  exit: { 'low': 3, 'medium': 3, 'medium-high': 2, 'high': 1, 'very-high': 1 },
+  hiring: { 'very-high': 3, 'high': 3, 'medium-high': 2, 'medium': 2, 'low-medium': 1, 'low': 1 },
+  tco: { 'light': 3, 'ops-light': 3, 'eng-light': 3, 'light-eng': 3, 'ops-medium': 2, 'licence+ops': 2, 'eng-heavy': 2, 'per-mau': 2, 'ops-heavy': 1, 'licence-heavy': 1, '2x-teams': 1 }
+};
+
+const dots = (n) => '●'.repeat(Math.max(0, n)) + '○'.repeat(Math.max(0, 3 - n));
+
+function renderTradeoff(ix, recs, drivers) {
+  const rows = [];
+  for (const rec of recs) {
+    const t = ix.tech.get(rec.techId);
+    if (!t) continue;
+    const alts = (t.alternatives || []).map((a) => ix.tech.get(a)).filter(Boolean).slice(0, 2);
+    for (const cand of [t, ...alts]) {
+      rows.push({
+        role: rec.role || cand.category,
+        name: cand.name,
+        chosen: cand.id === t.id,
+        exit: SCORE_MAP.exit[cand.exit_cost] ?? 2,
+        hiring: SCORE_MAP.hiring[cand.hiring_pool] ?? 2,
+        tco: SCORE_MAP.tco[cand.tco_shape] ?? 2,
+        tokens: cand.innovation_token_cost ?? 0
+      });
+    }
+  }
+
+  const L = [];
+  L.push('## Trade-off summary');
+  L.push('');
+  L.push(`Weights derived from a **${drivers.audience}** audience. Adjust them with stakeholders _before_ reading the scores — that is what makes this a decision rather than a rationalisation.`);
+  L.push('');
+  L.push('| Decision | Option | | Exit cost | Hiring pool | 3-yr TCO | Tokens |');
+  L.push('|---|---|---|---|---|---|---|');
+  let lastRole = null;
+  for (const r of rows) {
+    const roleCell = r.role === lastRole ? '' : r.role;
+    lastRole = r.role;
+    L.push(`| ${roleCell} | ${r.chosen ? `**${r.name}**` : r.name} | ${r.chosen ? '✓' : ''} | ${dots(r.exit)} | ${dots(r.hiring)} | ${dots(r.tco)} | ${r.tokens} |`);
+  }
+  L.push('');
+  L.push('_More dots is better. Tokens are innovation-token cost — lower is more boring, which is usually correct._');
+  L.push('');
+  return L.join('\n');
+}
+
+/* ------------------------------------------------------------------ *
+ * arc42 sections 4, 9, 10
+ * ------------------------------------------------------------------ */
+
+function renderArc42(ix, recs, adrs, drivers, input) {
+  const L = [];
+  L.push(`# ${input.productName || 'System'} — architecture documentation (arc42 extract)`);
+  L.push('');
+  L.push('> Generated sections 4, 9 and 10. The remaining arc42 sections are yours to write — see https://arc42.org/');
+  L.push('');
+
+  L.push('## 4. Solution Strategy');
+  L.push('');
+  L.push('| Quality goal | Architectural approach | Rationale |');
+  L.push('|---|---|---|');
+  for (const rec of recs) {
+    const t = ix.tech.get(rec.techId);
+    if (!t) continue;
+    const goal = drivers.drivers[0]?.name || 'Fitness for purpose';
+    L.push(`| ${goal} | ${rec.role || t.category}: ${t.name} | ${(t.best_when?.[0] || 'Default for this system shape').replace(/\|/g, '\\|')} |`);
+  }
+  L.push('');
+
+  L.push('## 9. Architecture Decisions');
+  L.push('');
+  L.push('| ADR | Decision | Status | Confidence basis |');
+  L.push('|---|---|---|---|');
+  for (let i = 0; i < adrs.length; i++) {
+    const rec = recs[i];
+    L.push(`| [${pad4(adrs[i].number)}](./adr/${adrs[i].filename}) | ${adrs[i].title} | proposed | ${rec.basis || 'heuristic-default'} |`);
+  }
+  L.push('');
+
+  L.push('## 10. Quality Requirements');
+  L.push('');
+  L.push('### 10.1 Quality tree (weighted)');
+  L.push('');
+  for (const d of drivers.scored) {
+    L.push(`- **${d.name}** — weight ${d.weight}/3 — ${d.probe}`);
+  }
+  L.push('');
+  L.push('### 10.2 Quality scenarios');
+  L.push('');
+  L.push('| Attribute | Stimulus | Expected response | Measure |');
+  L.push('|---|---|---|---|');
+  for (const d of drivers.drivers) {
+    L.push(`| ${d.name} | _TBD_ | _TBD_ | _TBD_ |`);
+  }
+  L.push('');
+  L.push('_Fill the scenarios in with real numbers. An unquantified quality requirement is a preference, not a requirement._');
+  L.push('');
+  return L.join('\n');
+}
+
+/* ------------------------------------------------------------------ *
+ * C4 container diagram (Mermaid)
+ * ------------------------------------------------------------------ */
+
+const C4_LAYER = {
+  'frontend-framework': 'ui', 'meta-framework': 'ui', 'frontend-approach': 'ui',
+  'mobile-framework': 'ui', 'admin-framework': 'ui', 'low-code-internal': 'ui', 'bi-tool': 'ui',
+  'backend-framework': 'app', 'workflow-orchestration': 'app', 'decisioning': 'app',
+  'database': 'data', 'eventing': 'data',
+  'identity': 'platform', 'observability': 'platform'
+};
+
+// Decomposition style and build-vs-buy are PROPERTIES of the system, not containers.
+// Drawing them as boxes is the classic generated-diagram tell — render them as a note instead.
+const C4_NOT_A_CONTAINER = new Set(['decomposition', 'build-vs-buy']);
+
+function renderC4(ix, recs, input) {
+  const L = [];
+  L.push('C4Container');
+  L.push(`  title Container diagram — ${input.productName || 'System'}`);
+  L.push('');
+  L.push(`  Person(user, "${input.audience || 'User'}", "Uses the system")`);
+  L.push('');
+  L.push(`  Container_Boundary(sys, "${input.productName || 'System'}") {`);
+
+  const seen = new Set();
+  const byLayer = { ui: [], app: [], data: [], platform: [] };
+  const properties = [];
+  for (const rec of recs) {
+    const t = ix.tech.get(rec.techId);
+    if (!t || seen.has(t.id)) continue;
+    seen.add(t.id);
+    if (C4_NOT_A_CONTAINER.has(t.category)) { properties.push({ t, rec }); continue; }
+    const layer = C4_LAYER[t.category] || 'app';
+    byLayer[layer].push({ t, rec });
+  }
+
+  const emit = (entry) => {
+    const { t, rec } = entry;
+    const id = slug(t.id).replace(/-/g, '_');
+    const desc = (rec.role || t.category).replace(/"/g, "'");
+    const tech = t.name.replace(/"/g, "'");
+    const macro = ['database', 'eventing'].includes(t.category) ? 'ContainerDb' : 'Container';
+    L.push(`    ${macro}(${id}, "${desc}", "${tech}", "${(t.best_when?.[0] || '').replace(/"/g, "'")}")`);
+    return id;
+  };
+
+  const ids = { ui: [], app: [], data: [], platform: [] };
+  for (const layer of ['ui', 'app', 'data', 'platform']) {
+    for (const e of byLayer[layer]) ids[layer].push(emit(e));
+  }
+  L.push('  }');
+  L.push('');
+
+  // The first app-layer container is the primary backend. UI talks to it; it fans out to the
+  // rest. Wiring every container to every other one produces a hairball, not a diagram.
+  const primary = ids.app[0];
+  const secondaryApps = ids.app.slice(1);
+
+  for (const u of ids.ui) {
+    L.push(primary
+      ? `  Rel(user, ${u}, "Uses", "HTTPS")`
+      : `  Rel(user, ${u}, "Uses", "HTTPS")`);
+  }
+  if (primary) {
+    for (const u of ids.ui) L.push(`  Rel(${u}, ${primary}, "Calls", "REST/JSON")`);
+    for (const a of secondaryApps) L.push(`  Rel(${primary}, ${a}, "Delegates to")`);
+    for (const d of ids.data) L.push(`  Rel(${primary}, ${d}, "Reads/writes")`);
+    for (const p of ids.platform) L.push(`  Rel(${primary}, ${p}, "Uses")`);
+  } else {
+    for (const u of ids.ui) for (const d of ids.data) L.push(`  Rel(${u}, ${d}, "Reads/writes")`);
+  }
+  for (const a of secondaryApps) for (const d of ids.data) L.push(`  Rel(${a}, ${d}, "Reads/writes")`);
+
+  if (properties.length) {
+    L.push('');
+    for (const { t, rec } of properties) {
+      L.push(`  %% ${rec.role || t.category}: ${t.name} — a property of the system, not a container.`);
+    }
+  }
+
+  L.push('');
+  L.push('  UpdateLayoutConfig($c4ShapeInRow="3", $c4BoundaryInRow="1")');
+  return L.join('\n');
+}
+
+/* ------------------------------------------------------------------ *
+ * Warnings — the innovation-token budget and missing-signal prompts
+ * ------------------------------------------------------------------ */
+
+// Source types whose value decays with time. A radar ring from 2024 is a weaker claim today;
+// the arc42 template and the Choose Boring Technology essay are not.
+const PERISHABLE_SOURCE_TYPES = new Set(['radar', 'survey', 'adoption-curve', 'adoption-data']);
+
+function buildWarnings(kb, ix, recs, input, totalTokens) {
+  const w = [];
+  const budgetRule = ix.rules.get('r-innovation-token-budget');
+  const threshold = budgetRule?.when?.total_innovation_token_cost_min ?? 3;
+
+  if (totalTokens >= threshold) {
+    const msg = (budgetRule?.then?.message || 'This stack spends {n} innovation tokens.')
+      .replace('{n}', totalTokens);
+    w.push({ level: 'warn', code: 'innovation-token-budget', message: msg });
+  } else {
+    w.push({
+      level: 'info', code: 'innovation-token-budget',
+      message: `This stack spends ${totalTokens} of roughly ${threshold} available innovation tokens.`
+    });
+  }
+
+  if (!input.compliance?.length) {
+    w.push({
+      level: 'ask', code: 'r-no-compliance-signal',
+      message: 'Is there a compliance regime in play (HIPAA, PCI, SOC2, GDPR, sector regulator)? Compliance is the constraint most likely to invalidate an entire recommendation set.'
+    });
+  }
+  if (!input.teamSize) {
+    w.push({
+      level: 'ask', code: 'r-no-team-signal',
+      message: 'How many engineers will own this in year two? Team size gates decomposition, ops-heavy choices and build-vs-buy.'
+    });
+  }
+
+  for (const rec of recs) {
+    const t = ix.tech.get(rec.techId);
+    if (!t) {
+      w.push({ level: 'error', code: 'unknown-tech', message: `No knowledge-base entry for "${rec.techId}".` });
+      continue;
+    }
+    if (['high', 'very-high'].includes(t.exit_cost)) {
+      w.push({
+        level: 'warn', code: 'exit-cost',
+        message: `${t.name} — ${EXIT_COST_PROSE[t.exit_cost]}`
+      });
+    }
+    const staleDays = kb.meta?.refresh_policy?.stale_after_days ?? 270;
+    const s = ix.src.get(t.maturity?.source_id);
+    // Only point-in-time signals go stale. Templates, essays and pattern catalogues do not.
+    if (s?.published && PERISHABLE_SOURCE_TYPES.has(s.type)) {
+      const pub = new Date(s.published.length === 7 ? `${s.published}-01` : s.published);
+      const age = (Date.now() - pub.getTime()) / 86400000;
+      if (age > staleDays) {
+        w.push({
+          level: 'stale', code: 'stale-source',
+          message: `${t.name} — maturity signal cites ${s.name}, published ${s.published}. Re-check the current volume.`
+        });
+      }
+    }
+  }
+  return w;
+}
+
+/* ------------------------------------------------------------------ *
+ * Main entry point
+ * ------------------------------------------------------------------ */
+
+function buildExports({ kb, input = {}, recommendations = [], date }) {
+  if (!kb || !kb.technologies) throw new Error('buildExports: kb is required (stack-kb.json v0.1.0 shape)');
+
+  const ix = indexKb(kb);
+  const d = today(date);
+  const drivers = decisionDrivers(kb, ix, input);
+
+  const surfaceLabel = (kb.surfaces || []).find((s) => s.id === input.surface)?.label;
+  const enrichedInput = { ...input, surfaceLabel };
+
+  const start = input.adrStartNumber ?? 1;
+  const adrs = [];
+  let totalTokens = 0;
+
+  recommendations.forEach((rec, i) => {
+    const tech = ix.tech.get(rec.techId);
+    if (!tech) return;
+    const adr = renderAdr({
+      number: start + i, tech, rec, ix, drivers, input: enrichedInput, date: d
+    });
+    totalTokens += adr.tokens || 0;
+    adrs.push(adr);
+  });
+
+  const validRecs = recommendations.filter((r) => ix.tech.has(r.techId));
+  const tradeoff = renderTradeoff(ix, validRecs, drivers);
+  const arc42 = renderArc42(ix, validRecs, adrs, drivers, enrichedInput);
+  const c4Mermaid = renderC4(ix, validRecs, enrichedInput);
+  const warnings = buildWarnings(kb, ix, validRecs, input, totalTokens);
+
+  const bundle = [
+    `# ${input.productName || 'System'} — architecture decision pack`,
+    '',
+    `Generated ${d} from knowledge base v${kb.meta?.schema_version || '?'}.`,
+    'This is a directional starting point produced by a heuristic advisor. Validate every decision against real constraints before adopting it.',
+    '',
+    '## Advisor notes',
+    '',
+    ...warnings.map((w) => `- **${w.level.toUpperCase()}** — ${w.message}`),
+    '',
+    '---',
+    '',
+    tradeoff,
+    '---',
+    '',
+    '## Container diagram',
+    '',
+    '```mermaid',
+    c4Mermaid,
+    '```',
+    '',
+    '---',
+    '',
+    arc42,
+    '---',
+    '',
+    '# Architecture Decision Records',
+    '',
+    ...adrs.map((a) => `\n${a.markdown}\n\n---\n`)
+  ].join('\n');
+
+  const files = [
+    { path: 'docs/architecture.md', content: arc42 },
+    { path: 'docs/tradeoff.md', content: tradeoff },
+    { path: 'docs/container.mmd', content: c4Mermaid },
+    { path: 'docs/decision-pack.md', content: bundle },
+    ...adrs.map((a) => ({ path: `docs/adr/${a.filename}`, content: a.markdown }))
+  ];
+
+  return { adrs, arc42, c4Mermaid, tradeoff, bundle, warnings, files, totalTokens, drivers };
+}
+
+/* ------------------------------------------------------------------ *
+ * Browser download helpers (no dependencies)
+ * ------------------------------------------------------------------ */
+
+function downloadText(filename, text) {
+  const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function copyToClipboard(text) {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch { return false; }
+}
+
+window.AdrExport = { buildExports, downloadText, copyToClipboard };
+
 </script>
 </body>
 </html>
