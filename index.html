@@ -14,6 +14,19 @@
     --good:#34c98a; --warn:#e0a23c; --chip:#171b24;
     --radius:10px; --radius-sm:7px; --radius-lg:12px;
     --ease:cubic-bezier(.2,.7,.3,1);
+    /* Deliberate type scale (~1.25 ratio) — replaces ad-hoc half-pixel sizing tuned by eye.
+       Applied to the highest-visibility, most-repeated components first (stack cards, section
+       titles); not a blanket find-replace across every legacy size in the file. */
+    --fs-xs:11px; --fs-sm:12px; --fs-base:13px;
+    /* Fluid above the base tier via clamp() — scales with viewport instead of jumping at fixed
+       breakpoints, so the hero/card headline sizes stay proportionate on mobile without a
+       separate media-query override for each one. */
+    --fs-md:clamp(14px, 0.5vw + 13.5px, 15px);
+    --fs-lg:clamp(17px, 1.2vw + 15px, 19px);
+    --fs-xl:clamp(21px, 2.4vw + 17px, 26px);
+    /* Confidence gets a real visual channel (border + tint), not just a 6px dot's opacity. */
+    --conf-high-border:rgba(91,141,239,0.55); --conf-high-bg:rgba(91,141,239,0.05);
+    --conf-med-border:var(--border); --conf-low-border:#2a303e;
   }
   *{box-sizing:border-box;}
   html{-webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;}
@@ -67,20 +80,39 @@
   button.ghost:hover{color:var(--text); border-color:var(--accent);}
   #results{display:none;}
   .section-title{
-    font-size:10.5px; text-transform:uppercase; letter-spacing:0.06em; color:var(--accent);
+    /* Neutral, not accent-blue: blue is reserved for interactive elements (buttons, links,
+       hover states) elsewhere in this file. All 16 section headers using the same blue as
+       every button/link diluted "blue means click me" into "blue means nothing in particular" —
+       one of the concrete generic-AI-dashboard tells this pass fixes. */
+    font-size:10.5px; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted2);
     margin:22px 0 9px; font-weight:700;
   }
+  .results-hero{
+    background:linear-gradient(155deg, rgba(91,141,239,0.1), rgba(124,91,239,0.05) 60%, transparent);
+    border:1px solid rgba(91,141,239,0.25); border-radius:var(--radius-lg);
+    padding:18px 20px; margin-bottom:18px;
+  }
+  .results-hero .rh-eyebrow{font-size:var(--fs-xs); text-transform:uppercase; letter-spacing:0.06em; color:var(--accent2); font-weight:700; margin-bottom:6px;}
+  .results-hero .rh-headline{font-size:var(--fs-xl); font-weight:800; letter-spacing:-0.015em; color:var(--text); line-height:1.25; margin-bottom:10px;}
+  .results-hero .signals{margin-top:0;}
   .grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(264px,1fr)); gap:10px;}
   .stack-card{
-    background:var(--panel2); border:1px solid var(--border); border-radius:var(--radius); padding:13px;
-    transition:border-color .15s var(--ease);
+    background:var(--panel2); border:1px solid var(--conf-med-border); border-radius:var(--radius); padding:13px;
+    border-left-width:3px; transition:border-color .15s var(--ease), background .15s var(--ease);
   }
   .stack-card:hover{border-color:#2c3342;}
   .stack-card{position:relative;}
+  /* Confidence gets a real visual channel: high-confidence cards get an accent-tinted left
+     border and a faint background wash so they visually lead; low-confidence cards get a
+     dashed left border so "this is a default, not a signal-driven pick" is legible at a glance
+     without reading the badge text. Was previously a 6px dot's opacity difference only. */
+  .stack-card.card-conf-high{border-left-color:var(--conf-high-border); background:linear-gradient(180deg, var(--conf-high-bg), transparent 60%), var(--panel2);}
+  .stack-card.card-conf-medium{border-left-color:var(--accent2); opacity:0.94;}
+  .stack-card.card-conf-low{border-left-style:dashed; border-left-color:var(--conf-low-border); opacity:0.82;}
   .stack-card .head{display:flex; justify-content:space-between; align-items:flex-start; gap:8px;}
-  .stack-card h3{margin:0 0 3px; font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.03em; font-weight:600;}
-  .stack-card .pick{font-size:14.5px; font-weight:700; margin:3px 0 6px; color:var(--text); letter-spacing:-0.01em;}
-  .stack-card .why{font-size:12px; color:var(--muted); line-height:1.48;}
+  .stack-card h3{margin:0 0 3px; font-size:var(--fs-xs); color:var(--muted); text-transform:uppercase; letter-spacing:0.03em; font-weight:600;}
+  .stack-card .pick{font-size:var(--fs-md); font-weight:700; margin:3px 0 6px; color:var(--text); letter-spacing:-0.01em;}
+  .stack-card .why{font-size:var(--fs-sm); color:var(--muted); line-height:1.48;}
   .conf{
     flex-shrink:0; display:inline-flex; align-items:center; gap:5px;
     font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em;
@@ -1882,13 +1914,22 @@ function renderRecommendations(s, rec){
 
   const confLabel = c => ({high:'High confidence', medium:'Medium confidence', low:'Low confidence (default)'}[c] || 'Low confidence (default)');
 
-  const signalsHtml = `<div class="card"><div class="signals">${activeSignals.length? activeSignals.map(x=>`<span class="sig">${x}</span>`).join('') : '<span class="sig">generic / no strong signals — defaults applied</span>'}</div></div>`;
+  // Hero moment: results used to open straight into a flat chip row, then 15 visually-identical
+  // stack cards — no anchor for the eye to land on first. This gives the page one clear headline
+  // before the detail grid, built from fields that are always present (cloud/database picks),
+  // not a hand-authored summary requiring new NLG logic.
+  const heroHeadline = `${cloud.v.split(/[(—]/)[0].trim()} + ${db.v.split(/[(—·]/)[0].trim()}`;
+  const signalsHtml = `<div class="results-hero">
+      <div class="rh-eyebrow">${activeSignals.length} signal${activeSignals.length===1?'':'s'} detected</div>
+      <div class="rh-headline">${heroHeadline}</div>
+      <div class="signals">${activeSignals.length? activeSignals.map(x=>`<span class="sig">${x}</span>`).join('') : '<span class="sig">generic / no strong signals — defaults applied</span>'}</div>
+    </div>`;
 
   const sections = [];
   const sec = (id, navLabel, titleHtml, bodyHtml) => sections.push({id, navLabel, titleHtml, bodyHtml});
 
   sec('stack', 'Stack', 'Core Technical Stack', `<div class="grid">${stackCards.map(([title, pick, why, conf, persona, altToggle])=>
-    `<div class="stack-card"><div class="head"><h3>${title}</h3><span class="conf conf-${conf||'low'}">${confLabel(conf)}</span></div><div class="pick">${pick}</div><div class="why">${why}</div><div class="persona">${persona}</div>${altToggle||''}</div>`
+    `<div class="stack-card card-conf-${conf||'low'}"><div class="head"><h3>${title}</h3><span class="conf conf-${conf||'low'}">${confLabel(conf)}</span></div><div class="pick">${pick}</div><div class="why">${why}</div><div class="persona">${persona}</div>${altToggle||''}</div>`
   ).join('')}</div>`);
 
   sec('iamcompare', 'IAM Options', 'Identity Provider Options <span style="color:var(--muted); text-transform:none; letter-spacing:0; font-weight:400;">— Okta vs. Entra ID vs. Ping/ForgeRock vs. OneLogin vs. JumpCloud, plus PAM/IGA</span>',
@@ -2028,7 +2069,6 @@ function renderRecommendations(s, rec){
 
   const html = `
     <div id="sig-anchor"></div>
-    <div class="section-title">Detected Signals</div>
     ${signalsHtml}
     ${accordionHtml}
   `;
