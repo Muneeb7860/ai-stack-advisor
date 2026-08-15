@@ -318,13 +318,25 @@
   #screenMode.active{display:flex;}
   #screenFreetext{display:none;}
   #screenFreetext.active{display:block;}
-  .mode-head h1{font-size:var(--fs-xl); margin:0 0 9px; font-weight:800; letter-spacing:-0.02em;}
-  .mode-head p{color:var(--muted); font-size:var(--fs-base); line-height:1.6; margin:0 0 22px; max-width:520px;}
-  .mode-preview-row{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:26px;}
-  .mode-preview-row span{
-    background:var(--chip); border:1px solid var(--border); color:var(--muted2);
-    font-size:10.5px; padding:4px 10px; border-radius:999px;
+  .mode-eyebrow{
+    display:inline-flex; align-items:center; gap:7px; background:var(--chip); border:1px solid var(--border);
+    border-radius:999px; padding:6px 13px 6px 10px; font-size:11px; color:var(--muted2); font-weight:600; margin-bottom:16px;
   }
+  .mode-eyebrow::before{content:''; width:6px; height:6px; border-radius:50%; background:var(--good); flex-shrink:0; box-shadow:0 0 6px rgba(52,201,138,0.7);}
+  .mode-head h1{font-size:var(--fs-xl); margin:0 0 12px; font-weight:800; letter-spacing:-0.02em; line-height:1.15;}
+  .mode-head h1 .hl-accent{background:linear-gradient(135deg, var(--accent), var(--accent2)); -webkit-background-clip:text; background-clip:text; color:transparent;}
+  .mode-head p{color:var(--muted); font-size:var(--fs-base); line-height:1.6; margin:0 0 26px; max-width:520px;}
+  /* "Screenshot" framing for the hero preview — reuses real .stack-card/.conf components below,
+     not a fabricated mockup, so this is an honest preview of actual output. */
+  .hero-preview{
+    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg);
+    overflow:hidden; margin-bottom:28px; box-shadow:0 20px 50px -20px rgba(0,0,0,0.6);
+  }
+  .hp-chrome{display:flex; align-items:center; gap:6px; padding:10px 14px; border-bottom:1px solid var(--border); background:var(--panel2);}
+  .hp-dot{width:8px; height:8px; border-radius:50%; background:var(--border);}
+  .hp-chrome-label{margin-left:8px; font-size:10.5px; color:var(--muted); font-weight:600;}
+  .hp-cards{display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:16px;}
+  @media (max-width:640px){ .hp-cards{grid-template-columns:1fr;} }
   .mode-cards{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
   .mode-card{
     background:linear-gradient(180deg, var(--panel), var(--panel2)); border:1px solid var(--border);
@@ -486,11 +498,26 @@
 <!-- ================= Mode picker (decision #3: equal weight, no default) ================= -->
 <div id="screenMode">
   <div class="mode-head">
-    <h1>🧭 AI Stack Advisor</h1>
-    <p>Tell us about what you're building — however's easiest for you. Get a full technical + AI architecture recommendation back, with confidence ratings and cited reasoning, in one pass.</p>
-    <div class="mode-preview-row">
-      <span>Cloud &amp; database</span><span>LLM strategy</span><span>RAG architecture</span>
-      <span>Cost estimate</span><span>Governance targets</span><span>16 sections total</span>
+    <div class="mode-eyebrow">🧭 AI Stack Advisor — runs entirely in your browser, no signup</div>
+    <h1>One paragraph in.<br><span class="hl-accent">A full architecture out.</span></h1>
+    <p>Cloud, database, LLM strategy, RAG, cost, and governance — every pick backed by a confidence rating and a cited reason, not a black box.</p>
+  </div>
+  <!-- Real proof of value, not a text-chip promise: these are the actual .stack-card / .conf
+       components the results page renders, reused verbatim (pointer-events:none, static
+       example data) so this is a genuine preview, not an idealized mockup pretending to be one. -->
+  <div class="hero-preview">
+    <div class="hp-chrome"><span class="hp-dot"></span><span class="hp-dot"></span><span class="hp-dot"></span><span class="hp-chrome-label">Your result, in seconds</span></div>
+    <div class="hp-cards">
+      <div class="stack-card card-conf-high" style="pointer-events:none;">
+        <div class="head"><h3>Cloud Provider</h3><span class="conf conf-high">High confidence</span></div>
+        <div class="pick">AWS</div>
+        <div class="why">Explicit AWS usage detected — build on existing footprint rather than introducing a second cloud.</div>
+      </div>
+      <div class="stack-card card-conf-medium" style="pointer-events:none;">
+        <div class="head"><h3>AI / LLM Strategy</h3><span class="conf conf-medium">Medium confidence</span></div>
+        <div class="pick">Claude Sonnet + RAG</div>
+        <div class="why">Chatbot signal detected alongside a knowledge-base requirement.</div>
+      </div>
     </div>
   </div>
   <div class="mode-cards">
