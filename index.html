@@ -7,11 +7,22 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
+<script>
+  // Runs before the <style> block below is applied, so the saved theme is set before first
+  // paint — otherwise a returning light-theme user would see one dark frame flash before JS
+  // in the body catches up. Dark stays the default (decision: "add light theme as well",
+  // keep dark as the baseline) — light is opt-in via localStorage only.
+  (function(){
+    try {
+      if (localStorage.getItem('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
+    } catch(e) {}
+  })();
+</script>
 <style>
   :root{
     --bg:#0a0c11; --panel:#12151d; --panel2:#151922; --border:#1f2430;
     --text:#e8ebf1; --muted:#828a99; --muted2:#9aa1ae; --accent:#5b8def; --accent2:#7c5bef;
-    --good:#34c98a; --warn:#e0a23c; --chip:#171b24;
+    --good:#34c98a; --warn:#e0a23c; --chip:#171b24; --surface:#0a0e15;
     --radius:10px; --radius-sm:7px; --radius-lg:12px;
     --ease:cubic-bezier(.2,.7,.3,1);
     /* Deliberate type scale (~1.25 ratio) — replaces ad-hoc half-pixel sizing tuned by eye.
@@ -27,9 +38,30 @@
     /* Confidence gets a real visual channel (border + tint), not just a 6px dot's opacity. */
     --conf-high-border:rgba(91,141,239,0.55); --conf-high-bg:rgba(91,141,239,0.05);
     --conf-med-border:var(--border); --conf-low-border:#2a303e;
+    --dot-rgb:255,255,255; --dot-alpha:0.035;
+  }
+  /* Light theme — explicit opt-in via [data-theme="light"] on <html>, toggled by the button in
+     the header and persisted to localStorage. Not prefers-color-scheme-driven: this is a
+     user-chosen toggle (decision: "add light theme as well", keep dark as the default), not an
+     automatic system-preference switch. Every token below has a real, checked light equivalent —
+     not just an inverted --bg with everything else left dark-tuned. */
+  :root[data-theme="light"]{
+    --bg:#f7f8fa; --panel:#ffffff; --panel2:#f3f4f7; --border:#e2e5eb;
+    --text:#161a22; --muted:#6b7280; --muted2:#4b5361; --accent:#3b6fd6; --accent2:#6d4fd1;
+    --good:#1f9d6b; --warn:#b5760e; --chip:#eef0f4; --surface:#ffffff;
+    --conf-high-border:rgba(59,111,214,0.4); --conf-high-bg:rgba(59,111,214,0.05);
+    --conf-med-border:var(--border); --conf-low-border:#c7cbd4;
+    --dot-rgb:10,12,17; --dot-alpha:0.05;
   }
   *{box-sizing:border-box;}
   html{-webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;}
+  .theme-toggle{
+    position:fixed; top:16px; right:16px; z-index:100; width:34px; height:34px;
+    background:var(--chip); border:1px solid var(--border); border-radius:999px;
+    color:var(--text); font-size:15px; cursor:pointer; display:flex; align-items:center; justify-content:center;
+    transition:border-color .15s var(--ease), background .2s var(--ease);
+  }
+  .theme-toggle:hover{border-color:var(--accent);}
   body{
     margin:0; font-family:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     /* Was a corner-glow radial gradient — close to a template signature at this point (the
@@ -38,8 +70,9 @@
        stock gradient, common in considered dev-tool UI (Linear/Vercel-style) without reading
        as generic. */
     background:
-      radial-gradient(circle at 1px 1px, rgba(255,255,255,0.035) 1px, transparent 0) 0 0/24px 24px,
+      radial-gradient(circle at 1px 1px, rgba(var(--dot-rgb),var(--dot-alpha)) 1px, transparent 0) 0 0/24px 24px,
       var(--bg);
+    transition:background-color .2s var(--ease), color .2s var(--ease);
     color:var(--text); min-height:100vh; padding:26px 16px 64px;
     letter-spacing:-0.006em; font-size:14px; line-height:1.5;
     font-variant-numeric:tabular-nums; font-feature-settings:'tnum' 1;
@@ -56,7 +89,7 @@
   }
   label.field-label{font-size:11.5px; color:var(--muted2); font-weight:600; letter-spacing:0.01em;}
   textarea{
-    width:100%; min-height:140px; resize:vertical; background:#0a0e15;
+    width:100%; min-height:140px; resize:vertical; background:var(--surface);
     border:1px solid var(--border); border-radius:var(--radius); color:var(--text);
     padding:12px; font-size:13.5px; line-height:1.5; font-family:inherit;
     transition:border-color .15s var(--ease);
@@ -140,11 +173,11 @@
   .llm-picks{display:flex; flex-direction:column; gap:7px;}
   .llm-row{
     display:flex; justify-content:space-between; align-items:center; gap:10px;
-    background:#0a0e15; border:1px solid var(--border); border-radius:var(--radius); padding:9px 12px;
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:9px 12px;
   }
   .llm-row .name{font-weight:600; font-size:13px; letter-spacing:-0.006em;}
   .llm-row .tag{color:var(--muted); font-size:11px;}
-  .rag-pick{background:#0a0e15; border:1px solid var(--border); border-radius:var(--radius); padding:12px;}
+  .rag-pick{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:12px;}
   .rag-pick .name{font-size:14px; font-weight:700; color:var(--good); margin-bottom:3px; letter-spacing:-0.01em;}
   .guardrail-list{display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;}
   .g-chip{background:rgba(224,162,60,0.1); border:1px solid rgba(224,162,60,0.3); color:#e8c07e; border-radius:6px; padding:5px 9px; font-size:11.5px;}
@@ -152,15 +185,15 @@
   .sig{background:var(--chip); border:1px solid var(--border); color:var(--muted); border-radius:999px; padding:3px 8px; font-size:10.5px;}
   .footer-note{color:var(--muted); font-size:11px; margin-top:24px; line-height:1.55; border-top:1px solid var(--border); padding-top:13px;}
   .docs-row{display:flex; gap:8px; flex-wrap:wrap; margin-top:5px;}
-  .doc-chip{background:#0a0e15; border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 11px; font-size:12px; flex:1; min-width:145px;}
+  .doc-chip{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 11px; font-size:12px; flex:1; min-width:145px;}
   .doc-chip b{display:block; font-size:11px; color:var(--accent); margin-bottom:2px;}
   .persona{font-size:9px; color:var(--accent2); text-transform:uppercase; letter-spacing:0.03em; margin-top:2px; font-weight:700;}
-  .opt-item{background:#0a0e15; border:1px solid var(--border); border-radius:var(--radius); padding:11px 13px; margin-bottom:7px;}
+  .opt-item{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:11px 13px; margin-bottom:7px;}
   .opt-item:last-child{margin-bottom:0;}
   .opt-item .t{font-weight:600; font-size:12.5px; margin-bottom:3px; color:var(--text); letter-spacing:-0.006em;}
   .opt-item .w{font-size:11.5px; color:var(--muted); line-height:1.48;}
   .cost-grid{display:flex; flex-direction:column; gap:8px;}
-  .cost-row{display:grid; grid-template-columns:120px 180px 1fr; gap:12px; align-items:start; background:#0a0e15; border:1px solid var(--border); border-radius:var(--radius); padding:11px 13px;}
+  .cost-row{display:grid; grid-template-columns:120px 180px 1fr; gap:12px; align-items:start; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:11px 13px;}
   .cost-label{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--accent2); padding-top:1px;}
   .cost-value{font-size:14px; font-weight:700; color:var(--text); letter-spacing:-0.01em;}
   .cost-detail{font-size:11.5px; color:var(--muted); line-height:1.5;}
@@ -170,11 +203,11 @@
   .tier-table td{padding:8px; border-bottom:1px solid var(--border); color:var(--text);}
   .tier-table tr:last-child td{border-bottom:none;}
   .gov-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(232px,1fr)); gap:10px;}
-  .gov-block{background:#0a0e15; border:1px solid var(--border); border-radius:var(--radius); padding:13px;}
+  .gov-block{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:13px;}
   .gov-block h4{margin:0 0 8px; font-size:10.5px; text-transform:uppercase; letter-spacing:0.04em; color:var(--accent2); font-weight:700;}
   .gov-block ul{margin:0; padding-left:16px; font-size:12px; color:var(--text); line-height:1.6;}
   .assumption{font-size:11px; color:var(--muted); margin-top:9px; padding-top:9px; border-top:1px dashed var(--border); line-height:1.5;}
-  .tradeoff-card{background:#0a0e15; border:1px solid var(--border); border-radius:var(--radius); padding:14px; margin-bottom:9px;}
+  .tradeoff-card{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px; margin-bottom:9px;}
   .tradeoff-card:last-child{margin-bottom:0;}
   .tradeoff-card .head{display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:2px;}
   .tradeoff-card h3{margin:0; font-size:11.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.03em; font-weight:600;}
@@ -182,7 +215,7 @@
   .tradeoff-card .why{font-size:12px; color:var(--text); line-height:1.5; margin-bottom:9px;}
   .tradeoff-card .when{font-size:12px; color:var(--muted); line-height:1.5; background:rgba(224,162,60,0.07); border:1px solid rgba(224,162,60,0.22); border-radius:var(--radius-sm); padding:8px 11px;}
   .tradeoff-card .when b{color:var(--warn); font-weight:700;}
-  .glossary{font-size:11.5px; color:var(--muted); line-height:1.55; background:#0a0e15; border:1px solid var(--border); border-radius:var(--radius); padding:11px 13px; margin-bottom:12px;}
+  .glossary{font-size:11.5px; color:var(--muted); line-height:1.55; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:11px 13px; margin-bottom:12px;}
   .vram-table{width:100%; border-collapse:collapse; font-size:11.5px;}
   .vram-table th{text-align:left; color:var(--accent2); font-size:10px; text-transform:uppercase; letter-spacing:0.03em; padding:7px 9px; border-bottom:1px solid var(--border); font-weight:700;}
   .vram-table td{padding:8px 9px; border-bottom:1px solid var(--border); color:var(--text); vertical-align:top; line-height:1.48;}
@@ -193,7 +226,7 @@
   .iam-vendor-list{display:flex; flex-direction:column; gap:8px;}
   .alt-toggle-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(230px,1fr)); gap:8px;}
   .grid .stack-card:has(.alt-toggle[open]){grid-column:1 / -1;}
-  .iam-vendor-card{background:#0a0e15; border:1px solid var(--border); border-radius:var(--radius); padding:12px 14px;}
+  .iam-vendor-card{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:12px 14px;}
   .iam-vendor-card.recommended{border-color:rgba(52,201,138,0.4); background:rgba(52,201,138,0.05);}
   .iam-vendor-card .ivc-head{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;}
   .iam-vendor-card .ivc-name{font-weight:700; font-size:13px; color:var(--text); letter-spacing:-0.006em;}
@@ -363,7 +396,7 @@
   .wiz-sub{font-size:13px; color:var(--muted); margin:0 0 20px; line-height:1.5;}
   .chip-grid{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:6px;}
   .pick-chip{
-    background:#0a0e15; border:1.5px solid var(--border); color:var(--text); padding:10px 15px;
+    background:var(--surface); border:1.5px solid var(--border); color:var(--text); padding:10px 15px;
     border-radius:10px; font-size:13px; cursor:pointer; transition:all .15s var(--ease); font-weight:500;
     display:flex; align-items:center; gap:7px;
   }
@@ -372,7 +405,7 @@
   .pick-chip.selected::after{content:'✓'; color:var(--accent); font-weight:700; margin-left:2px;}
   .radio-list{display:flex; flex-direction:column; gap:7px;}
   .pick-radio{
-    background:#0a0e15; border:1.5px solid var(--border); border-radius:10px; padding:12px 15px;
+    background:var(--surface); border:1.5px solid var(--border); border-radius:10px; padding:12px 15px;
     cursor:pointer; transition:all .15s var(--ease); display:flex; align-items:center; justify-content:space-between; gap:10px;
   }
   .pick-radio:hover{border-color:#3a4256;}
@@ -449,7 +482,7 @@
   .refine-error{background:rgba(224,162,60,0.08); border:1px solid rgba(224,162,60,0.3); border-radius:7px; padding:8px 10px; color:#e8c07e;}
   .refine-keyprompt{margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;}
   .refine-keyprompt input{
-    flex:1; min-width:180px; background:#0a0e15; border:1px solid var(--border); border-radius:7px;
+    flex:1; min-width:180px; background:var(--surface); border:1px solid var(--border); border-radius:7px;
     color:var(--text); padding:7px 9px; font-size:11.5px; font-family:inherit;
   }
   .refine-keyprompt input:focus{outline:none; border-color:var(--accent);}
@@ -462,10 +495,10 @@
   .ask-thread{display:flex; flex-direction:column; gap:6px; margin-bottom:7px;}
   .ask-msg{padding:7px 10px; border-radius:8px; font-size:11.5px; line-height:1.5; max-width:92%;}
   .ask-msg.user{background:rgba(91,141,239,0.14); border:1px solid rgba(91,141,239,0.3); align-self:flex-end;}
-  .ask-msg.answer{background:#0a0e15; border:1px solid var(--border); align-self:flex-start;}
+  .ask-msg.answer{background:var(--surface); border:1px solid var(--border); align-self:flex-start;}
   .ask-input-row{display:flex; gap:6px;}
   .ask-input-row input{
-    flex:1; background:#0a0e15; border:1px solid var(--border); border-radius:7px;
+    flex:1; background:var(--surface); border:1px solid var(--border); border-radius:7px;
     color:var(--text); padding:7px 9px; font-size:11.5px; font-family:inherit;
   }
   .ask-input-row input:focus{outline:none; border-color:var(--accent);}
@@ -494,6 +527,8 @@
 </style>
 </head>
 <body>
+
+<button id="themeToggle" class="theme-toggle" onclick="toggleTheme()" title="Switch theme" aria-label="Switch between dark and light theme">🌙</button>
 
 <!-- ================= Mode picker (decision #3: equal weight, no default) ================= -->
 <div id="screenMode">
@@ -553,6 +588,8 @@
       <div class="pick-chip" data-val="chatbot"><span>💬</span>AI chatbot / assistant</div>
       <div class="pick-chip" data-val="data"><span>📊</span>Data / analytics platform</div>
       <div class="pick-chip" data-val="internal"><span>🛠️</span>Internal tool</div>
+      <div class="pick-chip" data-val="admin"><span>📋</span>Admin / dashboard app</div>
+      <div class="pick-chip" data-val="ecommerce"><span>🛒</span>E-commerce / marketplace</div>
     </div>
   </div>
 
@@ -606,7 +643,7 @@
   <div class="wiz-step" data-step="6">
     <div class="wiz-q">Anything else worth knowing?</div>
     <div class="wiz-sub">Optional — existing cloud provider, latency needs, budget constraints, anything the questions above didn't cover.</div>
-    <textarea id="wizFreetext" style="width:100%; min-height:90px; resize:vertical; background:#0a0e15; border:1px solid var(--border); border-radius:var(--radius); color:var(--text); padding:12px; font-size:13px; font-family:inherit;" placeholder="e.g. We're already on AWS, need to launch in 6 weeks, budget is tight..."></textarea>
+    <textarea id="wizFreetext" style="width:100%; min-height:90px; resize:vertical; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); padding:12px; font-size:13px; font-family:inherit;" placeholder="e.g. We're already on AWS, need to launch in 6 weeks, budget is tight..."></textarea>
     <div class="skip-note">Skip this and we'll work from your answers above alone.</div>
   </div>
 
@@ -2435,6 +2472,20 @@ function showFlowPopover(id){
 
 initFlowViewport();
 
+// ---------------- Theme toggle (dark default, light opt-in, persisted) ----------------
+function syncThemeToggleIcon(){
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  const btn = document.getElementById('themeToggle');
+  if (btn) { btn.textContent = isLight ? '☀️' : '🌙'; btn.title = isLight ? 'Switch to dark theme' : 'Switch to light theme'; }
+}
+function toggleTheme(){
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  if (isLight) { document.documentElement.removeAttribute('data-theme'); try{ localStorage.setItem('theme','dark'); }catch(e){} }
+  else { document.documentElement.setAttribute('data-theme','light'); try{ localStorage.setItem('theme','light'); }catch(e){} }
+  syncThemeToggleIcon();
+}
+syncThemeToggleIcon(); // reflect whatever the <head> inline script already applied pre-paint
+
 /* ================================================================================
    Guided mode + backend wiring milestone (decisions #1-13, see KICKOFF_BRIEF.md)
    ================================================================================ */
@@ -2512,6 +2563,8 @@ function synthesizeRequirementText(state){
     api: 'an API / backend service', chatbot: 'an AI chatbot',
     data: 'a data analytics platform with data pipelines',
     internal: 'an internal tool for internal company employees',
+    admin: 'an internal admin dashboard for managing operations, with role-based access control and audit logging',
+    ecommerce: 'an e-commerce platform with a shopping cart and checkout',
   };
   const buildingPhrases = state.building.map(b => buildingMap[b]).filter(Boolean);
   if (buildingPhrases.length) parts.push(`We're building ${buildingPhrases.join(' and ')}.`);
