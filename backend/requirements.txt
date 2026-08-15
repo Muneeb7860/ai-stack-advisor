@@ -10,7 +10,13 @@ anthropic>=0.34
 # 2.0 rename of the older mcp.server.fastmcp.FastMCP API. A pin below 2.0 would resolve to
 # the pre-rename module path and break the import — not just a "get the latest" preference.
 mcp>=2.0
-# app/retrieval.py: TF-IDF/cosine-similarity retrieval over docs/use-case-knowledge-base/,
-# same approach as the research prototype it ports from (see that module's docstring for why
-# TF-IDF rather than a dense embedding model — a real, disclosed limitation, not an oversight).
-scikit-learn>=1.4
+# app/retrieval.py: ChromaDB vector store for embeddings-based retrieval over
+# docs/use-case-knowledge-base/ — see that module's docstring for why embeddings (via a local
+# Ollama model) replaced the earlier TF-IDF/cosine approach, and why ChromaDB's own bundled
+# default embedding function was rejected (it fetches from Hugging Face at runtime).
+chromadb>=1.5
+# httpx: used directly by app/retrieval.py to call the local Ollama /api/embed endpoint, and
+# by app/llm_providers.py for the local-model chat/tool-calling fallback. Already an
+# indirect dependency via fastapi/anthropic, pinned here because both modules import it
+# directly rather than relying on it being present transitively.
+httpx>=0.27

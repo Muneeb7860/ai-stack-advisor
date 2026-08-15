@@ -175,11 +175,12 @@ def test_build_grounding_context_returns_citable_content_for_covered_domain():
 
 
 def test_build_grounding_context_empty_for_zero_overlap_query():
-    """Best-effort, not a hard gate (module docstring) — GROUNDING_SCORE_THRESHOLD is
-    deliberately low (0.03, see refine.py's constant comment for the full empirical
-    reasoning), so this only filters TRUE zero-lexical-overlap queries, not merely
-    off-topic-but-still-technical-sounding ones (those can legitimately score 0.03-0.14 and
-    are an accepted, disclosed trade-off — not something this test asserts against)."""
+    """Best-effort, not a hard gate (module docstring) — GROUNDING_SCORE_THRESHOLD is tuned to
+    the embedding score scale (0.55, see refine.py's constant comment for the full empirical
+    reasoning post-migration to ChromaDB/embeddings), so this only filters TRUE
+    zero-relevance queries, not merely off-topic-but-still-technical-sounding ones (those can
+    legitimately score close to the threshold and are an accepted, disclosed trade-off — not
+    something this test asserts against)."""
     grounding = refine_module._build_grounding_context("Tell me a joke about cats.")
     assert grounding == ""
 
@@ -192,3 +193,61 @@ def test_refine_still_works_when_grounding_is_empty(mock_anthropic, refine_paylo
         json={**refine_payload, "requirement_text": "Configure DNS for our custom domain."},
     )
     assert resp.status_code == 200
+
+
+# --- Local-model (Ollama) fallback provider routing --- see app/llm_providers.py for the real
+# structured-output reliability numbers this feature is based on; these tests cover this
+# endpoint's own routing/opt-in-gating logic, not Ollama itself (monkeypatched, same spirit as
+# mock_anthropic above — no real local model call needed to run this file).
+
+def test_refine_rejects_ollama_provider_when_not_enabled(refine_payload):
+    """Both sides must opt in (LLM_PROVIDER=ollama on the deployment AND provider='ollama' on
+    the request) — see routers/refine.py. Default test settings have LLM_PROVIDER=anthropic,
+    so a caller asking for the local path gets a clear 400, never a silent reroute to Claude
+    nor an attempt to actually reach Ollama."""
+    resp = client.post(
+        "/api/refine",
+        json={**refine_payload, "provider": "ollama", "anthropic_api_key": None},
+    )
+    assert resp.status_code == 400
+    assert "not enabled" in resp.json()["detail"]
+
+
+def test_refine_ollama_provider_works_when_enabled(monkeypatch, refine_payload):
+    """With the deployment opted in (LLM_PROVIDER=ollama) and the caller opting in per-request,
+    /api/refine routes to the local path, omits requiring an anthropic_api_key, and labels the
+    response provider='ollama'."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "llm_provider", "ollama")
+    calls = []
+
+    def _fake_run_ollama_refinement(base_url, model, system_prompt, tool, requirement_text, recommendations, grounding):
+        calls.append({"requirement_text": requirement_text, "recommendations": recommendations})
+        return FAKE_REFINEMENT_RESULT, {"input_tokens": 10, "output_tokens": 5}
+
+    monkeypatch.setattr(refine_module, "run_ollama_refinement", _fake_run_ollama_refinement)
+
+    resp = client.post(
+        "/api/refine",
+        json={
+            "requirement_text": refine_payload["requirement_text"],
+            "recommendations": refine_payload["recommendations"],
+            "provider": "ollama",
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["provider"] == "ollama"
+    assert len(calls) == 1
+
+
+def test_refine_request_requires_api_key_for_anthropic_provider(refine_payload):
+    """anthropic_api_key is optional at the schema level (to allow the ollama path), but still
+    required when provider is (implicitly or explicitly) 'anthropic' — enforced by
+    schemas.RefineRequest's model_validator, not left to fail deeper in the call stack."""
+    resp = client.post(
+        "/api/refine",
+        json={**refine_payload, "anthropic_api_key": None},
+    )
+    assert resp.status_code == 422

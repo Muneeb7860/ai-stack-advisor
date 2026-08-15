@@ -29,6 +29,12 @@ it's out of scope forever.
 
 API key handling: identical to /api/refine — request-scoped, never logged, never persisted.
 
+Local-model fallback: identical opt-in contract to /api/refine (provider="ollama" on the
+request body + LLM_PROVIDER=ollama on this deployment) — see app/llm_providers.py. Ask's local
+path is plain-prose chat completion (no tool-calling schema to satisfy), which is why it was a
+safe fallback to ship even before /api/refine's stricter structured-output reliability was
+separately verified.
+
 RAG grounding (KICKOFF_BRIEF.md decision #6): retrieved from docs/use-case-knowledge-base/
 (app/retrieval.py) using the user's QUESTION as the query, not the original requirement text —
 per 00-INDEX-AND-INGESTION-GUIDE.md §2, "Anti-patterns sections are high-value retrieval
@@ -46,11 +52,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
+from ..config import settings
 from ..db import get_db
+from ..llm_providers import run_ollama_ask
 from ..retrieval import format_citation, retrieve
 
-GROUNDING_SCORE_THRESHOLD = 0.03  # see refine.py's identical constant for the full rationale
-GROUNDING_TOP_K = 2
+GROUNDING_SCORE_THRESHOLD = 0.55  # see refine.py's identical constant for the full rationale
+# (re-tuned for the embeddings scale, not the old TF-IDF-era 0.03)
+GROUNDING_TOP_K = 3  # see refine.py's identical constant for why (raised from 2)
 
 router = APIRouter(prefix="/api", tags=["ask"])
 
@@ -115,6 +124,13 @@ def _run_ask(api_key: str, system_prompt: str, history: list[dict]) -> tuple[str
 
 @router.post("/ask", response_model=schemas.AskResponse)
 def ask(payload: schemas.AskRequest, db: Session = Depends(get_db)):
+    if payload.provider == "ollama" and settings.llm_provider != "ollama":
+        raise HTTPException(
+            status_code=400,
+            detail="Local model fallback (provider='ollama') is not enabled on this deployment "
+            "(set LLM_PROVIDER=ollama).",
+        )
+
     analysis = db.query(models.Analysis).filter_by(id=payload.analysis_id).first()
     if not analysis:
         raise HTTPException(status_code=404, detail="Analysis not found")
@@ -135,7 +151,12 @@ def ask(payload: schemas.AskRequest, db: Session = Depends(get_db)):
     history = [{"role": m.role, "content": m.content} for m in prior_messages]
     history.append({"role": "user", "content": payload.question})
 
-    answer, usage = _run_ask(payload.anthropic_api_key, system_prompt, history)
+    if payload.provider == "ollama":
+        answer, usage = run_ollama_ask(settings.ollama_base_url, settings.ollama_model, system_prompt, history)
+        model_used = settings.ollama_model
+    else:
+        answer, usage = _run_ask(payload.anthropic_api_key, system_prompt, history)
+        model_used = MODEL
 
     # Persisted only now that the model call actually succeeded — see module docstring.
     user_row = models.ConversationMessage(
@@ -153,6 +174,7 @@ def ask(payload: schemas.AskRequest, db: Session = Depends(get_db)):
         analysis_id=analysis.id,
         answer=answer,
         usage=schemas.UsageInfo(**usage),
-        llm_model_used=MODEL,
+        llm_model_used=model_used,
         conversation=[schemas.ConversationMessageOut.model_validate(m) for m in all_messages],
+        provider=payload.provider,
     )

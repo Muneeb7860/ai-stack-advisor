@@ -10,8 +10,9 @@ must stay that way** (PRD NFR-5) — nothing here is a hard dependency for the c
 | Share links | **Built, tested** | `POST /api/analyses`, `POST /api/analyses/{id}/share`, `GET /api/analyses/shared/{slug}` |
 | LLM refinement | **Built, tested** | `POST /api/refine` — see `app/routers/refine.py` docstring for the constrained-reasoning design, RAG grounding, and a resolved gap (optional `analysis_id`) not covered by the original spec |
 | Grounded follow-up Q&A | **Built, tested** | `POST /api/ask` — see `app/routers/ask.py` docstring; scoped structurally to one `analysis_id`, replays full conversation history each turn, RAG-grounded on the follow-up question |
-| RAG retrieval | **Built, tested** | `app/retrieval.py` — two-stage TF-IDF retrieval over `../docs/use-case-knowledge-base/`, backs both endpoints above; see `RETRIEVAL-PROTOTYPE-FINDINGS.md` in that folder for the design rationale and `tests/test_retrieval_eval.py` for the 21-case eval (20 pass, 1 disclosed limitation) |
-| MCP tool wrapper | **Built, tested** | `app/mcp/server.py` — `recommend_stack()` tool, backed by `app/rule_engine.py` (Python port of `index.html`'s rule engine, verified against it — see `../docs/adr/0001-mcp-rule-engine-port.md`) |
+| RAG retrieval | **Built, tested** | `app/retrieval.py` — two-stage retrieval (routing + content, see module docstring) over `../docs/use-case-knowledge-base/`, backed by ChromaDB + a local Ollama embedding model (`nomic-embed-text`), not TF-IDF anymore; backs both endpoints above. `tests/test_retrieval_eval.py`'s 23-test eval: **before** (TF-IDF) 21 passed/1 xfailed/1 xpassed, **after** (embeddings) 20 passed/3 xfailed/0 xpassed — the embeddings swap fixed the one paraphrase-gap case TF-IDF was known to fail, and surfaced two new disclosed semantic-neighbor-confusion cases in exchange; see that file's `KNOWN_XFAIL_IDS`/`_XFAIL_REASONS` for the real per-case detail |
+| Local-model fallback | **Built, tested (opt-in, degraded)** | `POST /api/refine` / `POST /api/ask` with `provider: "ollama"` — see `app/llm_providers.py`. Claude stays primary/default; this only activates when the deployment sets `LLM_PROVIDER=ollama` AND the caller explicitly opts in per-request. Real measured structured-output pass rates against `qwen2.5:7b`/`mistral:latest` (native tool-calling + a JSON-parse fallback) are in that module's docstring — shipped as a genuine fallback for both endpoints, not narrowed to ask-only, because the measured combined reliability supported it |
+| MCP tool wrapper | **Built, tested — exercised end-to-end over real stdio** | `app/mcp/server.py` — `recommend_stack()` tool, backed by `app/rule_engine.py` (Python port of `index.html`'s rule engine, verified against it — see `../docs/adr/0001-mcp-rule-engine-port.md`). A real stdio JSON-RPC client (initialize → tools/list → tools/call) confirmed it end-to-end; found in the process that the `mcp` SDK does not inherit arbitrary env vars into the server subprocess by default (`mcp.client.stdio.get_default_environment()` only passes an allowlist like `PATH`/`HOME`) — a real Claude Desktop/Code MCP config for this server needs an explicit `"env": {"DATABASE_URL": "..."}` block, or it falls back to `config.py`'s default and silently can't reach Postgres |
 
 Full requirement traceability: `../docs/AI-Stack-Advisor-PRD.docx` FR-27/28/29, the ERD
 (`../diagrams/erd.html`), and the DDD (`../docs/AI-Stack-Advisor-DDD.docx`).
@@ -44,7 +45,8 @@ uvicorn app.main:app --reload
 pytest tests/ -v
 ```
 
-93 tests currently (91 passing, 1 xfailed by design, 1 xpassed):
+93 tests currently (90 passing, 3 xfailed by design — see `test_retrieval_eval.py` below for
+why that count changed from the TF-IDF era):
 - `test_guided_synthesis.py` (7): validates `index.html`'s guided-mode wizard synthesis
   (`synthesizeRequirementText()`) via a Python mirror, verified byte-for-byte against the real
   JS before being trusted — 7 scenarios covering every wizard branch including the skip-logic
@@ -89,11 +91,19 @@ pytest tests/ -v
 - `test_retrieval_eval.py` (23): the 21-case retrieval eval set from
   `../docs/use-case-knowledge-base/` (direct retrieval, anti-pattern "is X okay?" phrasing,
   cross-document queries, decision-point boundary cases, negative controls) wired to the real
-  `app/retrieval.py` implementation — 20 genuine passes, 1 xfail (a disclosed TF-IDF-vs-real-
-  embeddings paraphrase limitation, not silently hidden), a structural check that a
-  Signals/triggers chunk is never returned as citable content for any of the 21 queries, and
-  a regression test (found during audit) confirming a genuinely missing corpus degrades to
-  "no grounding" instead of a 500 — see `app/retrieval.py`'s `_get_index()` docstring.
+  `app/retrieval.py` implementation — a structural check that a Signals/triggers chunk is
+  never returned as citable content for any of the 21 queries, and a regression test (found
+  during audit) confirming a genuinely missing corpus degrades to "no grounding" instead of a
+  500. Real before/after numbers from the TF-IDF → ChromaDB/embeddings migration: **before**
+  21 passed / 1 xfailed (case 15, a paraphrase gap) / 1 xpassed (case 21, a negative-control
+  false positive that happened to squeak under threshold); **after** 20 passed / 3 xfailed —
+  case 15 is now a genuine pass (embeddings closed that paraphrase gap, the whole reason for
+  the migration), case 21 stays a disclosed gap, and two NEW disclosed gaps appeared (case 7:
+  a semantic-neighbor confusion — "fraud-scoring model" vs. a marketplace doc's "Trust &
+  safety pipeline" section; case 20: a negative control whose score now sits above the
+  weakest genuine hit, a known property of embedding cosine similarity's narrower score band).
+  See that file's `KNOWN_XFAIL_IDS`/`_XFAIL_REASONS` for the full per-case reasoning — nothing
+  here was tuned away to force green.
 
 `test_refine.py` and `test_ask.py` monkeypatch the real Anthropic call
 (`app.routers.refine._run_refinement` / `app.routers.ask._run_ask`) — no live API key or
@@ -152,18 +162,66 @@ raising that with the user first.
 5. ✅ RAG grounding retrofit — done, added after a parallel frontend/knowledge-base session
    produced `../docs/use-case-knowledge-base/`. See `app/retrieval.py` and both routers'
    `_build_grounding_context()` functions.
+6. ✅ Retrieval upgraded from TF-IDF to embeddings (ChromaDB + local Ollama
+   `nomic-embed-text`) — see `app/retrieval.py`'s module docstring and the retrieval-eval
+   numbers above.
+7. ✅ Opt-in local-model (Ollama) fallback for `/api/refine` and `/api/ask` — see
+   `app/llm_providers.py` and "Local-model fallback" below. Claude remains primary/default.
 
 ## MCP tool (`recommend_stack`)
 
 Run the server: `python -m app.mcp.server` (stdio transport). Point Claude Desktop's or
-Claude Code's MCP config at this command (needs `DATABASE_URL` set, same as the API). Once
-connected, `recommend_stack(requirement_text: str)` returns the same `{signals,
-recommendations}` shape as `POST /api/analyses` expects as input — the same rule engine
-`index.html` runs client-side, just callable from inside an agent conversation instead of a
-web form.
+Claude Code's MCP config at this command, with an explicit `"env": {"DATABASE_URL": "..."}`
+block — **do not assume the server subprocess inherits your shell's environment.** Verified by
+driving a real stdio JSON-RPC session end-to-end (initialize → tools/list → tools/call via the
+`mcp` Python SDK's own `ClientSession`/`stdio_client`, not just the in-process unit tests):
+`mcp.client.stdio.get_default_environment()` only passes an allowlist (`PATH`, `HOME`, and a
+few others) into the subprocess, not the full parent environment, so a config that omits the
+`env` block gets a server that silently falls back to `config.py`'s default `DATABASE_URL`
+(`localhost:5432`) and fails with a Postgres connection error the moment the tool is actually
+called — `tools/list` still succeeds either way, so this only shows up on the first real
+`recommend_stack` call, not at connection time. With `DATABASE_URL` passed explicitly, a real
+end-to-end call (`"Fintech startup, small team, real-time fraud detection, HIPAA not
+required."`) returned the full `{signals, recommendations}` payload and a corresponding
+`McpInvocation` row was confirmed in Postgres afterward. Once connected correctly,
+`recommend_stack(requirement_text: str)` returns the same `{signals, recommendations}` shape
+as `POST /api/analyses` expects as input — the same rule engine `index.html` runs
+client-side, just callable from inside an agent conversation instead of a web form.
 
 Every invocation is logged as an `McpInvocation` row the instant the tool is called — before
 the rule engine has necessarily produced a result (DDD 4.4) — including the calling client's
 self-reported name (e.g. "Claude Desktop") when available. A successful call also persists
 an `Analysis` row and links it back to the invocation; a failed call (e.g. empty
 `requirement_text`) still leaves the invocation logged, just with `analysis_id` left null.
+
+## Local-model fallback (opt-in, clearly degraded — Claude stays primary)
+
+`POST /api/refine` and `POST /api/ask` accept `provider: "ollama"` on the request body to
+route that one call to a local Ollama model instead of Claude. Off by default on both sides —
+the deployment must set `LLM_PROVIDER=ollama` (`.env`) AND the caller must explicitly pass
+`provider: "ollama"` per request; setting the env var alone does not reroute existing traffic.
+See `app/llm_providers.py`'s module docstring for the real test methodology and numbers this
+is based on: structured tool-calling against `REFINEMENT_TOOL`'s exact schema was run for real
+(not assumed) against the two largest locally-installed models, `qwen2.5:7b` and
+`mistral:latest`, 3 requirement/recommendation cases × 3 repeated runs each, with `num_ctx`
+explicitly set to 8192 to rule out Ollama's default context window as a confound (both models'
+native context is 32768; ruled out, not assumed away). Native `tool_calls` alone: 8/9 (89%)
+for qwen, 4/9 (44%) for mistral — mistral's Ollama chat template frequently emits the function
+call as JSON text in the message body instead of the structured `tool_calls` field even though
+the API nominally supports tools. Adding a fallback JSON-parse of the message content when
+`tool_calls` is empty/malformed (`_extract_tool_result()`) raised both to 8/9 and 9/9
+respectively across the sampled runs. Shipped as a real fallback for **both** endpoints (not
+narrowed to ask-only) because the measured reliability supported it — not because it was
+assumed to work. Every local-model response is prefixed with a visible
+`[Local model — offline/degraded mode, not Claude...]` disclaimer and carries
+`provider: "ollama"` in the JSON response so a caller can render it with visibly lower
+confidence than a Claude-backed result. `/api/refine`'s local path retries once on a parse
+failure before surfacing a 502; `/api/ask`'s local path is plain prose (no schema to satisfy),
+inherently lower-risk. Both check that the configured `OLLAMA_MODEL` is actually installed
+before calling it, and fail with a clear `ollama pull <model>` message if not — no attempt to
+silently substitute a different model.
+
+Also new: `app/retrieval.py`'s RAG grounding now runs on ChromaDB + a local Ollama embedding
+model (`nomic-embed-text`, default `OLLAMA_EMBED_MODEL`) instead of TF-IDF — see that module's
+docstring for the design (the two-stage routing/content split is unchanged) and the
+"Running tests" section above for real before/after eval numbers.

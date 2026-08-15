@@ -255,3 +255,53 @@ def test_ask_still_works_when_grounding_is_empty(mock_ask, existing_analysis):
         },
     )
     assert resp.status_code == 200
+
+
+# --- Local-model (Ollama) fallback provider routing --- see test_refine.py's equivalent block
+# and app/llm_providers.py's module docstring for the full rationale/measured numbers.
+
+def test_ask_rejects_ollama_provider_when_not_enabled(existing_analysis):
+    resp = client.post(
+        "/api/ask",
+        json={
+            "analysis_id": existing_analysis["id"],
+            "question": "Why Postgres over Mongo here?",
+            "provider": "ollama",
+        },
+    )
+    assert resp.status_code == 400
+    assert "not enabled" in resp.json()["detail"]
+
+
+def test_ask_ollama_provider_works_when_enabled(monkeypatch, existing_analysis):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "llm_provider", "ollama")
+    calls = []
+
+    def _fake_run_ollama_ask(base_url, model, system_prompt, history):
+        calls.append({"system_prompt": system_prompt, "history": history})
+        return "Local model answer.", {"input_tokens": 10, "output_tokens": 5}
+
+    monkeypatch.setattr(ask_module, "run_ollama_ask", _fake_run_ollama_ask)
+
+    resp = client.post(
+        "/api/ask",
+        json={
+            "analysis_id": existing_analysis["id"],
+            "question": "Why Postgres over Mongo here?",
+            "provider": "ollama",
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["provider"] == "ollama"
+    assert len(calls) == 1
+
+
+def test_ask_request_requires_api_key_for_anthropic_provider(existing_analysis):
+    resp = client.post(
+        "/api/ask",
+        json={"analysis_id": existing_analysis["id"], "question": "Why Postgres over Mongo here?"},
+    )
+    assert resp.status_code == 422

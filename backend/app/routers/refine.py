@@ -14,6 +14,15 @@ anthropic_api_key comes from the REQUEST BODY, never server env. It's passed str
 Anthropic SDK for this one call and allowed to go out of scope at the end of the request —
 never logged, never persisted (it is NOT one of RefinementResult's columns in models.py).
 
+Local-model fallback (opt-in, NOT the default — see app/llm_providers.py's module docstring
+for the real measured reliability numbers): passing `provider: "ollama"` on the request body
+routes this call to a local Ollama model instead of Claude, IF this deployment has also set
+LLM_PROVIDER=ollama (config.py) — both sides must opt in. Claude remains the default/primary
+path for every caller that doesn't explicitly ask for the local one. The local path's
+rationale is prefixed with a visible disclaimer and the response's `provider` field is set to
+"ollama" so callers can render it with visibly lower confidence, never with the same authority
+as a Claude-backed result.
+
 Design gap resolved here, not silently: the docstring this file originally shipped with
 specified a request body of { requirement_text, recommendations, anthropic_api_key } with no
 analysis_id, but RefinementResult.analysis_id is a non-null FK. Resolution (see
@@ -50,25 +59,33 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
+from ..config import settings
 from ..db import get_db
+from ..llm_providers import run_ollama_refinement
 from ..retrieval import format_citation, retrieve
 
-# Deliberately low, not the 0.15 used as a QUALITY-MEASUREMENT threshold in
-# tests/test_retrieval_eval.py's negative controls — that threshold is for judging whether
-# retrieval found the *right* answer; this one is for judging whether a chunk is worth
-# *injecting into a prompt* at all, which is a much lower bar. Empirically checked, not
-# guessed: eval case 12's genuine anti-pattern hit (Postgres LIKE search anti-pattern —
-# exactly the "is X okay?" use case this corpus was principally built for, per
-# 00-INDEX-AND-INGESTION-GUIDE.md §2) scores ~0.115 — BELOW 0.15. A 0.15 cutoff here would
-# have silently suppressed grounding for the corpus's flagship use case. Real, disclosed
-# limitation this low threshold accepts in exchange: moderately technical-but-unrelated
-# queries (e.g. "How do we set up CI/CD for Kubernetes?") can still score 0.07-0.14 — nonzero,
-# genuinely irrelevant noise — and pass this bar. That's an acceptable trade per the module
-# docstring (an irrelevant chunk costs prompt space, not correctness, since the system prompt
-# instructs the model to only cite what it can actually justify) — a query with truly zero
-# lexical overlap with the corpus still scores 0.0 and is filtered.
-GROUNDING_SCORE_THRESHOLD = 0.03
-GROUNDING_TOP_K = 2
+# Re-tuned when app/retrieval.py moved from TF-IDF to embeddings (ChromaDB + Ollama
+# nomic-embed-text) — the old value (0.03) was calibrated to TF-IDF's sparse lexical scoring
+# scale, where a truly unrelated query scores ~0.0. Embedding cosine similarity does not have
+# that property (a well-known embedding-space characteristic: even semantically unrelated text
+# pairs tend to score 0.4-0.55+), so 0.03 stopped doing any filtering at all post-migration —
+# verified empirically, not assumed: "Tell me a joke about cats." (zero legitimate overlap
+# with this corpus) now scores ~0.54 under embeddings. Re-measured the actual score bands
+# post-migration: several genuinely irrelevant queries ("What is the capital of France?", "How
+# do I bake sourdough bread?", "Recommend a good sci-fi movie.") top out at ~0.49-0.54, while
+# the WEAKEST genuine hit across the full eval suite's direct-retrieval cases scores ~0.594.
+# 0.55 sits in that empirically-measured gap. Same trade-off as before still applies at the
+# new number: an irrelevant-but-plausible-sounding technical query can still slip through
+# (costs prompt space, not correctness — the system prompt instructs the model to only cite
+# what it can actually justify), while true off-topic queries are filtered.
+GROUNDING_SCORE_THRESHOLD = 0.55
+GROUNDING_TOP_K = 3
+# Raised from 2 when GROUNDING_SCORE_THRESHOLD was re-tuned for embeddings (see that
+# constant's comment): embeddings' narrower score band means a document's own most-useful
+# chunk (e.g. an anti-patterns section) can land 3rd rather than in the top 2 by a fraction of
+# a point — verified against eval case 12's query, where the anti-patterns chunk scored 0.613
+# vs. 0.627/0.616 for two less-directly-useful chunks from the same document. 3 catches it
+# without materially growing prompt size.
 
 
 def _build_grounding_context(requirement_text: str) -> str:
@@ -194,8 +211,34 @@ def _run_refinement(api_key: str, requirement_text: str, recommendations: dict) 
     raise HTTPException(status_code=502, detail="Model did not return a refinement result.")
 
 
+def _run_ollama_refinement_call(requirement_text: str, recommendations: dict) -> tuple[dict, dict]:
+    """Isolated the same way _run_refinement() is, for the same testing reason (monkeypatch
+    instead of a real local Ollama call in unit tests) — see app/llm_providers.py for the real
+    measured reliability numbers this local path is based on."""
+    grounding = _build_grounding_context(requirement_text)
+    return run_ollama_refinement(
+        settings.ollama_base_url,
+        settings.ollama_model,
+        SYSTEM_PROMPT,
+        REFINEMENT_TOOL,
+        requirement_text,
+        recommendations,
+        grounding,
+    )
+
+
 @router.post("/refine", response_model=schemas.RefineResponse)
 def refine(payload: schemas.RefineRequest, db: Session = Depends(get_db)):
+    if payload.provider == "ollama" and settings.llm_provider != "ollama":
+        # Opt-in on both sides, per app/llm_providers.py's module docstring — a caller asking
+        # for the local path doesn't get it unless this deployment has also enabled it.
+        raise HTTPException(
+            status_code=400,
+            detail="Local model fallback (provider='ollama') is not enabled on this deployment "
+            "(set LLM_PROVIDER=ollama). Falling back silently to Claude would defeat the point "
+            "of asking for the offline path explicitly, so this is a hard error, not a silent "
+            "reroute.",
+        )
     if payload.analysis_id:
         analysis = db.query(models.Analysis).filter_by(id=payload.analysis_id).first()
         if not analysis:
@@ -214,16 +257,21 @@ def refine(payload: schemas.RefineRequest, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(analysis)
 
-    result, usage = _run_refinement(
-        payload.anthropic_api_key, payload.requirement_text, payload.recommendations
-    )
+    if payload.provider == "ollama":
+        result, usage = _run_ollama_refinement_call(payload.requirement_text, payload.recommendations)
+        model_used = settings.ollama_model
+    else:
+        result, usage = _run_refinement(
+            payload.anthropic_api_key, payload.requirement_text, payload.recommendations
+        )
+        model_used = MODEL
 
     refinement_row = models.RefinementResult(
         analysis_id=analysis.id,
         adjusted_picks=result["adjusted_picks"],
         rationale=result["rationale"],
         open_questions=result["open_questions"],
-        llm_model_used=MODEL,
+        llm_model_used=model_used,
     )
     db.add(refinement_row)
     db.commit()
@@ -235,6 +283,7 @@ def refine(payload: schemas.RefineRequest, db: Session = Depends(get_db)):
         adjusted_picks=result["adjusted_picks"],
         rationale=result["rationale"],
         open_questions=result["open_questions"],
-        llm_model_used=MODEL,
+        llm_model_used=model_used,
         usage=schemas.UsageInfo(**usage),
+        provider=payload.provider,
     )

@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class AnalysisCreate(BaseModel):
@@ -40,8 +41,22 @@ class RefineRequest(BaseModel):
 
     requirement_text: str = Field(..., min_length=1, max_length=10_000)
     recommendations: dict
-    anthropic_api_key: str = Field(..., min_length=1)
+    # Optional now (was required) — see app/llm_providers.py's module docstring. Left optional
+    # rather than required-with-a-dummy-value so the existing frontend (which always sends a
+    # real key) is completely unaffected; only a caller that explicitly sets
+    # provider="ollama" is allowed to omit it.
+    anthropic_api_key: str | None = Field(None, min_length=1)
     analysis_id: uuid.UUID | None = None
+    # "anthropic" (default, unchanged behavior) or "ollama" — opt-in local-model fallback, see
+    # app/llm_providers.py. Only usable when the deployment has also opted in via
+    # settings.llm_provider == "ollama"; routers/refine.py enforces that, not this schema.
+    provider: Literal["anthropic", "ollama"] = "anthropic"
+
+    @model_validator(mode="after")
+    def _api_key_required_for_anthropic(self):
+        if self.provider == "anthropic" and not self.anthropic_api_key:
+            raise ValueError("anthropic_api_key is required when provider='anthropic'")
+        return self
 
 
 class AdjustedPick(BaseModel):
@@ -74,6 +89,10 @@ class RefineResponse(BaseModel):
     open_questions: list[str]
     llm_model_used: str
     usage: UsageInfo
+    # "anthropic" (default/primary) or "ollama" (opt-in local fallback — see
+    # app/llm_providers.py). Lets a caller render the local-model path with visibly lower
+    # confidence than a Claude-backed result, per this feature's own design constraint.
+    provider: Literal["anthropic", "ollama"] = "anthropic"
 
 
 class AskRequest(BaseModel):
@@ -81,7 +100,14 @@ class AskRequest(BaseModel):
 
     analysis_id: uuid.UUID
     question: str = Field(..., min_length=1, max_length=4_000)
-    anthropic_api_key: str = Field(..., min_length=1)
+    anthropic_api_key: str | None = Field(None, min_length=1)
+    provider: Literal["anthropic", "ollama"] = "anthropic"  # see RefineRequest.provider
+
+    @model_validator(mode="after")
+    def _api_key_required_for_anthropic(self):
+        if self.provider == "anthropic" and not self.anthropic_api_key:
+            raise ValueError("anthropic_api_key is required when provider='anthropic'")
+        return self
 
 
 class ConversationMessageOut(BaseModel):
@@ -98,3 +124,4 @@ class AskResponse(BaseModel):
     llm_model_used: str
     conversation: list[ConversationMessageOut]
     usage: UsageInfo
+    provider: Literal["anthropic", "ollama"] = "anthropic"  # see RefineResponse.provider

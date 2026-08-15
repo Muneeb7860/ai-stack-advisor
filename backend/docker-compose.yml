@@ -20,6 +20,15 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg2://advisor:advisor@db:5432/advisor
       CORS_ORIGINS: http://localhost:3000,http://localhost:8080
+      # app/retrieval.py's embeddings and app/llm_providers.py's local fallback both call out
+      # to Ollama, which runs on the HOST, not as a container in this compose file (it's a
+      # pre-existing local daemon, not something this project provisions) — "localhost" from
+      # inside this container means the container itself, not the host, so this must be
+      # host.docker.internal instead. Works on Docker Desktop and colima; if your Docker setup
+      # doesn't support host.docker.internal, override with your host's LAN IP.
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8000:8000"
     depends_on:
