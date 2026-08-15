@@ -189,6 +189,15 @@
   .results-hero .rh-eyebrow{font-size:var(--fs-xs); text-transform:uppercase; letter-spacing:0.06em; color:var(--accent2); font-weight:700; margin-bottom:6px;}
   .results-hero .rh-headline{font-size:var(--fs-xl); font-weight:800; letter-spacing:-0.015em; color:var(--text); line-height:1.25; margin-bottom:10px;}
   .results-hero .signals{margin-top:0;}
+  .token-budget{margin-top:14px; padding-top:12px; border-top:1px solid var(--border);}
+  .token-budget .tb-row{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;}
+  .token-budget .tb-label{font-size:var(--fs-xs); text-transform:uppercase; letter-spacing:0.05em; color:var(--muted); font-weight:600;}
+  .token-budget .tb-value{font-size:var(--fs-sm); font-weight:700; color:var(--text); font-variant-numeric:tabular-nums;}
+  .token-budget .tb-track{height:5px; border-radius:3px; background:var(--chip); overflow:hidden;}
+  .token-budget .tb-fill{height:100%; border-radius:3px; background:var(--good); transition:width .3s var(--ease);}
+  .token-budget.over .tb-fill{background:var(--warn);}
+  .token-budget.over .tb-value{color:var(--warn);}
+  .token-budget .tb-note{margin-top:8px; font-size:var(--fs-sm); color:var(--muted2); line-height:1.5;}
   .grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(264px,1fr)); gap:10px;}
   .stack-card{
     background:var(--panel2-glass); backdrop-filter:blur(var(--glass-blur)) saturate(160%); -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(160%);
@@ -2111,6 +2120,7 @@ function renderRecommendations(s, rec){
       <div class="rh-eyebrow">${activeSignals.length} signal${activeSignals.length===1?'':'s'} detected</div>
       <div class="rh-headline">${heroHeadline}</div>
       <div class="signals">${activeSignals.length? activeSignals.map(x=>`<span class="sig">${x}</span>`).join('') : '<span class="sig">generic / no strong signals — defaults applied</span>'}</div>
+      ${renderTokenBudgetHtml(rec, s)}
     </div>`;
 
   const sections = [];
@@ -3353,6 +3363,35 @@ function mapAppPicksToKb(rec, s){
   omitted.push({category:'AI / LLM Strategy', detail:'Not covered by the current knowledge base — its own "Known gaps" section states there are no cloud-provider or LLM-strategy entries yet, though the demo UI surfaces this category.'});
 
   return {recommendations: recs, omitted};
+}
+
+// Innovation-token budget indicator (playbook follow-up: the ADR export already computes
+// totalTokens and an over-budget warning via buildWarnings(), but that only ever surfaced inside
+// the downloaded file — invisible unless someone clicked Export and read it. This surfaces the
+// same number on the results page itself, before export, so McKinley's "~3 tokens" framing is
+// visible where the picks actually are. Reuses mapAppPicksToKb/buildAdrInput/buildExports rather
+// than recomputing a separate token count — one source of truth for "what got exported".
+function renderTokenBudgetHtml(rec, s){
+  if (!window.AdrExport || typeof window.AdrExport.buildExports !== 'function') return '';
+  try {
+    const {recommendations} = mapAppPicksToKb(rec, s);
+    if (!recommendations.length) return ''; // nothing KB-covered yet — no budget to show
+    const kb = getKbData();
+    const out = window.AdrExport.buildExports({kb, input: buildAdrInput(), recommendations});
+    const tokens = out.totalTokens || 0;
+    const budget = 3; // McKinley's rule of thumb for an entire company — see Choose Boring Technology
+    const pct = Math.min(100, Math.round((tokens / budget) * 100));
+    const over = tokens > budget;
+    const tokenWarning = (out.warnings || []).find(w => /innovation token/i.test(w.message));
+    return `<div class="token-budget${over ? ' over' : ''}">
+        <div class="tb-row"><span class="tb-label">Innovation tokens spent (KB-covered picks)</span><span class="tb-value">${tokens} of ~${budget}</span></div>
+        <div class="tb-track"><div class="tb-fill" style="width:${pct}%"></div></div>
+        ${tokenWarning ? `<div class="tb-note">${tokenWarning.message}</div>` : ''}
+      </div>`;
+  } catch(e){
+    console.warn('Token budget indicator skipped:', e.message);
+    return '';
+  }
 }
 
 // Assembles the KB exporter's `input` object from whatever the user actually told the wizard —
