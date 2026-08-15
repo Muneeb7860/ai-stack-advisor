@@ -3450,7 +3450,53 @@ function mapAppPicksToKb(rec, s){
   ['API Gateway / Edge','DNS'].forEach(cat => {
     omitted.push({category:cat, detail:'Still not covered by the current knowledge base — no genuinely matching entries exist even after the 204-technology expansion (the Cloud domain\'s "gateway-api" entry is Kubernetes-specific and too narrow a match for this card\'s actual picks).'});
   });
-  omitted.push({category:'AI / LLM Strategy', detail:'Still not covered by the current knowledge base — confirmed against the new KB\'s own "Known gaps" section, which explicitly states there is no LLM/model-strategy domain yet, though the demo UI surfaces this category.'});
+  // AI / LLM Strategy — the KB gained a dedicated llm-strategy domain (llm-access-strategy /
+  // llm-model-frontier / llm-model-small categories) covering self-hosted-Ollama vs. cloud-API
+  // access, and individual model-family entries at frontier and small/self-hostable tiers.
+  // Matched against the actual rendered text of pickHostingLocation()/pickRuntime()/
+  // pickLLMProvider()/pickLLM() (see the 'LLM'/'Orchestration'/'Hosting' sections above) rather
+  // than re-deriving from raw signals, same convention as every other category in this function.
+  const hostingText = (rec.hosting && rec.hosting.rec) || '';
+  const runtimeText = (rec.runtime && rec.runtime.rec) || '';
+  const llmProviderText = (rec.llmProviderPick && rec.llmProviderPick.v) || '';
+  const llmPickNames = (rec.llm || []).map(p => p.name || '').join(' | ');
+
+  // Access-strategy pick: Ollama self-hosted vs. a specific cloud API vs. OpenRouter. Both the
+  // hosting-location pick and the runtime pick can independently name Ollama (hosting answers
+  // "where does regulated data live", runtime answers "what serves it") — only map once per
+  // access-strategy technology to avoid double-counting innovation tokens for one real decision,
+  // same double-count guard used for Compute Model / Containers above.
+  if (has(hostingText, 'Local / self-hosted only') || has(runtimeText, 'Ollama (fully local')) {
+    recs.push({techId:'ollama-self-hosted', role:'AI / LLM Access Strategy', basis: confToBasis(rec.hosting.conf, !!s.onPrem), ruleIds: s.onPrem ? ['r-llm-air-gapped-gate'] : []});
+  } else if (has(hostingText, 'Local / self-hosted') || has(runtimeText, 'Ollama')) {
+    recs.push({techId:'ollama-self-hosted', role:'AI / LLM Access Strategy (partial — regulated-data path only)', basis: confToBasis(rec.hosting.conf, false), ruleIds:['r-llm-self-host-gate'],
+      note:'Pick is a hybrid posture (self-hosted for sensitive/high-volume traffic, cloud API for the rest) — mapped to Ollama for the self-hosted half; the cloud-API half is mapped separately below via the LLM Provider pick.'});
+  }
+  if (has(llmProviderText, 'Anthropic Claude')) {
+    recs.push({techId:'cloud-api-anthropic', role:'AI / LLM Access Strategy', basis: confToBasis(rec.llmProviderPick.conf, !!(s.compliance || s.enterprise || s.security)), ruleIds: s.agentic ? ['r-llm-frontier-for-agentic-gate'] : []});
+    recs.push({techId:'claude-sonnet', role:'AI / LLM Model (frontier tier)', basis: confToBasis(rec.llmProviderPick.conf, !!(s.compliance || s.enterprise || s.security)), ruleIds: s.agentic ? ['r-llm-frontier-for-agentic-gate'] : []});
+  } else if (has(llmProviderText, 'OpenAI GPT')) {
+    recs.push({techId:'cloud-api-openai', role:'AI / LLM Access Strategy', basis: confToBasis(rec.llmProviderPick.conf, false), ruleIds: s.agentic ? ['r-llm-frontier-for-agentic-gate'] : []});
+    recs.push({techId:'openai-gpt-frontier', role:'AI / LLM Model (frontier tier)', basis: confToBasis(rec.llmProviderPick.conf, false), ruleIds: s.agentic ? ['r-llm-frontier-for-agentic-gate'] : []});
+  } else {
+    omitted.push({category:'AI / LLM Access Strategy', detail:`LLM provider pick was "${llmProviderText}" — did not match Anthropic Claude or OpenAI GPT text, so no cloud-API techId mapped.`});
+  }
+
+  // Small/self-hostable model-tier picks (pickLLM()'s "4B–12B" / "12B–30B" open-weight rows) —
+  // the KB's small-tier entries are the model families actually verified installed on this
+  // deployment's local Ollama instance (Qwen2.5, Gemma3, Mistral 7B), not a generic placeholder.
+  // pickLLM() names Gemma/DeepSeek/Llama generically rather than a specific family, so this maps
+  // to the KB's Gemma3 and Qwen2.5 entries (both genuinely small-tier, self-hostable, and locally
+  // verified) with a note rather than claiming a 1:1 textual match that doesn't exist.
+  if (has(llmPickNames, 'Open-weight small model') || has(llmPickNames, '4B–12B') || has(llmPickNames, 'Gemma 4B')) {
+    recs.push({techId:'gemma3-family', role:'AI / LLM Model (small tier)', basis: confToBasis('medium', false), ruleIds:['r-llm-self-host-gate'],
+      note:'App pick names this tier generically ("Google Gemma, DeepSeek, or Llama class, 4B–12B") — mapped to the KB\'s Gemma 3 entry as the closest small-tier, self-hostable match actually verified installed (gemma3:4b) on this deployment\'s local Ollama instance.'});
+  }
+  if (has(llmPickNames, 'Mid-size open-weight') || has(llmPickNames, '12B–30B')) {
+    omitted.push({category:'AI / LLM Model (mid tier)', detail:`Pick names a 12B-30B tier ("${llmPickNames}") — the KB's largest verified-installed self-hostable entry is Qwen2.5 up to 7B on this deployment; a 12B-30B-specific entry is not yet authored, so this stays omitted rather than force-mapped to a smaller size class.`});
+  }
+
+  omitted.push({category:'AI / LLM Strategy', detail:'Now partially covered by the new llm-strategy KB domain (access strategy + frontier/small model tiers, mapped above where the pick text matches) — the mid-size (12B-30B) open-weight tier and the RAG/guardrails/MCP sub-cards (separate app sections) are not yet modeled in the KB, so remaining gaps are still reported here rather than silently dropped.'});
 
   return {recommendations: recs, omitted};
 }
@@ -3639,8 +3685,11 @@ async function loadSharedAnalysis(slug){
         "code",
         "config-tables",
         "custom-state-machine",
+        "gemma-larger-cloud",
+        "glm-5",
         "hugo",
         "looker",
+        "minimax-m3",
         "native",
         "rabbitmq",
         "remix",
@@ -3949,6 +3998,78 @@ async function loadSharedAnalysis(slug){
       "url": "https://www.kubernetes.io/blog/2026/01/29/ingress-nginx-statement/",
       "published": "2026-01",
       "type": "announcement",
+      "trust": "high"
+    },
+    {
+      "id": "ollama-qwen25",
+      "name": "Ollama library — qwen2.5",
+      "url": "https://ollama.com/library/qwen2.5",
+      "published": "2026-08",
+      "type": "docs",
+      "trust": "high"
+    },
+    {
+      "id": "ollama-gemma3",
+      "name": "Ollama library — gemma3",
+      "url": "https://ollama.com/library/gemma3",
+      "published": "2026-08",
+      "type": "docs",
+      "trust": "high"
+    },
+    {
+      "id": "ollama-mistral",
+      "name": "Ollama library — mistral",
+      "url": "https://ollama.com/library/mistral",
+      "published": "2026-08",
+      "type": "docs",
+      "trust": "high"
+    },
+    {
+      "id": "ollama-deepseek-coder",
+      "name": "Ollama library — deepseek-coder",
+      "url": "https://ollama.com/library/deepseek-coder",
+      "published": "2026-08",
+      "type": "docs",
+      "trust": "high"
+    },
+    {
+      "id": "anthropic-models-overview",
+      "name": "Anthropic — Claude models overview",
+      "url": "https://platform.claude.com/docs/en/about-claude/models/overview",
+      "published": "2026-08",
+      "type": "docs",
+      "trust": "high"
+    },
+    {
+      "id": "openai-models-docs",
+      "name": "OpenAI — API models reference",
+      "url": "https://developers.openai.com/api/docs/models",
+      "published": "2026-08",
+      "type": "docs",
+      "trust": "high"
+    },
+    {
+      "id": "google-gemini-models-docs",
+      "name": "Google AI — Gemini API models",
+      "url": "https://ai.google.dev/gemini-api/docs/models",
+      "published": "2026-08",
+      "type": "docs",
+      "trust": "high"
+    },
+    {
+      "id": "openrouter-docs",
+      "name": "OpenRouter — documentation",
+      "url": "https://openrouter.ai/docs",
+      "published": "2026-01",
+      "type": "docs",
+      "trust": "medium"
+    },
+    {
+      "id": "ollama-docs",
+      "name": "Ollama — documentation",
+      "url": "https://ollama.com/docs",
+      "published": "2026-01",
+      "type": "docs",
       "trust": "high"
     }
   ],
@@ -10861,6 +10982,478 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "note": "The live 2026 pattern is RBAC for coarse roles plus ReBAC/ABAC for fine-grained object and context decisions, externalised from application code."
+    },
+    {
+      "id": "ollama-self-hosted",
+      "name": "Ollama (self-hosted local inference)",
+      "category": "llm-access-strategy",
+      "domain": "llm-strategy",
+      "domain_rank": 1,
+      "surfaces": [
+        "platform",
+        "business-app",
+        "admin"
+      ],
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "ollama-docs"
+      },
+      "hiring_pool": "medium",
+      "license": "MIT",
+      "hosting": [
+        "self"
+      ],
+      "exit_cost": "low",
+      "tco_shape": "ops-medium",
+      "best_when": [
+        "data residency or air-gap rules out sending prompts/outputs to a third party",
+        "a specific task (classification, extraction, routing) runs at steady, predictable, high-enough volume that a GPU stays utilized",
+        "per-token cost at volume would exceed the amortized cost of owned/rented GPU hardware"
+      ],
+      "avoid_when": [
+        "the task needs frontier-tier reasoning or tool-call reliability that small open-weight models do not reliably clear",
+        "request volume is low, bursty, or unpredictable — an idle GPU is more expensive than pay-per-token API calls",
+        "no one on the team can own GPU capacity planning, driver/runtime upgrades, and model-swap operational work"
+      ],
+      "alternatives": [
+        "cloud-api-anthropic",
+        "cloud-api-openai",
+        "cloud-api-google",
+        "openrouter"
+      ],
+      "innovation_token_cost": 1,
+      "note": "Break-even against frontier API pricing typically needs tens of millions of tokens/month of sustained, predictable traffic — see r-llm-self-host-gate. Below that, self-hosting is an ops cost with no offsetting savings."
+    },
+    {
+      "id": "cloud-api-anthropic",
+      "name": "Anthropic Claude API (cloud)",
+      "category": "llm-access-strategy",
+      "domain": "llm-strategy",
+      "domain_rank": 1,
+      "surfaces": [
+        "platform",
+        "business-app",
+        "web-app",
+        "admin"
+      ],
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "anthropic-models-overview"
+      },
+      "hiring_pool": "high",
+      "license": "Proprietary (commercial API)",
+      "hosting": [
+        "managed-all-clouds"
+      ],
+      "exit_cost": "low",
+      "tco_shape": "per-mau",
+      "best_when": [
+        "regulated or security-sensitive work where instruction-following and refusal behavior matter (agentic coding, compliance-adjacent tasks)",
+        "multi-step agentic tool-use and long-context reasoning where model quality dominates cost",
+        "the team wants zero inference infrastructure to operate"
+      ],
+      "avoid_when": [
+        "hard data-residency or no-third-party-network rules apply (use self-hosted instead)",
+        "per-token cost at sustained high volume exceeds a self-hosted alternative and the task tolerates a smaller model",
+        "the workload needs on-device or fully offline inference"
+      ],
+      "alternatives": [
+        "cloud-api-openai",
+        "cloud-api-google",
+        "ollama-self-hosted",
+        "openrouter"
+      ],
+      "innovation_token_cost": 0,
+      "note": "Enterprise procurement commonly routes through AWS Bedrock, Google Cloud Vertex AI, or Microsoft Foundry rather than the direct API — same models, different billing/compliance wrapper."
+    },
+    {
+      "id": "cloud-api-openai",
+      "name": "OpenAI API (cloud)",
+      "category": "llm-access-strategy",
+      "domain": "llm-strategy",
+      "domain_rank": 1,
+      "surfaces": [
+        "platform",
+        "business-app",
+        "web-app",
+        "admin"
+      ],
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "openai-models-docs"
+      },
+      "hiring_pool": "very-high",
+      "license": "Proprietary (commercial API)",
+      "hosting": [
+        "managed-all-clouds"
+      ],
+      "exit_cost": "low",
+      "tco_shape": "per-mau",
+      "best_when": [
+        "broadest general-purpose default — largest third-party tooling/integration ecosystem of any provider",
+        "no single strong compliance or agentic-coding signal favoring a specific alternative",
+        "fast time-to-first-integration matters more than deep provider-specific tuning"
+      ],
+      "avoid_when": [
+        "strict enterprise compliance certification is required outside the Azure OpenAI wrapper",
+        "hard data-residency or no-third-party-network rules apply (use self-hosted instead)",
+        "sustained high volume makes a cheaper open-weight or self-hosted tier cost-competitive for the specific task"
+      ],
+      "alternatives": [
+        "cloud-api-anthropic",
+        "cloud-api-google",
+        "ollama-self-hosted",
+        "openrouter"
+      ],
+      "innovation_token_cost": 0,
+      "note": "Frontier-tier pricing moves fast and by model generation — verify current per-token pricing against the live docs before budgeting; do not treat any single number here as durable."
+    },
+    {
+      "id": "cloud-api-google",
+      "name": "Google Gemini API (cloud)",
+      "category": "llm-access-strategy",
+      "domain": "llm-strategy",
+      "domain_rank": 1,
+      "surfaces": [
+        "platform",
+        "business-app",
+        "web-app",
+        "admin"
+      ],
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "google-gemini-models-docs"
+      },
+      "hiring_pool": "high",
+      "license": "Proprietary (commercial API)",
+      "hosting": [
+        "managed-all-clouds"
+      ],
+      "exit_cost": "low",
+      "tco_shape": "per-mau",
+      "best_when": [
+        "multimodal input (video/audio/large documents) or very long context is a binding requirement",
+        "the Flash tier's cost/latency profile fits high-volume, moderate-complexity tasks better than a frontier-only provider",
+        "the team is already on Google Cloud/Vertex AI for other infrastructure"
+      ],
+      "avoid_when": [
+        "hard data-residency or no-third-party-network rules apply (use self-hosted instead)",
+        "off-GCP deployments where Vertex AI's operational overhead outweighs its integration benefit",
+        "the task needs the deepest agentic tool-use reliability, where this pass rates Anthropic/OpenAI frontier tiers ahead"
+      ],
+      "alternatives": [
+        "cloud-api-anthropic",
+        "cloud-api-openai",
+        "ollama-self-hosted",
+        "openrouter"
+      ],
+      "innovation_token_cost": 0,
+      "note": "Gemini Flash/Flash-Lite variants exist specifically to undercut frontier per-token pricing for high-volume, lower-complexity calls — check the current model list before assuming \"Gemini\" means the Pro tier."
+    },
+    {
+      "id": "openrouter",
+      "name": "OpenRouter (managed multi-provider router)",
+      "category": "llm-access-strategy",
+      "domain": "llm-strategy",
+      "domain_rank": 2,
+      "surfaces": [
+        "platform",
+        "business-app"
+      ],
+      "maturity": {
+        "ring": "trial",
+        "source_id": "openrouter-docs"
+      },
+      "hiring_pool": "medium",
+      "license": "Proprietary (commercial routing layer over third-party models)",
+      "hosting": [
+        "managed-all-clouds"
+      ],
+      "exit_cost": "medium",
+      "tco_shape": "per-mau",
+      "best_when": [
+        "a small team wants model breadth (many providers behind one API/bill) without owning GPU infrastructure",
+        "workload composition across model families is still being explored and switching cost between providers should stay low",
+        "no single provider relationship or compliance-driven routing constraint dominates yet"
+      ],
+      "avoid_when": [
+        "the task is sensitive/regulated data that should not transit an additional third-party hop beyond the model provider itself",
+        "the team only ever calls one model family — a direct provider SDK avoids the routing fee for no added benefit",
+        "sustained high-volume traffic on one predictable task makes self-hosting cost-competitive"
+      ],
+      "alternatives": [
+        "ollama-self-hosted",
+        "cloud-api-anthropic",
+        "cloud-api-openai"
+      ],
+      "innovation_token_cost": 1,
+      "note": "Adds a per-request routing fee (commonly cited around 5.5%) on top of each underlying provider's own per-token pricing — verify current terms before committing to it as the default access path."
+    },
+    {
+      "id": "claude-sonnet",
+      "name": "Claude Sonnet (current generation)",
+      "category": "llm-model-frontier",
+      "domain": "llm-strategy",
+      "domain_rank": 3,
+      "surfaces": [
+        "platform",
+        "business-app",
+        "web-app"
+      ],
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "anthropic-models-overview"
+      },
+      "hiring_pool": "high",
+      "license": "Proprietary (API access only, no weights)",
+      "hosting": [
+        "managed-all-clouds"
+      ],
+      "exit_cost": "low",
+      "tco_shape": "per-mau",
+      "best_when": [
+        "user-facing conversation, multi-file code understanding, and multi-step agentic tool-use where reliability matters most",
+        "the \"best speed/intelligence balance\" tier is enough — Opus-tier is the escalation path for the hardest cases, not the default"
+      ],
+      "avoid_when": [
+        "the task is high-volume and simple enough that a 4B-12B open-weight model clears the quality bar at a fraction of the cost",
+        "fully offline or on-device inference is required"
+      ],
+      "alternatives": [
+        "openai-gpt-frontier",
+        "gemini-pro",
+        "ollama-self-hosted"
+      ],
+      "innovation_token_cost": 0,
+      "note": "1M-token context window, 128K max output, $2/input MTok and $10/output MTok as of the current generation per Anthropic's own pricing table (Aug 2026) — re-verify before budgeting, pricing and context limits change by model generation."
+    },
+    {
+      "id": "openai-gpt-frontier",
+      "name": "OpenAI GPT (current frontier tier)",
+      "category": "llm-model-frontier",
+      "domain": "llm-strategy",
+      "domain_rank": 3,
+      "surfaces": [
+        "platform",
+        "business-app",
+        "web-app"
+      ],
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "openai-models-docs"
+      },
+      "hiring_pool": "very-high",
+      "license": "Proprietary (API access only, no weights)",
+      "hosting": [
+        "managed-all-clouds"
+      ],
+      "exit_cost": "low",
+      "tco_shape": "per-mau",
+      "best_when": [
+        "broadest general reasoning default, deepest third-party tooling/integration ecosystem of any provider researched",
+        "the task benefits from mature fine-tuning and batch-API tooling"
+      ],
+      "avoid_when": [
+        "strict enterprise compliance/data-residency requirements not covered by the Azure OpenAI wrapper",
+        "the task is high-volume/low-complexity enough that a smaller open-weight model is the better cost fit"
+      ],
+      "alternatives": [
+        "claude-sonnet",
+        "gemini-pro",
+        "ollama-self-hosted"
+      ],
+      "innovation_token_cost": 0,
+      "note": "Current frontier tier (per OpenAI's own API model docs, Aug 2026) runs a ~1.05M-token context window and 128K max output; per-token pricing is tiered by sub-variant and by a long-context request threshold — verify against the live pricing page, this is the fastest-moving number in the whole KB."
+    },
+    {
+      "id": "gemini-pro",
+      "name": "Google Gemini Pro (current generation)",
+      "category": "llm-model-frontier",
+      "domain": "llm-strategy",
+      "domain_rank": 3,
+      "surfaces": [
+        "platform",
+        "business-app",
+        "web-app"
+      ],
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "google-gemini-models-docs"
+      },
+      "hiring_pool": "high",
+      "license": "Proprietary (API access only, no weights)",
+      "hosting": [
+        "managed-all-clouds"
+      ],
+      "exit_cost": "low",
+      "tco_shape": "per-mau",
+      "best_when": [
+        "video/audio/large-document multimodal workloads at scale, or a task that genuinely needs the largest available context window",
+        "already committed to Google Cloud/Vertex AI for other infrastructure"
+      ],
+      "avoid_when": [
+        "off-GCP deployment makes Vertex AI's operational overhead not worth the integration benefit",
+        "the task needs the deepest agentic tool-use reliability rather than raw context length"
+      ],
+      "alternatives": [
+        "claude-sonnet",
+        "openai-gpt-frontier",
+        "ollama-self-hosted"
+      ],
+      "innovation_token_cost": 0,
+      "note": "Widely documented at a 1M-token input context window (2M-token tiers reported rolling out on enterprise/Vertex AI paths) with output capped around 64K tokens — treat the exact current figures as needing re-verification against ai.google.dev before citing in a proposal."
+    },
+    {
+      "id": "qwen25-family",
+      "name": "Qwen2.5 (open-weight family, 0.5B-72B)",
+      "category": "llm-model-small",
+      "domain": "llm-strategy",
+      "domain_rank": 4,
+      "surfaces": [
+        "platform",
+        "business-app",
+        "admin"
+      ],
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "ollama-qwen25"
+      },
+      "hiring_pool": "medium",
+      "license": "Apache 2.0 (most sizes; 3B and 72B ship under the separate Qwen license)",
+      "hosting": [
+        "self"
+      ],
+      "exit_cost": "low",
+      "tco_shape": "ops-medium",
+      "best_when": [
+        "a self-hostable model is needed at a size that matches the task — 0.5B/3B for classification/routing, 7B for general chat and light code, up to 72B for heavier local reasoning",
+        "Apache 2.0 licensing (on the non-3B/72B sizes) matters for redistribution or commercial use without a separate license review"
+      ],
+      "avoid_when": [
+        "the task needs frontier-tier reasoning or long-context handling beyond the 32K context window Ollama ships for these sizes",
+        "the 3B or 72B size is specifically wanted and the separate Qwen license terms are not acceptable for the use case"
+      ],
+      "alternatives": [
+        "gemma3-family",
+        "mistral-7b",
+        "claude-sonnet"
+      ],
+      "innovation_token_cost": 0.5,
+      "note": "Ollama library lists 0.5B/1.5B/3B/7B/14B/32B/72B variants; the Ollama-packaged versions run a 32K context window (upstream Qwen2.5 documents up to 128K input capability) and 8K generation cap. Verified locally installed at 0.5B, 3B, and 7B on this deployment via `ollama list`."
+    },
+    {
+      "id": "gemma3-family",
+      "name": "Gemma 3 (open-weight family, 270M-27B)",
+      "category": "llm-model-small",
+      "domain": "llm-strategy",
+      "domain_rank": 4,
+      "surfaces": [
+        "platform",
+        "business-app",
+        "admin",
+        "mobile"
+      ],
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "ollama-gemma3"
+      },
+      "hiring_pool": "medium",
+      "license": "Gemma Terms of Use (custom, not OSI-approved open source)",
+      "hosting": [
+        "self"
+      ],
+      "exit_cost": "low",
+      "tco_shape": "ops-medium",
+      "best_when": [
+        "a Google-backed open-weight model is wanted at a size matching the task — 4B for high-volume/low-complexity work, 12B-27B for cost-efficient RAG/summarization",
+        "multimodal (4B/12B/27B sizes) input is needed on a self-hosted budget"
+      ],
+      "avoid_when": [
+        "a fully OSI-approved open-source license is a hard requirement (Gemma Terms of Use is source-available with use restrictions, not Apache/MIT)",
+        "the task needs frontier-tier agentic tool-use reliability"
+      ],
+      "alternatives": [
+        "qwen25-family",
+        "mistral-7b",
+        "claude-sonnet"
+      ],
+      "innovation_token_cost": 0.5,
+      "note": "270M/1B variants run a 32K context window; 4B/12B/27B (multimodal) variants run 128K. Verified locally installed at the 4B size on this deployment via `ollama list`."
+    },
+    {
+      "id": "mistral-7b",
+      "name": "Mistral 7B (open-weight)",
+      "category": "llm-model-small",
+      "domain": "llm-strategy",
+      "domain_rank": 4,
+      "surfaces": [
+        "platform",
+        "business-app",
+        "admin"
+      ],
+      "maturity": {
+        "ring": "trial",
+        "source_id": "ollama-mistral"
+      },
+      "hiring_pool": "medium",
+      "license": "Apache 2.0",
+      "hosting": [
+        "self"
+      ],
+      "exit_cost": "low",
+      "tco_shape": "ops-medium",
+      "best_when": [
+        "a fully Apache-2.0-licensed 7B-class general chat/instruction model is wanted with no per-size license carve-outs",
+        "multilingual strength or an eventual further-fine-tuning path matters more than benchmark-leading scores at this size"
+      ],
+      "avoid_when": [
+        "a newer same-size alternative (Qwen2.5 7B, Gemma3 4B) already clears the task's quality bar with a longer context window — Mistral 7B's Ollama-packaged context window (32K) and general capability trail the newer entries on most current benchmarks",
+        "the task needs frontier-tier reasoning"
+      ],
+      "alternatives": [
+        "qwen25-family",
+        "gemma3-family",
+        "claude-sonnet"
+      ],
+      "innovation_token_cost": 0.5,
+      "note": "7B parameters, 32K context window, Apache 2.0 license per Ollama's library page. Verified locally installed on this deployment via `ollama list`."
+    },
+    {
+      "id": "deepseek-coder-distilled",
+      "name": "DeepSeek-Coder (distilled, 1.3B-33B)",
+      "category": "llm-model-small",
+      "domain": "llm-strategy",
+      "domain_rank": 4,
+      "surfaces": [
+        "platform",
+        "admin"
+      ],
+      "maturity": {
+        "ring": "assess",
+        "source_id": "ollama-deepseek-coder"
+      },
+      "hiring_pool": "low-medium",
+      "license": "Not stated on the Ollama library page — verify the upstream DeepSeek-Coder license before any commercial redistribution",
+      "hosting": [
+        "self"
+      ],
+      "exit_cost": "low",
+      "tco_shape": "ops-medium",
+      "best_when": [
+        "light-duty, narrow code-completion or syntax-level tasks at the smallest (1.3B) distilled size, where latency and self-hosting cost matter more than code-reasoning depth",
+        "the 6.7B/33B sizes are used instead for anything beyond trivial completions — the 1.3B distilled size is not a general code-reasoning substitute"
+      ],
+      "avoid_when": [
+        "real code generation/review/refactoring quality is needed — this pass's own compute-tier guidance (pickModelOrchestration in the app) routes code tasks to mid-large code-tuned models, not a 1B-class distillation",
+        "context beyond 16K tokens is needed — all Ollama-packaged sizes cap there",
+        "the license has not been checked and the use is commercial redistribution, not internal use"
+      ],
+      "alternatives": [
+        "qwen25-family",
+        "claude-sonnet"
+      ],
+      "innovation_token_cost": 0.5,
+      "note": "1.3B/6.7B/33B parameter variants, 16K context window per Ollama's library page; license not stated there. Verified locally installed at the 1.3B size on this deployment via `ollama list` — light-duty use only, not a substitute for a real code-reasoning model at that size."
     }
   ],
   "rules": [
@@ -11504,6 +12097,90 @@ async function loadSharedAnalysis(slug){
       "cite": [
         "flexera2026"
       ]
+    },
+    {
+      "id": "r-llm-self-host-gate",
+      "when": {
+        "ai_need_any": [
+          "classification",
+          "extraction",
+          "routing",
+          "simple-chat",
+          "high-volume-llm"
+        ],
+        "llm_volume_min_tokens_per_month": 20000000
+      },
+      "then": {
+        "promote": [
+          "ollama-self-hosted",
+          "qwen25-family",
+          "gemma3-family"
+        ],
+        "demote": [
+          "cloud-api-anthropic",
+          "cloud-api-openai"
+        ]
+      },
+      "because": "Self-host on already-available local Ollama infrastructure when data residency or per-token cost at high, sustained volume is the binding constraint AND the task does not need frontier-tier reasoning quality — a 4B-12B open-weight model on a right-sized GPU crosses over to cheaper-than-API pricing once utilization stays above roughly 40-50% continuously, and below that threshold idle GPU time makes self-hosting the more expensive option, not the cheaper one.",
+      "confidence_basis": "consensus",
+      "cite": [
+        "ollama-docs",
+        "ollama-qwen25"
+      ]
+    },
+    {
+      "id": "r-llm-frontier-for-agentic-gate",
+      "when": {
+        "ai_need_any": [
+          "agentic",
+          "multi-step-tool-use"
+        ]
+      },
+      "then": {
+        "promote": [
+          "claude-sonnet",
+          "openai-gpt-frontier"
+        ],
+        "demote": [
+          "qwen25-family",
+          "gemma3-family",
+          "mistral-7b",
+          "deepseek-coder-distilled"
+        ]
+      },
+      "because": "Tool-call formatting reliability and multi-step planning degrade noticeably on small open-weight models — an agentic workflow is the task type least tolerant of downgrading to a self-hosted small model, so route it to a frontier-tier API model even when cost pressure would otherwise favor self-hosting elsewhere in the same system.",
+      "confidence_basis": "consensus",
+      "cite": [
+        "anthropic-models-overview"
+      ]
+    },
+    {
+      "id": "r-llm-air-gapped-gate",
+      "when": {
+        "compliance_any": [
+          "air-gapped",
+          "on-prem-only"
+        ],
+        "no_public_internet": true
+      },
+      "then": {
+        "promote": [
+          "ollama-self-hosted",
+          "qwen25-family",
+          "gemma3-family"
+        ],
+        "demote": [
+          "cloud-api-anthropic",
+          "cloud-api-openai",
+          "cloud-api-google",
+          "openrouter"
+        ]
+      },
+      "because": "An air-gapped environment has no path to the public internet at all, so every cloud LLM API — and any router or platform that proxies to one — is categorically unreachable regardless of how sensitive the specific data is. A locally-run open-weight model inside the network boundary is the only technology in this domain that fits, not a preference among several viable options.",
+      "confidence_basis": "constraint-derived",
+      "cite": [
+        "ollama-docs"
+      ]
     }
   ],
   "output_templates": {
@@ -11902,6 +12579,54 @@ async function loadSharedAnalysis(slug){
     {
       "for": "ingress-nginx",
       "check": "Migration to Gateway API completed and verified — after March 2026 there are no security patches at all."
+    },
+    {
+      "for": "ollama-self-hosted",
+      "check": "Track GPU utilization % (target sustained >40-50% to justify dedicated hardware) and $/1K-tokens self-hosted vs. the cheapest comparable cloud API tier, reviewed monthly; fall back to cloud API if utilization stays low for two consecutive review cycles."
+    },
+    {
+      "for": "cloud-api-anthropic",
+      "check": "Track $/task and refusal/error rate on a fixed eval set per model version; alert on API pricing-page or model-deprecation-notice changes (model IDs are pinned snapshots that get retired on a published schedule)."
+    },
+    {
+      "for": "cloud-api-openai",
+      "check": "Track $/task and latency p95 on a fixed eval set per model version; alert on API pricing-page changes and model-deprecation notices."
+    },
+    {
+      "for": "cloud-api-google",
+      "check": "Track $/task and context-window utilization (are you actually using the long-context budget you're paying for) per model version; alert on model-list/pricing-page changes."
+    },
+    {
+      "for": "openrouter",
+      "check": "Track routing-fee overhead as a % of total LLM spend and confirm it stays below the value of the multi-provider flexibility it buys; revisit if traffic consolidates onto one provider."
+    },
+    {
+      "for": "claude-sonnet",
+      "check": "Re-run the fixed task eval set against the current model ID after every Anthropic model-deprecation notice; confirm pricing/context figures against the live docs page each quarter."
+    },
+    {
+      "for": "openai-gpt-frontier",
+      "check": "Re-run the fixed task eval set after every OpenAI model release/deprecation notice; confirm pricing tiers against the live docs each quarter, not from memory."
+    },
+    {
+      "for": "gemini-pro",
+      "check": "Re-run the fixed task eval set after every Gemini model release; confirm context-window and pricing figures against ai.google.dev each quarter."
+    },
+    {
+      "for": "qwen25-family",
+      "check": "Benchmark task accuracy per size tier (0.5B/3B/7B) against your actual classification/extraction eval set before routing production traffic to the smallest size that clears the bar; re-check on every Ollama model-tag update."
+    },
+    {
+      "for": "gemma3-family",
+      "check": "Benchmark task accuracy at the deployed size against your actual eval set; confirm the Gemma Terms of Use still fit your redistribution/commercial-use plans before scaling usage."
+    },
+    {
+      "for": "mistral-7b",
+      "check": "Benchmark against Qwen2.5-7B/Gemma3-4B on your actual task before defaulting to it — it is not the current leader in its size class, only a fully-Apache-licensed option worth keeping in the comparison set."
+    },
+    {
+      "for": "deepseek-coder-distilled",
+      "check": "Confirm actual completion quality on your codebase's language/framework before relying on the 1.3B size beyond trivial completions; re-check the upstream license before any redistribution."
     }
   ],
   "domains": [
@@ -11954,6 +12679,11 @@ async function loadSharedAnalysis(slug){
       "id": "architecture",
       "label": "Decomposition & architecture style",
       "question": "How is it split up?"
+    },
+    {
+      "id": "llm-strategy",
+      "label": "AI / LLM model & access strategy",
+      "question": "Which models, and where do they run?"
     }
   ]
 }
