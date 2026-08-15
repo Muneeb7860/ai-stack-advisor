@@ -29,10 +29,14 @@ FastAPI app (same models/db module, same Postgres instance) — this is a SEPARA
 not mounted into the FastAPI app, matching design-doc-v2.md's C4 diagram (the MCP Server is
 its own container/component, not a route on the API).
 """
+import sys
+
 from mcp.server.mcpserver import Context, MCPServer
+from sqlalchemy import text
 
 from .. import models
-from ..db import SessionLocal
+from ..config import settings
+from ..db import SessionLocal, engine
 from ..rule_engine import recommend_stack as _recommend_stack
 
 mcp = MCPServer(
@@ -131,5 +135,37 @@ def recommend_stack(requirement_text: str, ctx: Context) -> dict:
     return _log_and_recommend(requirement_text, client_name)
 
 
+def _validate_startup_config() -> None:
+    """Fail fast at launch rather than on the first real tool call. Real finding from driving
+    this server over actual stdio JSON-RPC (not just in-process unit tests): mcp's
+    stdio_client does not inherit the parent process's full environment by default (only a
+    small allowlist like PATH/HOME) — so a launcher config missing an explicit DATABASE_URL
+    silently falls back to config.py's default rather than erroring. tools/list still succeeds
+    either way (it doesn't touch the DB), which makes a broken config invisible right up until
+    someone depends on it — exactly the "server that answers but can't actually do anything"
+    failure mode. A real connectivity check here turns that into a one-line error at launch,
+    before any client ever gets a chance to call recommend_stack() against a DB that isn't
+    reachable. Checks connectivity, not just "is the env var non-empty" — the default value is
+    itself a syntactically valid URL that simply doesn't resolve outside its intended
+    environment, which is the actual failure mode this exists to catch."""
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception as exc:  # noqa: BLE001 — deliberately broad: any DB-unreachable cause
+        # should produce the same clear, actionable exit, not a stack trace from whichever
+        # specific driver exception happened to be raised.
+        print(
+            f"ai-stack-advisor MCP server: cannot reach the database at "
+            f"DATABASE_URL={settings.database_url!r} ({exc.__class__.__name__}: {exc}). "
+            f"If you're launching this via a client config (Claude Desktop/Code), make sure "
+            f"its `env` block explicitly sets DATABASE_URL — stdio_client does not inherit "
+            f"your shell's environment by default, so an unset DATABASE_URL silently falls "
+            f"back to this module's default instead of erroring where you'd notice it.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
 if __name__ == "__main__":
+    _validate_startup_config()
     mcp.run(transport="stdio")

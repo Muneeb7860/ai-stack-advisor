@@ -43,12 +43,35 @@ local path is a plain chat completion — inherently lower-risk than the schema-
 refine path.
 """
 import json
-import re
+import logging
 
 import httpx
 from fastapi import HTTPException
 
+logger = logging.getLogger(__name__)
+
 REQUIRED_REFINEMENT_KEYS = ("adjusted_picks", "rationale", "open_questions")
+
+# SECURITY: the fallback JSON-parse path below reads a tool call out of free-form model
+# *content* instead of the structured tool_calls field. That content is not a trusted channel —
+# it's produced by a model that may have RAG-grounding text (docs/use-case-knowledge-base/) or
+# KB `note` fields (stack-kb.json, embedded in index.html and surfaced via the KB-MCP work)
+# concatenated into its context. A `note` field containing something shaped like
+# {"name": "submit_refinement", "arguments": {...}} does not need to persuade the model to
+# *decide* to call a tool — it only needs the model to echo it back, which is a much lower bar
+# than genuine prompt injection normally requires. Three mitigations, all applied below:
+#   1. Only accept a fallback parse when the message content is EXCLUSIVELY the JSON object
+#      (whitespace-trimmed) — no surrounding prose. A real model-authored tool call in content
+#      is typically the whole message; injected/reflected JSON embedded inside other prose is
+#      not. This alone rules out the common case of a `note`'s JSON snippet being echoed
+#      mid-sentence rather than emitted as the complete response.
+#   2. Allowlist the function name (submit_refinement is the only one ever offered to this
+#      model) and schema-validate the arguments (required keys + types) before returning
+#      anything — never dispatch on structural shape alone.
+#   3. Log every fallback-parsed call distinctly from native tool_calls hits, so the two paths
+#      are distinguishable in logs/metrics — this is also exactly the eval signal needed to
+#      measure how often the fallback path fires in production, not just in the 9-call test batch.
+ALLOWED_FUNCTION_NAME = "submit_refinement"
 
 # Prepended to every local-model rationale/answer so the degraded-quality label survives even
 # if a caller only renders `rationale`/`answer` and ignores the `provider` field on the
@@ -89,13 +112,30 @@ def check_model_available(base_url: str, model: str) -> None:
         )
 
 
-def _extract_tool_result(message: dict) -> dict | None:
-    """Native tool_calls first; if absent/malformed, regex-scan message content for an
-    embedded JSON object/array carrying the same required keys — see module docstring for the
-    real pass-rate data this two-path strategy is based on."""
+def _validate_refinement_shape(args: dict) -> bool:
+    """Schema validation beyond "has the right keys" — cheap type checks that reject the
+    shape of thing an echoed/injected JSON blob is likely to have (e.g. a `note` field's JSON
+    fragment coerced to fit required-key membership but not real field types)."""
+    if not all(k in args for k in REQUIRED_REFINEMENT_KEYS):
+        return False
+    if not isinstance(args.get("adjusted_picks"), list):
+        return False
+    if not isinstance(args.get("rationale"), str):
+        return False
+    if not isinstance(args.get("open_questions"), list):
+        return False
+    return True
+
+
+def _extract_tool_result(message: dict) -> tuple[dict, str] | None:
+    """Native tool_calls first (trusted channel — the model API's own structured field);
+    only if that's absent/malformed, fall back to parsing message *content*. Returns
+    (args, path) where path is "native" or "fallback" so callers can log/measure the two
+    paths distinctly — see the SECURITY note above ALLOWED_FUNCTION_NAME for why the fallback
+    path is deliberately much stricter than a generic JSON-in-text scan."""
     for tc in message.get("tool_calls") or []:
         fn = tc.get("function", {})
-        if fn.get("name") != "submit_refinement":
+        if fn.get("name") != ALLOWED_FUNCTION_NAME:
             continue
         args = fn.get("arguments")
         if isinstance(args, str):
@@ -103,31 +143,42 @@ def _extract_tool_result(message: dict) -> dict | None:
                 args = json.loads(args)
             except (json.JSONDecodeError, TypeError):
                 args = None
-        if isinstance(args, dict) and all(k in args for k in REQUIRED_REFINEMENT_KEYS):
-            return args
+        if isinstance(args, dict) and _validate_refinement_shape(args):
+            return args, "native"
 
-    content = message.get("content") or ""
-    for candidate in re.findall(r"\{.*\}", content, re.DOTALL):
-        try:
-            parsed = json.loads(candidate)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(parsed, dict):
-            if "arguments" in parsed and isinstance(parsed["arguments"], dict):
-                args = parsed["arguments"]
-                if all(k in args for k in REQUIRED_REFINEMENT_KEYS):
-                    return args
-            elif all(k in parsed for k in REQUIRED_REFINEMENT_KEYS):
-                return parsed
-    for candidate in re.findall(r"\[.*\]", content, re.DOTALL):
-        try:
-            parsed = json.loads(candidate)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(parsed, list) and parsed and isinstance(parsed[0], dict):
-            args = parsed[0].get("arguments")
-            if isinstance(args, dict) and all(k in args for k in REQUIRED_REFINEMENT_KEYS):
-                return args
+    # Fallback: content must be EXCLUSIVELY a JSON object once whitespace-trimmed — not a
+    # regex scan for any brace-delimited substring anywhere in a larger blob of prose. A real
+    # model-authored tool call emitted via content is normally the entire message; JSON that
+    # merely appears somewhere inside other text (e.g. reflected from a KB `note` field it was
+    # grounded on) is exactly the shape a reflection-based injection would produce, and this
+    # check rejects it outright rather than trying to distinguish intent after the fact.
+    content = (message.get("content") or "").strip()
+    if not content:
+        return None
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError:
+        return None
+
+    if isinstance(parsed, dict):
+        candidate = parsed.get("arguments") if isinstance(parsed.get("arguments"), dict) else parsed
+        name = parsed.get("name")
+        # If the blob carries a "name" field (i.e. it's shaped like a tool-call envelope, not
+        # bare arguments), it must match the one function this model was ever offered.
+        if name is not None and name != ALLOWED_FUNCTION_NAME:
+            logger.warning("Rejected fallback-parsed content: name=%r does not match allowlist", name)
+            return None
+        if isinstance(candidate, dict) and _validate_refinement_shape(candidate):
+            return candidate, "fallback"
+    elif isinstance(parsed, list) and parsed and isinstance(parsed[0], dict):
+        item = parsed[0]
+        if item.get("name") not in (None, ALLOWED_FUNCTION_NAME):
+            logger.warning("Rejected fallback-parsed content: name=%r does not match allowlist", item.get("name"))
+            return None
+        args = item.get("arguments")
+        if isinstance(args, dict) and _validate_refinement_shape(args):
+            return args, "fallback"
+
     return None
 
 
@@ -181,8 +232,13 @@ def run_ollama_refinement(
             ) from exc
         data = resp.json()
         message = data.get("message", {})
-        result = _extract_tool_result(message)
-        if result is not None:
+        extracted = _extract_tool_result(message)
+        if extracted is not None:
+            result, path = extracted
+            # Distinct log line per path — this is the eval signal the security review asked
+            # for: how often does production actually rely on the (riskier, stricter-checked)
+            # fallback path versus native tool_calls. Not just a 9-call test-batch statistic.
+            logger.info("Ollama refinement extraction path=%s model=%s", path, model)
             usage = {
                 "input_tokens": data.get("prompt_eval_count", 0),
                 "output_tokens": data.get("eval_count", 0),
