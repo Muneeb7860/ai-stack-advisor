@@ -62,6 +62,47 @@
     transition:border-color .15s var(--ease), background .2s var(--ease);
   }
   .theme-toggle:hover{border-color:var(--accent);}
+
+  /* ---- Glide panel: reusable slide-in-from-left drawer, "signature feel" pattern ----
+     Started on the wizard's building-type step (8 options now); designed to be reused by
+     other multi-select steps if this pattern earns its place after real use, not retrofitted
+     everywhere in one pass. Config-driven via openGlidePanel({title, items, groupKey}) rather
+     than duplicated per-step markup. */
+  .glide-backdrop{
+    position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:200; opacity:0; pointer-events:none;
+    transition:opacity .25s var(--ease);
+  }
+  .glide-backdrop.show{opacity:1; pointer-events:auto;}
+  .glide-panel{
+    position:fixed; top:0; left:0; bottom:0; width:min(340px, 88vw); z-index:201;
+    background:var(--panel); border-right:1px solid var(--border);
+    transform:translateX(-100%); transition:transform .28s var(--ease);
+    display:flex; flex-direction:column; box-shadow:24px 0 60px -20px rgba(0,0,0,0.5);
+  }
+  .glide-panel.show{transform:translateX(0);}
+  .glide-head{display:flex; align-items:center; justify-content:space-between; padding:16px 18px; border-bottom:1px solid var(--border);}
+  .glide-head h3{margin:0; font-size:var(--fs-md); font-weight:700;}
+  .glide-close{background:var(--chip); border:1px solid var(--border); color:var(--muted); width:28px; height:28px; border-radius:50%; cursor:pointer; font-size:14px; display:flex; align-items:center; justify-content:center;}
+  .glide-close:hover{color:var(--text); border-color:var(--accent);}
+  .glide-list{flex:1; overflow-y:auto; padding:10px;}
+  .glide-item{
+    display:flex; align-items:center; gap:11px; padding:12px 11px; border-radius:var(--radius);
+    cursor:pointer; transition:background .15s var(--ease);
+  }
+  .glide-item:hover{background:var(--chip);}
+  .glide-item .gi-check{
+    width:19px; height:19px; border-radius:6px; border:1.5px solid var(--border); flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; font-size:12px; color:transparent;
+    transition:all .15s var(--ease);
+  }
+  .glide-item.selected .gi-check{background:linear-gradient(135deg, var(--accent), var(--accent2)); border-color:transparent; color:#fff;}
+  .glide-item .gi-icon{font-size:16px; flex-shrink:0;}
+  .glide-item .gi-label{font-size:var(--fs-base); font-weight:600;}
+  .glide-trigger{
+    background:transparent; border:1px dashed var(--border); color:var(--muted); padding:9px 14px;
+    border-radius:var(--radius); font-size:12px; cursor:pointer; margin-top:10px; display:inline-flex; align-items:center; gap:6px;
+  }
+  .glide-trigger:hover{color:var(--text); border-color:var(--accent);}
   body{
     margin:0; font-family:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     /* Was a corner-glow radial gradient — close to a template signature at this point (the
@@ -530,6 +571,13 @@
 
 <button id="themeToggle" class="theme-toggle" onclick="toggleTheme()" title="Switch theme" aria-label="Switch between dark and light theme">🌙</button>
 
+<!-- Reusable glide panel — single instance, populated by openGlidePanel() -->
+<div class="glide-backdrop" id="glideBackdrop" onclick="closeGlidePanel()"></div>
+<div class="glide-panel" id="glidePanel">
+  <div class="glide-head"><h3 id="glideTitle"></h3><button class="glide-close" onclick="closeGlidePanel()" aria-label="Close">✕</button></div>
+  <div class="glide-list" id="glideList"></div>
+</div>
+
 <!-- ================= Mode picker (decision #3: equal weight, no default) ================= -->
 <div id="screenMode">
   <div class="mode-head">
@@ -591,6 +639,7 @@
       <div class="pick-chip" data-val="admin"><span>📋</span>Admin / dashboard app</div>
       <div class="pick-chip" data-val="ecommerce"><span>🛒</span>E-commerce / marketplace</div>
     </div>
+    <button type="button" class="glide-trigger" onclick="openGlidePanel('building')">☰ Browse all options in a panel</button>
   </div>
 
   <div class="wiz-step" data-step="2">
@@ -2614,6 +2663,56 @@ function wizFinish(){
   document.getElementById('input').value = text;
   showScreen('screenFreetext');
   analyze();
+}
+
+// ---------------- Glide panel: reusable slide-in-from-left drawer ----------------
+// Started on one step (building type) to prove the pattern before extending it to other
+// multi-select wizard steps (compliance, AI features) — a deliberate product-feel choice, not
+// solving a "too many chips" problem (8 items already fit the inline grid fine).
+// Config-driven so adding another step later means adding an entry here, not new markup.
+const GLIDE_CONFIGS = {
+  building: {
+    title: 'What are you building?',
+    items: [
+      {val:'web', icon:'🖥️', label:'Web app'},
+      {val:'mobile', icon:'📱', label:'Mobile app'},
+      {val:'api', icon:'🔌', label:'API / backend service'},
+      {val:'chatbot', icon:'💬', label:'AI chatbot / assistant'},
+      {val:'data', icon:'📊', label:'Data / analytics platform'},
+      {val:'internal', icon:'🛠️', label:'Internal tool'},
+      {val:'admin', icon:'📋', label:'Admin / dashboard app'},
+      {val:'ecommerce', icon:'🛒', label:'E-commerce / marketplace'},
+    ],
+  },
+};
+
+function openGlidePanel(groupKey){
+  const cfg = GLIDE_CONFIGS[groupKey];
+  if (!cfg) return;
+  document.getElementById('glideTitle').textContent = cfg.title;
+  const selectedVals = wizState[groupKey] || [];
+  document.getElementById('glideList').innerHTML = cfg.items.map(it => `
+    <div class="glide-item ${selectedVals.includes(it.val)?'selected':''}" data-val="${it.val}" onclick="toggleGlideItem('${groupKey}','${it.val}', this)">
+      <div class="gi-check">✓</div><span class="gi-icon">${it.icon}</span><span class="gi-label">${it.label}</span>
+    </div>`).join('');
+  document.getElementById('glidePanel').classList.add('show');
+  document.getElementById('glideBackdrop').classList.add('show');
+}
+function closeGlidePanel(){
+  document.getElementById('glidePanel').classList.remove('show');
+  document.getElementById('glideBackdrop').classList.remove('show');
+}
+function toggleGlideItem(groupKey, val, el){
+  const arr = wizState[groupKey];
+  const idx = arr.indexOf(val);
+  if (idx > -1) arr.splice(idx, 1); else arr.push(val);
+  el.classList.toggle('selected');
+  // Keep the inline chip grid in sync — the panel is an alternate view onto the same
+  // wizState, not a separate source of truth, so switching between them mid-step is safe.
+  const chip = document.querySelector(`.chip-grid[data-group="${groupKey}"] .pick-chip[data-val="${val}"]`);
+  if (chip) chip.classList.toggle('selected', arr.includes(val));
+  wizUpdateNextEnabled();
+  wizMaybeShowInference();
 }
 
 function showScreen(id){
