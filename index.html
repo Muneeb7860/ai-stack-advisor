@@ -63,6 +63,22 @@
   }
   *{box-sizing:border-box;}
   html{-webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;}
+  /* Global keyboard-focus indicator. Several components below remove the default outline on
+     plain :focus (textarea, refine-keyprompt/ask-input-row inputs) so a mouse click doesn't
+     leave a visible ring — that's a legitimate choice, but only if a keyboard user still gets
+     one. :focus-visible fires for keyboard/programmatic focus and not for mouse clicks, so
+     this rule restores the signal those removals dropped without reintroducing the
+     click-focus ring nobody wanted. Applies to every interactive element by default, not just
+     inputs — chips, radios, buttons, links all rely on this same rule, no per-component
+     opt-in needed. box-shadow (not outline) so it isn't clipped by overflow:hidden ancestors
+     (the glide panel, cards) the way an actual outline sometimes is.*/
+  a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible,
+  select:focus-visible, [tabindex]:focus-visible, .pick-chip:focus-visible,
+  .pick-radio:focus-visible, .glide-item:focus-visible{
+    outline:none;
+    box-shadow:0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+    border-radius:4px;
+  }
   .theme-toggle{
     position:fixed; top:16px; right:16px; z-index:100; width:34px; height:34px;
     background:var(--panel-glass); backdrop-filter:blur(var(--glass-blur)) saturate(160%); -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(160%);
@@ -104,7 +120,7 @@
   .glide-item .gi-check{
     width:19px; height:19px; border-radius:6px; border:1.5px solid var(--border); flex-shrink:0;
     display:flex; align-items:center; justify-content:center; font-size:12px; color:transparent;
-    transition:all .15s var(--ease);
+    transition:background .15s var(--ease), border-color .15s var(--ease), color .15s var(--ease);
   }
   .glide-item.selected .gi-check{background:linear-gradient(135deg, var(--accent), var(--accent2)); border-color:transparent; color:#fff;}
   .glide-item .gi-icon{font-size:16px; flex-shrink:0;}
@@ -163,7 +179,7 @@
   textarea{
     width:100%; min-height:140px; resize:vertical; background:var(--surface);
     border:1px solid var(--border); border-radius:var(--radius); color:var(--text);
-    padding:12px; font-size:13.5px; line-height:1.5; font-family:inherit;
+    padding:12px; font-size:16px; line-height:1.5; font-family:inherit;
     transition:border-color .15s var(--ease);
   }
   textarea::placeholder{color:#4d5567;}
@@ -217,7 +233,7 @@
   .token-budget .tb-label{font-size:var(--fs-xs); text-transform:uppercase; letter-spacing:0.05em; color:var(--muted); font-weight:600;}
   .token-budget .tb-value{font-size:var(--fs-sm); font-weight:700; color:var(--text); font-variant-numeric:tabular-nums;}
   .token-budget .tb-track{height:5px; border-radius:3px; background:var(--chip); overflow:hidden;}
-  .token-budget .tb-fill{height:100%; border-radius:3px; background:var(--good); transition:width .3s var(--ease);}
+  .token-budget .tb-fill{width:100%; height:100%; border-radius:3px; background:var(--good); transform-origin:left; transition:transform .3s var(--ease);}
   .token-budget.over .tb-fill{background:var(--warn);}
   .token-budget.over .tb-value{color:var(--warn);}
   .token-budget .tb-note{margin-top:8px; font-size:var(--fs-sm); color:var(--muted2); line-height:1.5;}
@@ -383,7 +399,7 @@
   .view-toggle{display:none; gap:0; margin-bottom:10px;}
   .view-toggle button{
     background:var(--chip); border:1px solid var(--border); color:var(--muted);
-    font-size:11.5px; padding:6px 14px; cursor:pointer; transition:all .15s var(--ease); font-weight:600;
+    font-size:11.5px; padding:6px 14px; cursor:pointer; transition:background .15s var(--ease), color .15s var(--ease), border-color .15s var(--ease); font-weight:600;
   }
   .view-toggle button:first-child{border-radius:8px 0 0 8px;}
   .view-toggle button:last-child{border-radius:0 8px 8px 0; border-left:none;}
@@ -471,7 +487,7 @@
     background:linear-gradient(180deg, var(--panel-glass), var(--panel2-glass));
     backdrop-filter:blur(var(--glass-blur)) saturate(160%); -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(160%);
     border:1px solid var(--glass-border);
-    border-radius:var(--radius-lg); padding:24px 22px; cursor:pointer; transition:all .15s var(--ease); text-align:left;
+    border-radius:var(--radius-lg); padding:24px 22px; cursor:pointer; transition:border-color .15s var(--ease), transform .15s var(--ease); text-align:left;
   }
   .mode-card:hover{border-color:var(--accent); transform:translateY(-2px);}
   .mode-card .mc-icon{font-size:24px; margin-bottom:11px;}
@@ -485,7 +501,7 @@
   #screenWizard.active{display:block;}
   .wiz-progress{display:flex; align-items:center; gap:10px; margin-bottom:26px;}
   .wiz-track{flex:1; height:4px; background:var(--chip); border-radius:2px; overflow:hidden;}
-  .wiz-fill{height:100%; background:linear-gradient(90deg, var(--accent), var(--accent2)); border-radius:2px; transition:width .3s var(--ease);}
+  .wiz-fill{width:100%; height:100%; background:linear-gradient(90deg, var(--accent), var(--accent2)); border-radius:2px; transform-origin:left; transition:transform .3s var(--ease);}
   .wiz-step-label{font-size:11px; color:var(--muted); white-space:nowrap; font-variant-numeric:tabular-nums;}
   .wiz-step{display:none;}
   .wiz-step.active{display:block; animation:wizFadeIn .25s var(--ease);}
@@ -495,7 +511,7 @@
   .chip-grid{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:6px;}
   .pick-chip{
     background:var(--surface); border:1.5px solid var(--border); color:var(--text); padding:10px 15px;
-    border-radius:10px; font-size:13px; cursor:pointer; transition:all .15s var(--ease); font-weight:500;
+    border-radius:10px; font-size:13px; cursor:pointer; transition:border-color .15s var(--ease), background .15s var(--ease); font-weight:500;
     display:flex; align-items:center; gap:7px;
   }
   .pick-chip:hover{border-color:#3a4256;}
@@ -504,7 +520,7 @@
   .radio-list{display:flex; flex-direction:column; gap:7px;}
   .pick-radio{
     background:var(--surface); border:1.5px solid var(--border); border-radius:10px; padding:12px 15px;
-    cursor:pointer; transition:all .15s var(--ease); display:flex; align-items:center; justify-content:space-between; gap:10px;
+    cursor:pointer; transition:border-color .15s var(--ease), background .15s var(--ease); display:flex; align-items:center; justify-content:space-between; gap:10px;
   }
   .pick-radio:hover{border-color:#3a4256;}
   .pick-radio.selected{border-color:var(--accent); background:rgba(91,141,239,0.1);}
@@ -581,7 +597,7 @@
   .refine-keyprompt{margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;}
   .refine-keyprompt input{
     flex:1; min-width:180px; background:var(--surface); border:1px solid var(--border); border-radius:7px;
-    color:var(--text); padding:7px 9px; font-size:11.5px; font-family:inherit;
+    color:var(--text); padding:7px 9px; font-size:16px; font-family:inherit;
   }
   .refine-keyprompt input:focus{outline:none; border-color:var(--accent);}
   .refine-keyprompt button{
@@ -597,7 +613,7 @@
   .ask-input-row{display:flex; gap:6px;}
   .ask-input-row input{
     flex:1; background:var(--surface); border:1px solid var(--border); border-radius:7px;
-    color:var(--text); padding:7px 9px; font-size:11.5px; font-family:inherit;
+    color:var(--text); padding:7px 9px; font-size:16px; font-family:inherit;
   }
   .ask-input-row input:focus{outline:none; border-color:var(--accent);}
   .ask-input-row button{
@@ -678,7 +694,7 @@
 <!-- ================= Guided wizard (decisions #6/#7) ================= -->
 <div id="screenWizard">
   <div class="wiz-progress">
-    <div class="wiz-track"><div class="wiz-fill" id="wizFill" style="width:12.5%"></div></div>
+    <div class="wiz-track"><div class="wiz-fill" id="wizFill" style="transform:scaleX(0.125)"></div></div>
     <div class="wiz-step-label" id="wizStepLabel">Step 1 of 8</div>
   </div>
 
@@ -785,7 +801,7 @@
   <div class="wiz-step" data-step="8">
     <div class="wiz-q" id="wizStep8Q">Anything else worth knowing?</div>
     <div class="wiz-sub" id="wizStep8Sub">Optional — existing cloud provider, latency needs, budget constraints, anything the questions above didn't cover.</div>
-    <textarea id="wizFreetext" style="width:100%; min-height:90px; resize:vertical; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); padding:12px; font-size:13px; font-family:inherit;" placeholder="e.g. We're already on AWS, need to launch in 6 weeks, budget is tight..."></textarea>
+    <textarea id="wizFreetext" style="width:100%; min-height:90px; resize:vertical; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); padding:12px; font-family:inherit;" placeholder="e.g. We're already on AWS, need to launch in 6 weeks, budget is tight..."></textarea>
     <div class="skip-note" id="wizStep8Skip">Skip this and we'll work from your answers above alone.</div>
   </div>
 
@@ -3006,7 +3022,7 @@ function wizRenderStep(){
   document.querySelector(`#screenWizard .wiz-step[data-step="${wizCurrentStep}"]`).classList.add('active');
   const vis = wizVisibleSteps();
   const pos = vis.indexOf(wizCurrentStep) + 1;
-  document.getElementById('wizFill').style.width = (pos/vis.length*100) + '%';
+  document.getElementById('wizFill').style.transform = 'scaleX(' + (pos/vis.length) + ')';
   document.getElementById('wizStepLabel').textContent = `Step ${pos} of ${vis.length}`;
   document.getElementById('wizBackBtn').style.visibility = pos===1 ? 'hidden' : 'visible';
   document.getElementById('wizInferStrip').classList.remove('show');
@@ -3307,7 +3323,8 @@ function openGlidePanel(groupKey){
       headerHtml = `<div class="glide-category">${it.category}</div>`;
       lastCategory = it.category;
     }
-    return `${headerHtml}<div class="glide-item ${selectedVals.includes(it.val)?'selected':''}" data-val="${it.val}" onclick="toggleGlideItem('${groupKey}','${it.val}', this)">
+    const checked = selectedVals.includes(it.val);
+    return `${headerHtml}<div class="glide-item ${checked?'selected':''}" data-val="${it.val}" tabindex="0" role="checkbox" aria-checked="${checked}" onclick="toggleGlideItem('${groupKey}','${it.val}', this)" onkeydown="if(event.key===' '||event.key==='Enter'){event.preventDefault(); toggleGlideItem('${groupKey}','${it.val}', this);}">
       <div class="gi-check">✓</div><span class="gi-icon">${it.icon}</span><span class="gi-label">${it.label}</span>
     </div>`;
   }).join('');
@@ -3323,6 +3340,7 @@ function toggleGlideItem(groupKey, val, el){
   const idx = arr.indexOf(val);
   if (idx > -1) arr.splice(idx, 1); else arr.push(val);
   el.classList.toggle('selected');
+  el.setAttribute('aria-checked', el.classList.contains('selected') ? 'true' : 'false');
   // Keep the inline chip grid in sync — the panel is an alternate view onto the same
   // wizState, not a separate source of truth, so switching between them mid-step is safe.
   const chip = document.querySelector(`.chip-grid[data-group="${groupKey}"] .pick-chip[data-val="${val}"]`);
@@ -3354,11 +3372,24 @@ function startWizard(){
 function startFreetext(){ showScreen('screenFreetext'); }
 function backToMode(){ showScreen('screenMode'); }
 
+// Real defect found in the ui-craft Tier 1 pass, missed by the static checker (it pattern-
+// matches inline onclick="..." attributes; these are wired via addEventListener here, which
+// source-regex can't see): every .pick-chip/.pick-radio was a plain <div> with a click
+// listener and NO keyboard path at all — no tabindex, no role, no Enter/Space handling. A
+// keyboard-only user could not select a single wizard option anywhere in the app. Fixed once,
+// centrally, at the same place click behavior is already wired — not by hand-adding
+// tabindex/role to 25+ static HTML instances, which would drift out of sync the next time a
+// chip is added (see toggleGlideItem below for the dynamically-generated glide-panel items,
+// fixed the same way for the same reason).
 document.querySelectorAll('#screenWizard .chip-grid').forEach(grid => {
   grid.querySelectorAll('.pick-chip').forEach(el => {
-    el.addEventListener('click', () => {
+    el.setAttribute('tabindex', '0');
+    el.setAttribute('role', 'checkbox');
+    el.setAttribute('aria-checked', 'false');
+    const toggle = () => {
       const group = grid.dataset.group;
       el.classList.toggle('selected');
+      el.setAttribute('aria-checked', el.classList.contains('selected') ? 'true' : 'false');
       const val = el.dataset.val;
       const arr = wizState[group];
       const idx = arr.indexOf(val);
@@ -3366,19 +3397,28 @@ document.querySelectorAll('#screenWizard .chip-grid').forEach(grid => {
       renderSelectedTiles(group);
       wizUpdateNextEnabled();
       wizMaybeShowInference();
-    });
+    };
+    el.addEventListener('click', toggle);
+    el.addEventListener('keydown', e => { if (e.key===' ' || e.key==='Enter'){ e.preventDefault(); toggle(); } });
   });
 });
 document.querySelectorAll('#screenWizard .radio-list').forEach(list => {
+  list.setAttribute('role', 'radiogroup');
   list.querySelectorAll('.pick-radio').forEach(el => {
-    el.addEventListener('click', () => {
+    el.setAttribute('tabindex', '0');
+    el.setAttribute('role', 'radio');
+    el.setAttribute('aria-checked', 'false');
+    const select = () => {
       const group = list.dataset.group;
-      list.querySelectorAll('.pick-radio').forEach(x => x.classList.remove('selected'));
+      list.querySelectorAll('.pick-radio').forEach(x => { x.classList.remove('selected'); x.setAttribute('aria-checked','false'); });
       el.classList.add('selected');
+      el.setAttribute('aria-checked', 'true');
       wizState[group] = el.dataset.val;
       wizUpdateNextEnabled();
       wizMaybeShowInference();
-    });
+    };
+    el.addEventListener('click', select);
+    el.addEventListener('keydown', e => { if (e.key===' ' || e.key==='Enter'){ e.preventDefault(); select(); } });
   });
 });
 
@@ -4083,7 +4123,7 @@ function renderTokenBudgetHtml(rec, s){
     const tokenWarning = (out.warnings || []).find(w => /innovation token/i.test(w.message));
     return `<div class="token-budget${over ? ' over' : ''}">
         <div class="tb-row"><span class="tb-label">Innovation tokens spent (KB-covered picks)</span><span class="tb-value">${tokens} of ~${budget}</span></div>
-        <div class="tb-track"><div class="tb-fill" style="width:${pct}%"></div></div>
+        <div class="tb-track"><div class="tb-fill" style="transform:scaleX(${pct/100})"></div></div>
         ${tokenWarning ? `<div class="tb-note">${tokenWarning.message}</div>` : ''}
       </div>`;
   } catch(e){
