@@ -687,7 +687,7 @@
     <div class="wiz-sub">This changes almost everything below — an existing app needs AI recommendations only, not a new cloud/database/backend stack you already have.</div>
     <div class="radio-list" data-group="scope">
       <div class="pick-radio" data-val="greenfield"><div><div class="pr-main">Building something new</div><div class="pr-sub">Full architecture — cloud, database, backend, AI, everything</div></div><div class="pr-dot"></div></div>
-      <div class="pick-radio" data-val="brownfield"><div><div class="pr-main">Adding AI to an app that already exists</div><div class="pr-sub">Chatbot or omnichannel AI support — your existing stack stays as-is</div></div><div class="pr-dot"></div></div>
+      <div class="pick-radio" data-val="brownfield"><div><div class="pr-main">Adding AI to an app that already exists</div><div class="pr-sub">Chatbot, omnichannel AI support, or guardrails-only — your existing stack stays as-is</div></div><div class="pr-dot"></div></div>
     </div>
   </div>
 
@@ -713,6 +713,7 @@
       <div class="radio-list" data-group="aiPattern">
         <div class="pick-radio" data-val="chatbot"><div><div class="pr-main">💬 Chatbot / conversational assistant</div><div class="pr-sub">One interface, bolted onto your existing backend via an API route or webhook</div></div><div class="pr-dot"></div></div>
         <div class="pick-radio" data-val="omnichannel"><div><div class="pr-main">📡 Omnichannel AI support</div><div class="pr-sub">One AI core, consistent across multiple channels (web widget, WhatsApp, email, voice/IVR) — needs a routing layer, not just an API route</div></div><div class="pr-dot"></div></div>
+        <div class="pick-radio" data-val="guardrails-only"><div><div class="pr-main">🛡️ Guardrails only</div><div class="pr-sub">Your AI is already built — you just want the guardrails/safety layer reviewed. Everything else (including the LLM pick) is skipped.</div></div><div class="pr-dot"></div></div>
       </div>
     </div>
   </div>
@@ -1019,6 +1020,10 @@ function detectSignals(text){
     // brownfieldAiOnly (both fire together on the wizard path) so a free-text user describing
     // multi-channel AI support organically still gets the right Integration-section content.
     brownfieldOmnichannel: has(['omnichannel ai support','omnichannel support','omni-channel ai','multiple channels','across channels','web widget, whatsapp','channel routing']),
+    // Pattern #5 — the strictest brownfield sub-pattern: suppress everything except guardrails,
+    // including the LLM pick itself (see computeVisibleSections). "We already have AI built" is
+    // the distinguishing phrase from plain brownfieldAiOnly, which only says the APP exists.
+    brownfieldGuardrailsOnly: has(['guardrails and safety layer reviewed','guardrails only','already have ai built','we already have ai built','review our guardrails','guardrails reviewed']),
     smallTeam: has(['small team','2 engineers','3 engineers','4 engineers','5 engineers','6 engineers','solo founder','few engineers'])
       || /\b([1-9]|1[0-2])[- ]?(person|people)\b/.test(t) || /team of\s*([1-9]|1[0-2])\b/.test(t),
     largeTeam: has(['large team','many teams','multiple teams','platform team']),
@@ -2346,6 +2351,28 @@ function computeRecommendations(s){
     llmProviderPick, vectorDbVendorPick, guardrailsVendorPick, cicdVendorPick, obsVendorPick, feVendorPick};
 }
 
+// Every section id renderRecommendations() can produce. Kept as one list so
+// computeVisibleSections() below has a single source of truth to subtract from, rather than
+// each pattern needing to enumerate what IT excludes against an implicit "everything" it can't
+// see. 'integration' is the one section that's brownfield-only in the other direction (it never
+// applies to greenfield, not even by default) — handled explicitly below, not by omission.
+const ALL_SECTION_IDS = ['stack','iamcompare','tradeoffs','llm','orchestration','hosting','topology',
+  'mcpapi','mcpservers','rag','vectordb','guardrails','integration','cost','throughput','governance','docs'];
+
+// The ONLY place the "which sections render" decision lives. sec() inside renderRecommendations
+// just checks membership against this function's output — no scattered if(showInfra)/
+// if(s.brownfieldAiOnly) wrapper blocks around individual sec() calls. This is deliberate ahead
+// of a planned larger change: the current scope axis (greenfield vs. brownfield vs. brownfield
+// sub-pattern) is very likely getting replaced by a "which layers are already fixed" model later
+// — when that happens, only THIS function's body needs to change (what computes the list), not
+// the renderer or any individual sec() call site. Pattern #5 (guardrails-only) is the maximal
+// test of that boundary: suppress everything except one section, including the LLM pick itself.
+function computeVisibleSections(s){
+  if (s.brownfieldGuardrailsOnly) return new Set(['guardrails']);
+  if (s.brownfieldAiOnly) return new Set(ALL_SECTION_IDS.filter(id => !['stack','iamcompare','tradeoffs','throughput'].includes(id)));
+  return new Set(ALL_SECTION_IDS.filter(id => id !== 'integration'));
+}
+
 // Render half of the old analyze() — takes a {signals, recommendations} pair (either just
 // computed by computeRecommendations(), or fetched verbatim from GET /api/analyses/shared/{slug})
 // and builds the exact same 14-section result view either way. Known, disclosed limitation: this
@@ -2393,12 +2420,19 @@ function renderRecommendations(s, rec){
   // every pickX() function still runs, this only changes what RENDERS) but they're meaningless
   // as a headline when the user explicitly said their infrastructure is already decided, so
   // build the headline from the AI pick instead. Branches by pattern (#1 chatbot vs #2 omnichannel).
-  const heroHeadline = s.brownfieldAiOnly
+  const heroHeadline = s.brownfieldGuardrailsOnly
+    ? 'Guardrails plan'
+    : s.brownfieldAiOnly
     ? (s.brownfieldOmnichannel
         ? (llm[0] ? `Omnichannel AI: ${llm[0].name.split(/[(,]/)[0].trim()}` : 'Omnichannel AI integration plan')
         : (llm[0] ? `Chatbot: ${llm[0].name.split(/[(,]/)[0].trim()}` : 'Chatbot integration plan'))
     : `${cloud.v.split(/[(—]/)[0].trim()} + ${db.v.split(/[(—·]/)[0].trim()}`;
-  const brownfieldBanner = s.brownfieldAiOnly ? `
+  const brownfieldBanner = s.brownfieldGuardrailsOnly ? `
+      <div class="brownfield-banner">
+        <b>🛡️ Guardrails-only scope detected</b> — you said your AI is already built, so everything
+        except guardrails is suppressed below, including the LLM pick itself. This is the one section
+        the tool will discuss; add detail above if you want the rest re-enabled.
+      </div>` : s.brownfieldAiOnly ? `
       <div class="brownfield-banner">
         <b>🔌 AI-only scope detected</b> — you said your application already exists, so infrastructure
         recommendations (cloud, database, backend language, CI/CD, etc.) are skipped below. Everything
@@ -2413,14 +2447,14 @@ function renderRecommendations(s, rec){
     </div>`;
 
   const sections = [];
-  const sec = (id, navLabel, titleHtml, bodyHtml) => sections.push({id, navLabel, titleHtml, bodyHtml});
-  // Suppressed entirely in brownfield/AI-only mode rather than rendered-but-empty — these
-  // sec() calls below are guarded individually so each one's own local variables (stackCards,
-  // tradeoffs, throughput) stay defined and computed as before; only whether they get PUSHED
-  // into the rendered `sections` array changes.
-  const showInfra = !s.brownfieldAiOnly;
+  const visibleSections = computeVisibleSections(s);
+  // Suppressed entirely (not rendered-but-empty) when not in visibleSections — this is now the
+  // ONLY suppression check in this whole function; every sec() call below runs unconditionally,
+  // and whichever ones don't apply for the current scope/pattern just never get pushed. Local
+  // variables (stackCards, tradeoffs, throughput, etc.) are still computed unconditionally
+  // above regardless — cheap, and keeps this function's shape simple.
+  const sec = (id, navLabel, titleHtml, bodyHtml) => { if (visibleSections.has(id)) sections.push({id, navLabel, titleHtml, bodyHtml}); };
 
-  if (showInfra){
   sec('stack', 'Stack', 'Core Technical Stack', `<div class="grid">${stackCards.map(([title, pick, why, conf, persona, altToggle])=>
     `<div class="stack-card card-conf-${conf||'low'}"><div class="head"><h3>${title}</h3><div style="display:flex; align-items:flex-start; gap:6px; flex-shrink:0;">${renderExitCostBadge(title)}<span class="conf conf-${conf||'low'}">${confLabel(conf)}</span></div></div><div class="pick">${pick}</div><div class="why">${why}</div><div class="persona">${persona}</div>${altToggle||''}</div>`
   ).join('')}</div>`);
@@ -2448,7 +2482,6 @@ function renderRecommendations(s, rec){
 
   sec('tradeoffs', 'Trade-offs', 'Key Trade-off Decisions <span style="color:var(--muted); text-transform:none; letter-spacing:0; font-weight:400;">— why, and when to switch</span>',
     `<div class="card">${tradeoffs.map(x=>`<div class="tradeoff-card"><div class="head"><h3>${x.d}</h3><span class="conf conf-${x.conf||'low'}">${confLabel(x.conf)}</span></div><div class="rec">${x.rec}</div><div class="why">${x.why}</div><div class="when"><b>Switch when:</b> ${x.when}</div></div>`).join('')}</div>`);
-  } // end showInfra (stack/iamcompare/tradeoffs)
 
   sec('llm', 'LLM', 'AI / LLM Recommendation',
     `<div class="card"><div class="llm-picks">${llm.map(p=>`<div class="llm-row"><div class="name">${p.name}</div><div class="tag">${p.tag}</div></div>`).join('')}</div>
@@ -2456,20 +2489,22 @@ function renderRecommendations(s, rec){
       ${renderAltToggle(LLM_PROVIDER_VENDORS, llmProviderPick.primaryId, LLM_PROVIDER_NOTE)}
     </div>`);
 
-  if (s.brownfieldAiOnly){
-    const ig = pickIntegrationGuidance(s);
-    sec('integration', 'Integration', `Integrating Into Your Existing Application <span style="color:var(--muted); text-transform:none; letter-spacing:0; font-weight:400;">— ${ig.patternLabel}</span>`,
-      `<div class="card">
-        <div class="rag-pick"><div class="head"><div class="name">${ig.integrationPath.v}</div></div><div class="why">${ig.integrationPath.why}</div></div>
-        <div class="subhead">Auth &amp; access</div>
-        <div class="opt-item"><div class="w">${ig.authNote}</div></div>
-        <div class="subhead">${s.brownfieldOmnichannel ? 'Cross-channel session continuity' : 'Conversation / session state'}</div>
-        <div class="opt-item"><div class="w">${ig.sessionNote}</div></div>
-        <div class="subhead">Data access scope</div>
-        <div class="opt-item"><div class="w">${ig.scopeNote}</div></div>
-        <div class="assumption">${ig.patternAssumption}</div>
-      </div>`);
-  }
+  // Unconditional call, same as every other sec() — visibleSections decides whether
+  // 'integration' actually renders (never for greenfield or guardrails-only, always for the
+  // other brownfield patterns). pickIntegrationGuidance(s) is a pure function safe to call
+  // against any signals object regardless of scope.
+  const ig = pickIntegrationGuidance(s);
+  sec('integration', 'Integration', `Integrating Into Your Existing Application <span style="color:var(--muted); text-transform:none; letter-spacing:0; font-weight:400;">— ${ig.patternLabel}</span>`,
+    `<div class="card">
+      <div class="rag-pick"><div class="head"><div class="name">${ig.integrationPath.v}</div></div><div class="why">${ig.integrationPath.why}</div></div>
+      <div class="subhead">Auth &amp; access</div>
+      <div class="opt-item"><div class="w">${ig.authNote}</div></div>
+      <div class="subhead">${s.brownfieldOmnichannel ? 'Cross-channel session continuity' : 'Conversation / session state'}</div>
+      <div class="opt-item"><div class="w">${ig.sessionNote}</div></div>
+      <div class="subhead">Data access scope</div>
+      <div class="opt-item"><div class="w">${ig.scopeNote}</div></div>
+      <div class="assumption">${ig.patternAssumption}</div>
+    </div>`);
 
   sec('orchestration', 'Orchestration', 'Model Orchestration <span style="color:var(--muted); text-transform:none; letter-spacing:0; font-weight:400;">— one large model vs. several small ones</span>',
     `<div class="card">
@@ -2549,10 +2584,8 @@ function renderRecommendations(s, rec){
     </div>
     <div class="card">${cost.map(i=>`<div class="opt-item"><div class="t">${i.t}</div><div class="w">${i.w}</div></div>`).join('')}</div>`);
 
-  if (showInfra){
   sec('throughput', 'Throughput', 'Concurrency &amp; Throughput <span style="color:var(--muted); text-transform:none; letter-spacing:0; font-weight:400;">— SDE / Application Architect lens</span>',
     `<div class="card">${throughput.map(i=>`<div class="opt-item"><div class="t">${i.t}</div><div class="w">${i.w}</div></div>`).join('')}</div>`);
-  }
 
   sec('governance', 'Governance', 'Governance: KRA / KPI / SLA / Reliability &amp; Continuous Improvement <span style="color:var(--muted); text-transform:none; letter-spacing:0; font-weight:400;">— TPM / Enterprise Architect lens</span>',
     `<div class="card">
@@ -2992,16 +3025,19 @@ function wizRenderStep(){
   if (wizCurrentStep===8){
     const brownfield = wizState.scope === 'brownfield';
     const omnichannel = brownfield && wizState.aiPattern === 'omnichannel';
+    const guardrailsOnly = brownfield && wizState.aiPattern === 'guardrails-only';
     document.getElementById('wizStep8Q').textContent = brownfield
-      ? (omnichannel ? 'Tell us about your existing application and which channels need AI support' : 'Tell us about your existing application and what you want the chatbot to do')
+      ? (guardrailsOnly ? 'Tell us about the AI you\'ve already built' : omnichannel ? 'Tell us about your existing application and which channels need AI support' : 'Tell us about your existing application and what you want the chatbot to do')
       : 'Anything else worth knowing?';
     document.getElementById('wizStep8Sub').textContent = brownfield
-      ? (omnichannel
+      ? (guardrailsOnly
+          ? 'e.g. what it does, which LLM/provider it uses, whether it has RAG or tool-calling — the more specific, the more targeted the guardrails review.'
+          : omnichannel
           ? 'e.g. what the app is built in, which channels are in scope (web widget, WhatsApp, email, voice/IVR), and whether users need to switch channels mid-conversation — the more specific, the better the routing guidance.'
           : 'e.g. what the app is built in, which channel (web widget, mobile in-app, etc.), and what the chatbot should actually handle — the more specific, the better the integration guidance.')
       : 'Optional — existing cloud provider, latency needs, budget constraints, anything the questions above didn\'t cover.';
     document.getElementById('wizStep8Skip').textContent = brownfield
-      ? (omnichannel ? 'Skip this and we\'ll give general omnichannel-routing guidance without knowing your specific channels.' : 'Skip this and we\'ll give general chatbot-integration guidance without knowing your specific stack.')
+      ? (guardrailsOnly ? 'Skip this and we\'ll give general guardrails guidance without knowing your specific AI setup.' : omnichannel ? 'Skip this and we\'ll give general omnichannel-routing guidance without knowing your specific channels.' : 'Skip this and we\'ll give general chatbot-integration guidance without knowing your specific stack.')
       : 'Skip this and we\'ll work from your answers above alone.';
   }
   wizUpdateNextEnabled();
@@ -3039,6 +3075,12 @@ function synthesizeRequirementText(state){
   if (state.scope === 'brownfield'){
     if (state.aiPattern === 'omnichannel'){
       parts.push('We already have an existing application in production. We only want to add omnichannel AI support — one AI core, consistent across multiple channels (web widget, WhatsApp, email, voice/IVR) — integrated into it. Do not recommend new infrastructure choices (cloud, database, backend language, CI/CD) since our existing stack is already decided and staying as-is.');
+    } else if (state.aiPattern === 'guardrails-only'){
+      // Pattern #5 — the maximal test of suppression: everything hidden except one section,
+      // including the LLM pick itself. Also contains the generic brownfield phrasing so
+      // brownfieldAiOnly fires alongside brownfieldGuardrailsOnly (viewToggle hiding, etc. all
+      // key off brownfieldAiOnly generically; guardrails-only is the strictest subset of it).
+      parts.push('We already have an existing application in production, and we already have AI built and deployed. We only want the guardrails and safety layer reviewed — do not recommend an LLM, RAG architecture, hosting location, or any new infrastructure choices (cloud, database, backend language, CI/CD) since everything else is already decided and staying as-is.');
     } else {
       parts.push('We already have an existing application in production. We only want to add AI — specifically a customer-facing chatbot — integrated into it. Do not recommend new infrastructure choices (cloud, database, backend language, CI/CD) since our existing stack is already decided and staying as-is.');
     }
@@ -4021,6 +4063,14 @@ function mapAppPicksToKb(rec, s){
 // than recomputing a separate token count — one source of truth for "what got exported".
 function renderTokenBudgetHtml(rec, s){
   if (!window.AdrExport || typeof window.AdrExport.buildExports !== 'function') return '';
+  // Real bug found via live testing pattern #5: this counted innovation tokens across EVERY
+  // KB-mapped category (cloud, database, etc.) even in guardrails-only mode, where none of
+  // those are actually being recommended — computeRecommendations() still computes them
+  // internally (nothing upstream changes, see computeVisibleSections' own comment), but
+  // showing "7.5 of ~3 tokens spent" for a stack that was never surfaced directly contradicts
+  // the suppression this mode promises. Guardrails-only doesn't get a token budget at all —
+  // there's no stack being proposed to spend tokens on.
+  if (s.brownfieldGuardrailsOnly) return '';
   try {
     const {recommendations, omitted} = mapAppPicksToKb(rec, s);
     if (!recommendations.length) return ''; // nothing KB-covered yet — no budget to show
