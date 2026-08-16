@@ -1293,6 +1293,14 @@ const LLM_PROVIDER_VENDORS = [
 ];
 function pickLLMProvider(s, llm){
   let primaryId, conf='medium';
+  // Same onPrem override as pickLLM() above, and for the same reason — this card's own
+  // vendor-comparison toggle (LLM_PROVIDER_VENDORS below) lists Anthropic/OpenAI/etc. as
+  // rows, none of which are reachable from an air-gapped network; 'selfhosted' must be the
+  // primaryId here, not a cloud vendor with a caveat bolted onto the why-text.
+  if(s.onPrem){
+    const v = llm[0] ? llm[0].name : 'Self-hosted open-weight model (Llama/Qwen/DeepSeek)';
+    return {v, why:'Air-gapped/on-prem means no cloud LLM API is reachable at all, regardless of compliance tier — the model has to run entirely inside your network boundary. See the Hosting card for the compute/GPU sizing this implies.', primaryId:'selfhosted', conf:'high'};
+  }
   if(s.compliance || s.enterprise || s.security){ primaryId='anthropic'; conf='high'; }
   else primaryId='openai';
   const v = llm[0] ? llm[0].name : (primaryId==='anthropic'?'Anthropic Claude':'OpenAI GPT');
@@ -1592,6 +1600,22 @@ function pickFrontend(s){
 }
 function pickLLM(s){
   const picks=[];
+  // Real bug found via live testing: this function named Anthropic/OpenAI/Google cloud APIs
+  // in every branch below regardless of onPrem, directly contradicting pickHostingLocation()'s
+  // own correct statement that "cloud LLM APIs are unreachable regardless of data sensitivity"
+  // once genuinely air-gapped. A BFSI reviewer skimming just this card (not cross-referencing
+  // the separate Hosting card) would have seen "Anthropic Claude" recommended for a system that
+  // structurally cannot reach the internet at all — the exact failure mode this override exists
+  // to prevent. Every model named below is open-weight and genuinely self-hostable (matches the
+  // families already referenced elsewhere in this file's other open-weight branches/COMPUTE_TIER_TABLE).
+  if(s.onPrem){
+    picks.push({name:'Llama 3.x, Qwen2.5, or DeepSeek (large/frontier-class open-weight, self-hosted)', tag:'Primary reasoning / user-facing — no cloud API of any kind is reachable in an air-gapped environment, so the model itself must run entirely inside your network boundary'});
+    if(s.agentic){
+      picks.push({name:'Qwen2.5-coder (32B+) or Llama 3.x (70B+), self-hosted', tag:'Agentic tool-use & multi-step orchestration — the largest self-hostable open-weight model your hardware supports (see the Compute Tier table below); tool-calling reliability at these sizes is real but not equivalent to a frontier cloud API — budget for a retry/validation layer'});
+    }
+    picks.push({name:'Gemma or Qwen2.5 (4B–12B), self-hosted', tag:'High-volume, low-cost tasks: classification, extraction, simple chat, routing'});
+    return picks;
+  }
   if(s.compliance || s.enterprise || s.security){
     picks.push({name:'Anthropic Claude (Sonnet tier)', tag:'Primary reasoning / user-facing — strong safety & instruction following for regulated use cases'});
   } else {
