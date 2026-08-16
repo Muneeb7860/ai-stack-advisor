@@ -1946,19 +1946,35 @@ function pickVectorDBPlacement(s, ragResult){
     return {needed:false, where:'', dbChoice:'', why:'Your retrieval need is over structured/relational data — that\'s served by querying your existing database (text-to-SQL or schema-aware retrieval), not a vector index. A vector DB would be the wrong tool here.'};
   }
   let dbChoice;
+  // Real bug found via the same systemic hosting-constraint thinking that fixed pickLLM: this
+  // team-skill override was firing regardless of onPrem, and Pinecone specifically has NO
+  // self-host tier at all (SaaS-only) — recommending it for an air-gapped requirement is the
+  // exact same class of contradiction as recommending Anthropic Claude for one. Weaviate and
+  // Qdrant both have genuine open-source self-hosted editions, so those stay valid even
+  // on-prem; only Pinecone needs the override. Checked BEFORE the team-skill block, not after,
+  // so a hard constraint always wins over a preference — same priority order used everywhere
+  // else a constraint and a preference can conflict in this file.
+  if(s.onPrem && s.pineconeMentioned){
+    dbChoice = 'Qdrant or Weaviate, self-hosted (not Pinecone — no self-host tier exists)';
+  }
   // Team-skill override takes priority over the scale-based default below — if the team
   // already runs a specific vector DB, that avoids introducing a new operational system
   // regardless of scale, same "matching skills beats a theoretically-better pick" rule used
   // throughout this feature. Falls through to the scale-based logic when no vendor is named.
-  if(s.pineconeMentioned) dbChoice = 'Pinecone — matches your team\'s existing experience, fully managed so no new infra to operate';
+  else if(s.pineconeMentioned) dbChoice = 'Pinecone — matches your team\'s existing experience, fully managed so no new infra to operate';
   else if(s.weaviateMentioned) dbChoice = 'Weaviate — matches your team\'s existing experience';
   else if(s.qdrantMentioned) dbChoice = 'Qdrant — matches your team\'s existing experience';
+  else if(s.onPrem) dbChoice = 'Qdrant or Weaviate, self-hosted';
   else if(!s.dataHeavy && !s.enterprise && !s.highScale) dbChoice = 'pgvector extension on your existing PostgreSQL instance';
   else if(s.unstructured && !s.structured) dbChoice = 'A dedicated vector database (Qdrant, Weaviate, or Milvus) — or Pinecone if you prefer fully managed';
   else dbChoice = 'MongoDB Atlas Vector Search (if MongoDB is already your document store) or a dedicated vector DB (Qdrant/Weaviate/Milvus/Pinecone) if you need hybrid search and metadata filtering at scale';
   const vectorSkillHit = s.pineconeMentioned || s.weaviateMentioned || s.qdrantMentioned;
-  const why = vectorSkillHit
+  const why = (s.onPrem && s.pineconeMentioned)
+    ? 'Your team knows Pinecone, but it\'s fully managed SaaS with no self-host tier at all — air-gapped/on-prem makes it structurally unreachable, not just a preference to override. Qdrant and Weaviate both have genuine open-source self-hosted editions and are the closest fit to what your team already knows.'
+    : vectorSkillHit
     ? 'Sticking with a vector database your team already operates avoids the ramp-up cost of a new system, and all three (Pinecone/Weaviate/Qdrant) are legitimate general-purpose choices — there\'s no workload-driven reason to switch away from one your team already knows.'
+    : s.onPrem
+    ? 'Air-gapped/on-prem rules out any SaaS-only vector store (Pinecone) — Qdrant and Weaviate both have genuine self-hosted editions that run entirely inside your network boundary.'
     : !s.dataHeavy && !s.enterprise && !s.highScale
     ? 'At your current scale, adding pgvector to a database you already operate avoids introducing an entirely new system to run, back up, and monitor. Migrate to a dedicated vector DB once query volume or index size makes pgvector\'s performance a bottleneck.'
     : 'At your scale, a purpose-built vector database gives you approximate-nearest-neighbor performance, hybrid (keyword + vector) search, and metadata filtering that general-purpose databases only support with real caveats.';
@@ -3969,7 +3985,7 @@ function renderTokenBudgetHtml(rec, s){
     const {recommendations} = mapAppPicksToKb(rec, s);
     if (!recommendations.length) return ''; // nothing KB-covered yet — no budget to show
     const kb = getKbData();
-    const out = window.AdrExport.buildExports({kb, input: buildAdrInput(), recommendations});
+    const out = window.AdrExport.buildExports({kb, input: buildAdrInput(s), recommendations});
     const tokens = out.totalTokens || 0;
     const budget = 3; // McKinley's rule of thumb for an entire company — see Choose Boring Technology
     const pct = Math.min(100, Math.round((tokens / budget) * 100));
@@ -3989,7 +4005,7 @@ function renderTokenBudgetHtml(rec, s){
 // Assembles the KB exporter's `input` object from whatever the user actually told the wizard —
 // falls back to sensible generic defaults (documented inline) when the free-text path was used
 // instead of the wizard, since wizState stays at its initial empty values in that case.
-function buildAdrInput(){
+function buildAdrInput(s){
   const buildingLabels = {web:'a web application', mobile:'a mobile app', api:'an API/backend service',
     chatbot:'an AI chatbot', data:'a data/analytics platform', internal:'an internal tool',
     admin:'an admin dashboard', ecommerce:'an e-commerce platform'};
@@ -4025,6 +4041,12 @@ function buildAdrInput(){
     compliance,
     teamSize: wizState.teamsize || undefined,
     existingStack,
+    // The resolved hosting constraint, from real signals not wizard state — a systemic
+    // invariant check (buildWarnings' hosting-constraint-violation check) reads this to catch
+    // ANY recommended technology whose KB `hosting` array lacks a self-hostable option, not
+    // just the one instance (pickLLM/pickLLMProvider) that was manually found and patched.
+    // See that check's own comment for why this replaces per-function firefighting.
+    airGapped: !!(s && s.onPrem),
     deciders: 'Architect, Engineering Lead',
     notes: 'Generated from AI Stack Advisor, a heuristic rule-engine tool — validate every recommendation against real constraints before adopting it.'
   };
@@ -4044,7 +4066,7 @@ function onExportAdrClick(){
       alert('None of the current recommendations are covered by the ADR knowledge base yet (it covers languages, frontend, database, messaging, IAM, and observability) — nothing to export.');
       return;
     }
-    const input = buildAdrInput();
+    const input = buildAdrInput(lastSignals);
     const out = window.AdrExport.buildExports({kb, input, recommendations});
 
     // Gap B.4 — the KB's own design philosophy is "visible gap, not silent omission" (see its
@@ -13760,6 +13782,29 @@ function buildWarnings(kb, ix, recs, input, totalTokens) {
       level: 'ask', code: 'r-no-team-signal',
       message: 'How many engineers will own this in year two? Team size gates decomposition, ops-heavy choices and build-vs-buy.'
     });
+  }
+
+  // Systemic hosting-constraint check (replaces per-function firefighting — see buildAdrInput's
+  // airGapped field comment). This is ONE validation pass over the assembled recommendation
+  // set against the resolved constraint, using the KB's own `hosting` field on every
+  // technology — not fifteen individual pickX() patches, each requiring someone to notice the
+  // contradiction by manually cross-referencing two cards. pickLLM/pickLLMProvider's earlier
+  // fix is this check's first PASSING test case (air-gapped no longer produces a cloud LLM
+  // pick, so it no longer trips this); anything still contradicting the constraint fails here
+  // instead of shipping silently.
+  const SELF_HOSTABLE_HOSTING = new Set(['self', 'self-host-enterprise', 'embedded', 'any']);
+  if (input.airGapped) {
+    for (const rec of recs) {
+      const t = ix.tech.get(rec.techId);
+      if (!t || !t.hosting) continue; // unknown-tech and missing-hosting-field are separate concerns, handled below
+      const canSelfHost = t.hosting.some(h => SELF_HOSTABLE_HOSTING.has(h));
+      if (!canSelfHost) {
+        w.push({
+          level: 'error', code: 'hosting-constraint-violation',
+          message: `${t.name} (role: ${rec.role}) — hosting is [${t.hosting.join(', ')}], no self-hostable option. This stack requires air-gapped/self-host-only deployment; this recommendation is unreachable and contradicts that constraint. Do not adopt as-is.`
+        });
+      }
+    }
   }
 
   for (const rec of recs) {
