@@ -525,18 +525,25 @@ ROUTING_BOOST_WEIGHT = 0.4
 # value of that threshold can ever separate a true negative control from a genuine hit by raw
 # score alone; RRF reordering changes WHICH chunks make top_k but can't be reflected in
 # `score` without breaking those other thresholds. The peak fused RRF score, by contrast, DOES
-# separate cleanly on real measurement: every genuine-hit eval case's best candidate reaches
-# >=0.0323 (out of a ~0.0328 ceiling at RRF_K=60, i.e. both signals essentially agreeing on a
-# top candidate), while case 20's negative control ("CI/CD for our Kubernetes deployments" —
-# no doc in this corpus is actually about CI/CD, but several mention Kubernetes in passing,
-# giving embeddings a plausible-looking neighbor with only partial lexical corroboration) tops
-# out at 0.0281 — a real, measured gap, not a hand-picked threshold. 0.0300 sits roughly
-# midway with margin on both sides of that gap (re-verify against tests/test_retrieval_eval.py
-# if the corpus or RRF_K changes — this is corpus-scale-relative, like ROUTING_BOOST_WEIGHT).
-# Case 21 (DNS/SSL certs) is NOT reliably separated by this gate (0.0320, inside the margin) —
-# consistent with that case's own long-documented conclusion that it needs a learned reranker,
-# not a threshold, lexical or fused.
-MIN_CONFIDENT_RRF = 0.0300
+# separate cleanly on real measurement — but re-measure this after any corpus/embedding-model
+# change, don't trust the number below to stay valid: it already drifted once (see below) and
+# the gap is narrow enough that it can drift again.
+#
+# RE-MEASURED (superseding this constant's original 0.0300 tuning): a full test-suite run on
+# a freshly rebuilt container found case 20 ("CI/CD for our Kubernetes deployments" — no doc in
+# this corpus is actually about CI/CD, several mention Kubernetes in passing) now peaks at
+# 0.03126, up from the 0.0281 measured when this threshold was first set — corpus/embedding
+# drift moved the gap, and 0.0300 no longer sat inside it. Checked all 23 eval cases directly
+# (not just case 20) to find the real current separation point: every genuine-hit case's best
+# candidate is now >=0.03200 (down slightly from the original >=0.0323), case 20 is the ONLY
+# one below that. 0.0316 sits inside the current (narrower) gap with real margin on both sides,
+# not at either edge. If this drifts again, re-run the measurement in this comment's method
+# (query every eval case directly against _get_index(), sort by peak fused RRF) rather than
+# nudging the constant by feel.
+# Case 21 (DNS/SSL certs) is NOT reliably separated by this gate (also ~0.0323, same as the
+# genuine hits) — consistent with that case's own long-documented conclusion that it needs a
+# learned reranker, not a threshold, lexical or fused.
+MIN_CONFIDENT_RRF = 0.0316
 
 
 def retrieve(query: str, top_k: int = 5) -> list[dict]:
