@@ -1945,43 +1945,75 @@ function pickVectorDBPlacement(s, ragResult){
   if(structuredRag){
     return {needed:false, where:'', dbChoice:'', why:'Your retrieval need is over structured/relational data — that\'s served by querying your existing database (text-to-SQL or schema-aware retrieval), not a vector index. A vector DB would be the wrong tool here.'};
   }
-  let dbChoice;
-  // Real bug found via the same systemic hosting-constraint thinking that fixed pickLLM: this
-  // team-skill override was firing regardless of onPrem, and Pinecone specifically has NO
-  // self-host tier at all (SaaS-only) — recommending it for an air-gapped requirement is the
-  // exact same class of contradiction as recommending Anthropic Claude for one. Weaviate and
-  // Qdrant both have genuine open-source self-hosted editions, so those stay valid even
-  // on-prem; only Pinecone needs the override. Checked BEFORE the team-skill block, not after,
-  // so a hard constraint always wins over a preference — same priority order used everywhere
-  // else a constraint and a preference can conflict in this file.
-  if(s.onPrem && s.pineconeMentioned){
-    dbChoice = 'Qdrant or Weaviate, self-hosted (not Pinecone — no self-host tier exists)';
+  // Real bug found via the systemic hosting-constraint thinking that fixed pickLLM, and fixed
+  // here PROPERLY rather than by enumeration: the original code checked "onPrem AND pinecone"
+  // as one case inside the same if/else chain as the team-skill preferences — meaning a
+  // preference and a hard constraint lived in the SAME scoring pass. That's exactly how a
+  // preference gets to "outvote" a constraint: it only takes one future vendor-preference
+  // addition that forgets to also check onPrem for the bug to reappear. The actual fix is
+  // structural, not a special case: two genuinely separate phases.
+  //   PHASE 1 — CONSTRAINTS filter the candidate set. Air-gapped removes every SaaS-only
+  //   option outright, unconditionally, before any preference logic ever sees the list. This
+  //   is not weighted and cannot be overridden by a preference below it.
+  //   PHASE 2 — PREFERENCES rank what survives Phase 1. Team skill only ever reorders/selects
+  //   among the technologies Phase 1 already allowed through — it can never reintroduce
+  //   something Phase 1 filtered out, because it never sees the pre-filter candidate set.
+  // Adding a new vendor-preference in the future only requires adding it to CANDIDATES below
+  // with an accurate selfHostable flag — the constraint filter applies to it automatically.
+  const CANDIDATES = [
+    {id:'pgvector', label:'pgvector extension on your existing PostgreSQL instance', selfHostable:true},
+    {id:'qdrant', label:'Qdrant', selfHostable:true},
+    {id:'weaviate', label:'Weaviate', selfHostable:true},
+    {id:'milvus', label:'Milvus', selfHostable:true},
+    {id:'mongoatlas', label:'MongoDB Atlas Vector Search', selfHostable:false},
+    {id:'pinecone', label:'Pinecone', selfHostable:false},
+  ];
+  const survivors = s.onPrem ? CANDIDATES.filter(c => c.selfHostable) : CANDIDATES;
+  const byId = id => survivors.find(c => c.id === id);
+
+  // PHASE 2: preference (team skill) ranks among survivors only.
+  const preferredId = s.pineconeMentioned ? 'pinecone' : s.weaviateMentioned ? 'weaviate' : s.qdrantMentioned ? 'qdrant' : null;
+  const preferredSurvived = preferredId && byId(preferredId);
+  const preferredFiltered = preferredId && !preferredSurvived; // the constraint actually caught something
+
+  let techId, dbChoice, why;
+  if (preferredSurvived) {
+    techId = preferredId;
+    dbChoice = `${byId(preferredId).label} — matches your team's existing experience${preferredId==='pinecone' ? ', fully managed so no new infra to operate' : ''}`;
+    why = 'Sticking with a vector database your team already operates avoids the ramp-up cost of a new system — this is a legitimate general-purpose choice, no workload-driven reason to switch away from one your team already knows.';
+  } else if (preferredFiltered) {
+    // The preference existed and got removed by Phase 1 — say so explicitly rather than
+    // silently substituting something else, so the contradiction is visible, not hidden.
+    techId = s.onPrem ? 'qdrant' : 'pinecone'; // fallback default among survivors
+    dbChoice = `${byId(techId).label}, self-hosted (not ${CANDIDATES.find(c=>c.id===preferredId).label} — no self-host tier exists, ruled out by the air-gapped constraint)`;
+    why = `Your team knows ${CANDIDATES.find(c=>c.id===preferredId).label}, but it's fully managed SaaS with no self-host tier at all — air-gapped/on-prem makes it structurally unreachable, not just a preference to override. Qdrant and Weaviate both have genuine open-source self-hosted editions and are the closest fit to what your team already knows.`;
+  } else if (s.onPrem) {
+    techId = 'qdrant';
+    dbChoice = 'Qdrant or Weaviate, self-hosted';
+    why = 'Air-gapped/on-prem rules out any SaaS-only vector store (Pinecone) — Qdrant and Weaviate both have genuine self-hosted editions that run entirely inside your network boundary.';
+  } else if (!s.dataHeavy && !s.enterprise && !s.highScale) {
+    techId = 'pgvector';
+    dbChoice = byId('pgvector').label;
+    why = 'At your current scale, adding pgvector to a database you already operate avoids introducing an entirely new system to run, back up, and monitor. Migrate to a dedicated vector DB once query volume or index size makes pgvector\'s performance a bottleneck.';
+  } else if (s.unstructured && !s.structured) {
+    techId = 'dedicated-vector-db';
+    dbChoice = 'A dedicated vector database (Qdrant, Weaviate, or Milvus) — or Pinecone if you prefer fully managed';
+    why = 'At your scale, a purpose-built vector database gives you approximate-nearest-neighbor performance, hybrid (keyword + vector) search, and metadata filtering that general-purpose databases only support with real caveats.';
+  } else {
+    techId = 'mongoatlas';
+    dbChoice = 'MongoDB Atlas Vector Search (if MongoDB is already your document store) or a dedicated vector DB (Qdrant/Weaviate/Milvus/Pinecone) if you need hybrid search and metadata filtering at scale';
+    why = 'At your scale, a purpose-built vector database gives you approximate-nearest-neighbor performance, hybrid (keyword + vector) search, and metadata filtering that general-purpose databases only support with real caveats.';
   }
-  // Team-skill override takes priority over the scale-based default below — if the team
-  // already runs a specific vector DB, that avoids introducing a new operational system
-  // regardless of scale, same "matching skills beats a theoretically-better pick" rule used
-  // throughout this feature. Falls through to the scale-based logic when no vendor is named.
-  else if(s.pineconeMentioned) dbChoice = 'Pinecone — matches your team\'s existing experience, fully managed so no new infra to operate';
-  else if(s.weaviateMentioned) dbChoice = 'Weaviate — matches your team\'s existing experience';
-  else if(s.qdrantMentioned) dbChoice = 'Qdrant — matches your team\'s existing experience';
-  else if(s.onPrem) dbChoice = 'Qdrant or Weaviate, self-hosted';
-  else if(!s.dataHeavy && !s.enterprise && !s.highScale) dbChoice = 'pgvector extension on your existing PostgreSQL instance';
-  else if(s.unstructured && !s.structured) dbChoice = 'A dedicated vector database (Qdrant, Weaviate, or Milvus) — or Pinecone if you prefer fully managed';
-  else dbChoice = 'MongoDB Atlas Vector Search (if MongoDB is already your document store) or a dedicated vector DB (Qdrant/Weaviate/Milvus/Pinecone) if you need hybrid search and metadata filtering at scale';
-  const vectorSkillHit = s.pineconeMentioned || s.weaviateMentioned || s.qdrantMentioned;
-  const why = (s.onPrem && s.pineconeMentioned)
-    ? 'Your team knows Pinecone, but it\'s fully managed SaaS with no self-host tier at all — air-gapped/on-prem makes it structurally unreachable, not just a preference to override. Qdrant and Weaviate both have genuine open-source self-hosted editions and are the closest fit to what your team already knows.'
-    : vectorSkillHit
-    ? 'Sticking with a vector database your team already operates avoids the ramp-up cost of a new system, and all three (Pinecone/Weaviate/Qdrant) are legitimate general-purpose choices — there\'s no workload-driven reason to switch away from one your team already knows.'
-    : s.onPrem
-    ? 'Air-gapped/on-prem rules out any SaaS-only vector store (Pinecone) — Qdrant and Weaviate both have genuine self-hosted editions that run entirely inside your network boundary.'
-    : !s.dataHeavy && !s.enterprise && !s.highScale
-    ? 'At your current scale, adding pgvector to a database you already operate avoids introducing an entirely new system to run, back up, and monitor. Migrate to a dedicated vector DB once query volume or index size makes pgvector\'s performance a bottleneck.'
-    : 'At your scale, a purpose-built vector database gives you approximate-nearest-neighbor performance, hybrid (keyword + vector) search, and metadata filtering that general-purpose databases only support with real caveats.';
   return {
     needed:true,
     where:'It sits in the retrieval path, parallel to (not instead of) your primary database: an offline ingestion pipeline chunks and embeds your source documents and upserts them into the vector store ahead of time; at query time, the user\'s query is embedded and matched against that store to retrieve relevant chunks, which are then injected into the LLM\'s context before generation.',
-    dbChoice, why
+    dbChoice, why,
+    // Stable id for mapAppPicksToKb to join on directly — never re-derive from dbChoice's
+    // prose. This is the fix for the second bug: the original text-match join (has(dbChoice,
+    // 'dedicated vector database')) silently broke the moment dbChoice's wording changed for
+    // any reason, including a good one — a safety check joined by display string is worse than
+    // no check, because it's trusted. techId cannot silently drift the way prose can.
+    techId,
   };
 }
 
@@ -3795,11 +3827,19 @@ function mapAppPicksToKb(rec, s){
   const dbText = rec.db.v || '';
   if (has(dbText, 'PostgreSQL')) recs.push({techId:'postgres', role:'Primary Database', basis: confToBasis(rec.db.conf, !!(s.structured || s.finance)), ruleIds:[]});
   else omitted.push({category:'Primary Database(s)', detail:`Picked "${dbText.split(' · ')[0] || dbText}" — no direct KB entry (KB database coverage is PostgreSQL and a dedicated-vector-DB category only).`});
+  // Vector Database — joined by pickVectorDBPlacement()'s own techId, never by parsing
+  // dbChoice's prose. The KB has real per-vendor entries (pgvector/qdrant/weaviate/milvus/
+  // pinecone all confirmed present, each with an accurate hosting field — pinecone is
+  // ["saas"] only, which is exactly the fact the onPrem fix depends on). 'mongoatlas' isn't
+  // a standalone KB entry yet, so it's honestly omitted rather than force-mapped to something
+  // close-but-wrong.
   if (rec.vectorDb && rec.vectorDb.needed){
-    if (has(rec.vectorDb.dbChoice, 'dedicated vector database')){
-      recs.push({techId:'dedicated-vector-db', role:'Vector Database', basis: confToBasis('high', false), ruleIds:[]});
+    const vdbId = rec.vectorDb.techId;
+    const VECTOR_DB_KB_IDS = new Set(['pgvector','qdrant','weaviate','milvus','pinecone','dedicated-vector-db']);
+    if (vdbId && VECTOR_DB_KB_IDS.has(vdbId)){
+      recs.push({techId:vdbId, role:'Vector Database', basis: confToBasis('high', false), ruleIds:[]});
     } else {
-      omitted.push({category:'Vector Database', detail:'pgvector-as-an-extension-on-Postgres was the pick — the KB does not yet separately model "pgvector on existing Postgres" versus a dedicated vector-DB product.'});
+      omitted.push({category:'Vector Database', detail:`Picked "${(rec.vectorDb.dbChoice||'').split(' — ')[0]}" (techId "${vdbId||'none'}") — no matching KB entry for this specific pick.`});
     }
   }
 
@@ -3982,10 +4022,10 @@ function mapAppPicksToKb(rec, s){
 function renderTokenBudgetHtml(rec, s){
   if (!window.AdrExport || typeof window.AdrExport.buildExports !== 'function') return '';
   try {
-    const {recommendations} = mapAppPicksToKb(rec, s);
+    const {recommendations, omitted} = mapAppPicksToKb(rec, s);
     if (!recommendations.length) return ''; // nothing KB-covered yet — no budget to show
     const kb = getKbData();
-    const out = window.AdrExport.buildExports({kb, input: buildAdrInput(s), recommendations});
+    const out = window.AdrExport.buildExports({kb, input: buildAdrInput(s), recommendations, omitted});
     const tokens = out.totalTokens || 0;
     const budget = 3; // McKinley's rule of thumb for an entire company — see Choose Boring Technology
     const pct = Math.min(100, Math.round((tokens / budget) * 100));
@@ -4067,7 +4107,7 @@ function onExportAdrClick(){
       return;
     }
     const input = buildAdrInput(lastSignals);
-    const out = window.AdrExport.buildExports({kb, input, recommendations});
+    const out = window.AdrExport.buildExports({kb, input, recommendations, omitted});
 
     // Gap B.4 — the KB's own design philosophy is "visible gap, not silent omission" (see its
     // CLAUDE.md). Categories this app recommends that the KB doesn't yet cover are appended
@@ -13755,8 +13795,23 @@ function renderC4(ix, recs, input) {
 // the arc42 template and the Choose Boring Technology essay are not.
 const PERISHABLE_SOURCE_TYPES = new Set(['radar', 'survey', 'adoption-curve', 'adoption-data']);
 
-function buildWarnings(kb, ix, recs, input, totalTokens) {
+function buildWarnings(kb, ix, recs, input, totalTokens, omitted = []) {
   const w = [];
+
+  // "I couldn't map this to the KB" and "I mapped it and it passed" must never look the same
+  // in the output — a recommendation the validator cannot check is a recommendation you cannot
+  // ship into an air-gapped bank on the strength of this tool's silence. Only escalates to
+  // error under a real hard constraint (airGapped); an unmapped category is a normal, disclosed
+  // gap otherwise (see the KB's own "visible gap, not silent omission" philosophy) — this
+  // doesn't change that, it just makes the gap load-bearing when a constraint is in play.
+  if (input.airGapped && omitted.length) {
+    for (const o of omitted) {
+      w.push({
+        level: 'error', code: 'unvalidated-under-constraint',
+        message: `${o.category} — not covered by the knowledge base, so it was NOT checked against the air-gapped/self-host-only constraint. ${o.detail} Verify manually before adopting.`
+      });
+    }
+  }
   const budgetRule = ix.rules.get('r-innovation-token-budget');
   const threshold = budgetRule?.when?.total_innovation_token_cost_min ?? 3;
 
@@ -13840,7 +13895,7 @@ function buildWarnings(kb, ix, recs, input, totalTokens) {
  * Main entry point
  * ------------------------------------------------------------------ */
 
-function buildExports({ kb, input = {}, recommendations = [], date }) {
+function buildExports({ kb, input = {}, recommendations = [], omitted = [], date }) {
   if (!kb || !kb.technologies) throw new Error('buildExports: kb is required (stack-kb.json v0.1.0 shape)');
 
   const ix = indexKb(kb);
@@ -13868,7 +13923,7 @@ function buildExports({ kb, input = {}, recommendations = [], date }) {
   const tradeoff = renderTradeoff(ix, validRecs, drivers);
   const arc42 = renderArc42(ix, validRecs, adrs, drivers, enrichedInput);
   const c4Mermaid = renderC4(ix, validRecs, enrichedInput);
-  const warnings = buildWarnings(kb, ix, validRecs, input, totalTokens);
+  const warnings = buildWarnings(kb, ix, validRecs, input, totalTokens, omitted);
 
   const bundle = [
     `# ${input.productName || 'System'} — architecture decision pack`,
