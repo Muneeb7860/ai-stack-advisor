@@ -441,9 +441,6 @@
     border:1px solid var(--glass-border); border-radius:var(--radius-lg);
     overflow:hidden; margin-bottom:28px; box-shadow:0 20px 50px -20px rgba(0,0,0,0.6);
   }
-  .hp-chrome{display:flex; align-items:center; gap:6px; padding:10px 14px; border-bottom:1px solid var(--border); background:var(--panel2-glass);}
-  .hp-dot{width:8px; height:8px; border-radius:50%; background:var(--border);}
-  .hp-chrome-label{margin-left:8px; font-size:10.5px; color:var(--muted); font-weight:600;}
   .hp-cards{display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:16px;}
   @media (max-width:640px){ .hp-cards{grid-template-columns:1fr;} }
   .mode-cards{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
@@ -626,7 +623,6 @@
        components the results page renders, reused verbatim (pointer-events:none, static
        example data) so this is a genuine preview, not an idealized mockup pretending to be one. -->
   <div class="hero-preview">
-    <div class="hp-chrome"><span class="hp-dot"></span><span class="hp-dot"></span><span class="hp-dot"></span><span class="hp-chrome-label">Your result, in seconds</span></div>
     <div class="hp-cards">
       <div class="stack-card card-conf-high" style="pointer-events:none;">
         <div class="head"><h3>Cloud Provider</h3><span class="conf conf-high">High confidence</span></div>
@@ -644,8 +640,8 @@
     <div class="mode-card" onclick="startWizard()">
       <div class="mc-icon">💬</div>
       <div class="mc-title">Answer a few questions</div>
-      <div class="mc-desc">6 short questions, skips what doesn't apply to you. No jargon required — good if you're not sure what to write in a paragraph.</div>
-      <div class="mc-time">~90 seconds</div>
+      <div class="mc-desc">7 short questions, skips what doesn't apply to you. No jargon required — good if you're not sure what to write in a paragraph.</div>
+      <div class="mc-time">~2 minutes</div>
     </div>
     <div class="mode-card" onclick="startFreetext()">
       <div class="mc-icon">📝</div>
