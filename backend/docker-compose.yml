@@ -27,6 +27,11 @@ services:
       # host.docker.internal instead. Works on Docker Desktop and colima; if your Docker setup
       # doesn't support host.docker.internal, override with your host's LAN IP.
       OLLAMA_BASE_URL: http://host.docker.internal:11434
+      # Opt-in only (see llm_providers.py's module docstring) — Claude stays the default/
+      # primary provider for any request that doesn't explicitly pass provider:"ollama".
+      # Enabled here so the local-dev compose stack can actually exercise the fallback path
+      # end-to-end; a real deployment should set this deliberately, not inherit it silently.
+      LLM_PROVIDER: ollama
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:

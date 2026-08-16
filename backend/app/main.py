@@ -1,8 +1,18 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .routers import ask, refine, share
+
+# Without this, Python's logging module has no handler attached and every logger.info() call
+# in this codebase — including llm_providers.py's native-vs-fallback tool-call-path logging,
+# which exists specifically as the eval signal for measuring how often the Ollama fallback
+# path fires in production (see its SECURITY comment) — silently goes nowhere. Found via a
+# real live test: a request that should have logged its extraction path produced zero log
+# output in `docker compose logs`. INFO level, stdout, so Docker/any log aggregator captures it.
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 app = FastAPI(
     title="AI Stack Advisor — v2 Backend",
