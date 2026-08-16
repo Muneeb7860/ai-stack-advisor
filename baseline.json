@@ -1,0 +1,903 @@
+{
+  "scanned": 1,
+  "design": null,
+  "findings": [
+    {
+      "id": "animate-layout",
+      "file": "index.html",
+      "line": 107,
+      "evidence": "nt; transition:all .15s var(--ease); } .glide-item.selected .gi-check{backgr",
+      "count": 1
+    },
+    {
+      "id": "animate-layout",
+      "file": "index.html",
+      "line": 386,
+      "evidence": "ointer; transition:all .15s var(--ease); font-weight:600; } .view-toggle button:",
+      "count": 1
+    },
+    {
+      "id": "animate-layout",
+      "file": "index.html",
+      "line": 474,
+      "evidence": "ointer; transition:all .15s var(--ease); text-align:left; } .mode-card:hover{bor",
+      "count": 1
+    },
+    {
+      "id": "animate-layout",
+      "file": "index.html",
+      "line": 498,
+      "evidence": "ointer; transition:all .15s var(--ease); font-weight:500; display:flex; align-it",
+      "count": 1
+    },
+    {
+      "id": "animate-layout",
+      "file": "index.html",
+      "line": 507,
+      "evidence": "ointer; transition:all .15s var(--ease); display:flex; align-items:center; justify-c",
+      "count": 1
+    },
+    {
+      "id": "animate-layout",
+      "file": "index.html",
+      "line": 492,
+      "evidence": "se);} @keyframes wizFadeIn{from{opacity:0; transform:translateY(6px);} to{opacity:",
+      "count": 1
+    },
+    {
+      "id": "ios-zoom",
+      "file": "index.html",
+      "line": 163,
+      "evidence": "1em;} textarea{ width:100%; min-height:140px; resize:vertical; background:var(",
+      "count": 1
+    },
+    {
+      "id": "ios-zoom",
+      "file": "index.html",
+      "line": 582,
+      "evidence": "yprompt input{ flex:1; min-width:180px; background:var(--surface); border:1px so",
+      "count": 1
+    },
+    {
+      "id": "ios-zoom",
+      "file": "index.html",
+      "line": 598,
+      "evidence": ".ask-input-row input{ flex:1; background:var(--surface); border:1px solid var",
+      "count": 1
+    },
+    {
+      "id": "ios-zoom",
+      "file": "index.html",
+      "line": 603,
+      "evidence": ".ask-input-row button{ background:var(--chip); border:1px solid var(--border)",
+      "count": 1
+    },
+    {
+      "id": "missing-states",
+      "file": "(codebase)",
+      "line": 0,
+      "evidence": "no focus state found",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 629,
+      "evidence": "<button id=\"themeToggle\" class=\"theme-toggle\" onclick=\"toggleTheme()\" title=\"Switch them",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 634,
+      "evidence": "<div class=\"glide-head\"><h3 id=\"glideTitle\"></h3><button class=\"glide-close\" onclick=\"cl",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 641,
+      "evidence": "<div class=\"mode-eyebrow\">🧭 AI Stack Advisor — runs entirely in your browser, no signup",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 664,
+      "evidence": "<div class=\"mc-icon\">💬</div>",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 670,
+      "evidence": "<div class=\"mc-icon\">📝</div>",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 699,
+      "evidence": "<div class=\"pick-chip\" data-val=\"web\"><span>🖥️</span>Web app</div>",
+      "count": 2
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 700,
+      "evidence": "<div class=\"pick-chip\" data-val=\"mobile\"><span>📱</span>Mobile app</div>",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 701,
+      "evidence": "<div class=\"pick-chip\" data-val=\"api\"><span>🔌</span>API / backend service</div>",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 702,
+      "evidence": "<div class=\"pick-chip\" data-val=\"chatbot\"><span>💬</span>AI chatbot / assistant</div>",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 703,
+      "evidence": "<div class=\"pick-chip\" data-val=\"data\"><span>📊</span>Data / analytics platform</div>",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 704,
+      "evidence": "<div class=\"pick-chip\" data-val=\"internal\"><span>🛠️</span>Internal tool</div>",
+      "count": 2
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 705,
+      "evidence": "<div class=\"pick-chip\" data-val=\"admin\"><span>📋</span>Admin / dashboard app</div>",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 706,
+      "evidence": "<div class=\"pick-chip\" data-val=\"ecommerce\"><span>🛒</span>E-commerce / marketplace</div",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 708,
+      "evidence": "<button type=\"button\" class=\"glide-trigger\" onclick=\"openGlidePanel('building')\">☰ Brows",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 714,
+      "evidence": "<div class=\"pick-radio\" data-val=\"chatbot\"><div><div class=\"pr-main\">💬 Chatbot / conver",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 715,
+      "evidence": "<div class=\"pick-radio\" data-val=\"omnichannel\"><div><div class=\"pr-main\">📡 Omnichannel ",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 716,
+      "evidence": "<div class=\"pick-radio\" data-val=\"guardrails-only\"><div><div class=\"pr-main\">🛡️ Guardra",
+      "count": 2
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 737,
+      "evidence": "<div class=\"pick-chip\" data-val=\"hipaa\"><span>🏥</span>Healthcare (HIPAA)</div>",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 738,
+      "evidence": "<div class=\"pick-chip\" data-val=\"pci\"><span>💳</span>Payments (PCI)</div>",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 739,
+      "evidence": "<div class=\"pick-chip\" data-val=\"soc2\"><span>🏢</span>Enterprise (SOC2)</div>",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 740,
+      "evidence": "<div class=\"pick-chip\" data-val=\"gov\"><span>🏛️</span>Government</div>",
+      "count": 2
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 760,
+      "evidence": "<div class=\"pick-chip\" data-val=\"java\"><span>☕</span>Java / Spring</div>",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 761,
+      "evidence": "<div class=\"pick-chip\" data-val=\"python\"><span>🐍</span>Python</div>",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 762,
+      "evidence": "<div class=\"pick-chip\" data-val=\"node\"><span>🟩</span>Node.js / JavaScript</div>",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 763,
+      "evidence": "<div class=\"pick-chip\" data-val=\"dotnet\"><span>🔷</span>.NET / C#</div>",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 764,
+      "evidence": "<div class=\"pick-chip\" data-val=\"go\"><span>🐹</span>Go</div>",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 765,
+      "evidence": "<div class=\"pick-chip\" data-val=\"ruby\"><span>💎</span>Ruby on Rails</div>",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 766,
+      "evidence": "<div class=\"pick-chip\" data-val=\"php\"><span>🐘</span>PHP / Laravel</div>",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 768,
+      "evidence": "<button type=\"button\" class=\"glide-trigger\" onclick=\"openGlidePanel('teamskills')\">☰ Bro",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 777,
+      "evidence": "<div class=\"pick-chip\" data-val=\"chatbot\"><span>💬</span>Customer-facing chatbot</div>",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 778,
+      "evidence": "<div class=\"pick-chip\" data-val=\"internal-kb\"><span>📚</span>Internal knowledge assistan",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 779,
+      "evidence": "<div class=\"pick-chip\" data-val=\"reco\"><span>🎯</span>Recommendations / personalization<",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 780,
+      "evidence": "<div class=\"pick-chip\" data-val=\"fraud\"><span>🛡️</span>Fraud / anomaly detection</div>",
+      "count": 2
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 781,
+      "evidence": "<div class=\"pick-chip\" data-val=\"unsure\"><span>🤔</span>Not sure yet</div>",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 803,
+      "evidence": "<h1>🧭 AI Stack Advisor</h1>",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 827,
+      "evidence": "<button id=\"viewCardsBtn\" class=\"active\" onclick=\"setView('cards')\">📋 Cards</button>",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 828,
+      "evidence": "<button id=\"viewFlowBtn\" onclick=\"setView('flow')\">🔀 Flow</button>",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 839,
+      "evidence": "<button class=\"share-btn\" id=\"exportAdrBtn\" onclick=\"onExportAdrClick()\">📄 Export as AD",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 840,
+      "evidence": "<button class=\"share-btn\" id=\"shareBtn\" onclick=\"onShareClick()\">📎 Share this analysis<",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 1164,
+      "evidence": "<div class=\"ivc-head\"><span class=\"ivc-name\">${v.name}</span><span class=\"ivc-cat\">${v.c",
+      "count": 2
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 2432,
+      "evidence": "<b>🛡️ Guardrails-only scope detected</b> — you said your AI is already built, so everyt",
+      "count": 2
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 2437,
+      "evidence": "<b>🔌 AI-only scope detected</b> — you said your application already exists, so infrastr",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 2526,
+      "evidence": "${COMPUTE_TIER_TABLE.map(r=>`<tr class=\"${r.tier===computeTier.tier?'recommended':''}\"><",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 2919,
+      "evidence": "pop.innerHTML = `<span class=\"fp-close\" onclick=\"document.getElementById('flowPopover').",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 2940,
+      "evidence": "if (btn) { btn.textContent = isLight ? '☀️' : '🌙'; btn.title = isLight ? 'Switch to dar",
+      "count": 3
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3203,
+      "evidence": "{val:'web', icon:'🖥️', label:'Web app'},",
+      "count": 2
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3204,
+      "evidence": "{val:'mobile', icon:'📱', label:'Mobile app'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3205,
+      "evidence": "{val:'api', icon:'🔌', label:'API / backend service'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3206,
+      "evidence": "{val:'chatbot', icon:'💬', label:'AI chatbot / assistant'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3207,
+      "evidence": "{val:'data', icon:'📊', label:'Data / analytics platform'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3208,
+      "evidence": "{val:'internal', icon:'🛠️', label:'Internal tool'},",
+      "count": 2
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3209,
+      "evidence": "{val:'admin', icon:'📋', label:'Admin / dashboard app'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3210,
+      "evidence": "{val:'ecommerce', icon:'🛒', label:'E-commerce / marketplace'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3225,
+      "evidence": "{val:'java', icon:'☕', label:'Java / Spring', category:'Backend language'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3226,
+      "evidence": "{val:'python', icon:'🐍', label:'Python', category:'Backend language'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3227,
+      "evidence": "{val:'node', icon:'🟩', label:'Node.js / JavaScript', category:'Backend language'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3228,
+      "evidence": "{val:'dotnet', icon:'🔷', label:'.NET / C#', category:'Backend language'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3229,
+      "evidence": "{val:'go', icon:'🐹', label:'Go', category:'Backend language'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3230,
+      "evidence": "{val:'ruby', icon:'💎', label:'Ruby on Rails', category:'Backend language'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3231,
+      "evidence": "{val:'php', icon:'🐘', label:'PHP / Laravel', category:'Backend language'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3232,
+      "evidence": "{val:'postgres', icon:'🐘', label:'PostgreSQL', category:'Database'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3233,
+      "evidence": "{val:'mysql', icon:'🐬', label:'MySQL', category:'Database'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3234,
+      "evidence": "{val:'sqlserver', icon:'🗄️', label:'SQL Server', category:'Database'},",
+      "count": 2
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3235,
+      "evidence": "{val:'oracle', icon:'🔴', label:'Oracle Database', category:'Database'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3236,
+      "evidence": "{val:'mongo', icon:'🍃', label:'MongoDB', category:'Database'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3237,
+      "evidence": "{val:'pinecone', icon:'🌲', label:'Pinecone (vector DB)', category:'Database'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3238,
+      "evidence": "{val:'weaviate', icon:'🔷', label:'Weaviate (vector DB)', category:'Database'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3239,
+      "evidence": "{val:'qdrant', icon:'🔶', label:'Qdrant (vector DB)', category:'Database'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3240,
+      "evidence": "{val:'html', icon:'🧩', label:'HTML / CSS / JavaScript', category:'Frontend framework'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3241,
+      "evidence": "{val:'react', icon:'⚛️', label:'React', category:'Frontend framework'},",
+      "count": 2
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3242,
+      "evidence": "{val:'angular', icon:'🅰️', label:'Angular', category:'Frontend framework'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3243,
+      "evidence": "{val:'vue', icon:'💚', label:'Vue', category:'Frontend framework'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3244,
+      "evidence": "{val:'aws', icon:'☁️', label:'AWS', category:'Cloud'},",
+      "count": 2
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3245,
+      "evidence": "{val:'azure', icon:'☁️', label:'Azure', category:'Cloud'},",
+      "count": 2
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3246,
+      "evidence": "{val:'gcp', icon:'☁️', label:'Google Cloud (GCP)', category:'Cloud'},",
+      "count": 2
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3247,
+      "evidence": "{val:'docker', icon:'🐳', label:'Docker', category:'Containers / Orchestration'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3248,
+      "evidence": "{val:'kubernetes', icon:'☸️', label:'Kubernetes', category:'Containers / Orchestration'}",
+      "count": 2
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3249,
+      "evidence": "{val:'openshift', icon:'🎩', label:'OpenShift', category:'Containers / Orchestration'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3250,
+      "evidence": "{val:'terraform', icon:'🧱', label:'Terraform / IaC', category:'DevOps / CI-CD'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3251,
+      "evidence": "{val:'githubactions', icon:'⚙️', label:'GitHub Actions', category:'DevOps / CI-CD'},",
+      "count": 2
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3252,
+      "evidence": "{val:'jenkins', icon:'🔧', label:'Jenkins', category:'DevOps / CI-CD'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3253,
+      "evidence": "{val:'gitlabci', icon:'🦊', label:'GitLab CI', category:'DevOps / CI-CD'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3254,
+      "evidence": "{val:'circleci', icon:'⭕', label:'CircleCI', category:'DevOps / CI-CD'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3255,
+      "evidence": "{val:'azuredevops', icon:'🔷', label:'Azure DevOps', category:'DevOps / CI-CD'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3256,
+      "evidence": "{val:'datadog', icon:'🐶', label:'Datadog', category:'Monitoring'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3257,
+      "evidence": "{val:'prometheus', icon:'📈', label:'Prometheus / Grafana', category:'Monitoring'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3258,
+      "evidence": "{val:'splunk', icon:'📊', label:'Splunk', category:'Monitoring'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3259,
+      "evidence": "{val:'dynatrace', icon:'🔵', label:'Dynatrace', category:'Monitoring'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3260,
+      "evidence": "{val:'newrelic', icon:'🚗', label:'New Relic', category:'Monitoring'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3261,
+      "evidence": "{val:'elk', icon:'🔍', label:'Elastic Stack (ELK)', category:'Monitoring'},",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3277,
+      "evidence": "<span class=\"sel-tile\" data-val=\"${val}\">${labelFor(val)}<span class=\"st-x\" title=\"Remov",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3311,
+      "evidence": "<div class=\"gi-check\">✓</div><span class=\"gi-icon\">${it.icon}</span><span class=\"gi-labe",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3489,
+      "evidence": "return `<span class=\"exit-cost-badge\" title=\"Expensive to change later — worth the extra",
+      "count": 2
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3552,
+      "evidence": "<button class=\"ask-toggle-btn\" id=\"askToggleBtn-${cardKey}\" onclick=\"onAskToggleClick('$",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3712,
+      "evidence": "if (btn) { btn.disabled = false; btn.textContent = '🔄 Refine again (new pass)'; }",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3731,
+      "evidence": "<button class=\"refine-history-toggle\" onclick=\"toggleRefineHistoryPanel()\">📜 Refinement",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3732,
+      "evidence": "<button class=\"refine-history-toggle\" id=\"refineAgainBtn\" onclick=\"onRefineAgainClick()\"",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 3756,
+      "evidence": "resultEl.innerHTML = `<div class=\"refine-nochange\">✓ No change suggested for this pick.<",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 4173,
+      "evidence": "btn.textContent = '✅ Downloaded';",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 4199,
+      "evidence": "btn.textContent = '✓ Link copied!';",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 4216,
+      "evidence": "<span>📎 You're viewing a shared analysis — <b>read-only</b>. Anyone with this link can ",
+      "count": 1
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 4222,
+      "evidence": "document.getElementById('sharedBanner').innerHTML = `<div class=\"shared-banner\">⚠️ ${e.m",
+      "count": 2
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 13570,
+      "evidence": "L.push(`- ⚠️ No explicit signal for this choice; it is a default. Confirm before committ",
+      "count": 2
+    },
+    {
+      "id": "emoji-as-icon",
+      "file": "index.html",
+      "line": 13692,
+      "evidence": "L.push(`| ${roleCell} | ${r.chosen ? `**${r.name}**` : r.name} | ${r.chosen ? '✓' : ''} ",
+      "count": 1
+    },
+    {
+      "id": "glassmorphism",
+      "file": "index.html",
+      "line": 28,
+      "evidence": "panel + backdrop-filter:blur() on .glass surfaces only (cards, glide panel, m",
+      "count": 1
+    },
+    {
+      "id": "glassmorphism",
+      "file": "index.html",
+      "line": 68,
+      "evidence": "glass); backdrop-filter:blur(var(--glass-blur)) saturate(160%); -webkit-backdrop-fil",
+      "count": 3
+    },
+    {
+      "id": "glassmorphism",
+      "file": "index.html",
+      "line": 68,
+      "evidence": "-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(160%); border:1px solid",
+      "count": 6
+    },
+    {
+      "id": "glassmorphism",
+      "file": "index.html",
+      "line": 87,
+      "evidence": "glass); backdrop-filter:blur(var(--glass-blur)) saturate(160%); -webkit-backdrop",
+      "count": 1
+    },
+    {
+      "id": "glassmorphism",
+      "file": "index.html",
+      "line": 88,
+      "evidence": "-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(160%); border-right:1px",
+      "count": 1
+    },
+    {
+      "id": "glassmorphism",
+      "file": "index.html",
+      "line": 158,
+      "evidence": ")); backdrop-filter:blur(var(--glass-blur)) saturate(160%); -webkit-backdrop-fil",
+      "count": 3
+    },
+    {
+      "id": "glassmorphism",
+      "file": "index.html",
+      "line": 372,
+      "evidence": ",0.94); backdrop-filter:blur(8px); border-bottom:1px solid var(--border);",
+      "count": 1
+    },
+    {
+      "id": "glassmorphism",
+      "file": "index.html",
+      "line": 408,
+      "evidence": "9,0.9); backdrop-filter:blur(6px); border:1px solid var(--border); border-radius:8px",
+      "count": 1
+    },
+    {
+      "id": "glassmorphism",
+      "file": "index.html",
+      "line": 414,
+      "evidence": ",0.85); backdrop-filter:blur(6px); border:1px solid var(--border); border-radius:8px",
+      "count": 1
+    },
+    {
+      "id": "page-skeleton",
+      "file": "index.html",
+      "line": 0,
+      "evidence": "sections present: hero → feature → pricing → faq → cta",
+      "count": 1
+    },
+    {
+      "id": "sparkle-ai",
+      "file": "index.html",
+      "line": 3551,
+      "evidence": "<button class=\"refine-btn\" onclick=\"onRefineClick('${cardKey}', this)\">✨ Refine with AI<",
+      "count": 1
+    },
+    {
+      "id": "sparkle-ai",
+      "file": "index.html",
+      "line": 3670,
+      "evidence": "if (btnEl) { btnEl.disabled = false; btnEl.textContent = '✨ Refine with AI'; }",
+      "count": 1
+    }
+  ],
+  "sprawl": {
+    "colors": 37,
+    "fontSizes": 19,
+    "radii": 11,
+    "spacing": 23,
+    "fonts": 2
+  },
+  "suppressed": 0
+}
