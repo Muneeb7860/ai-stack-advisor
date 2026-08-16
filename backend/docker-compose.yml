@@ -27,11 +27,14 @@ services:
       # host.docker.internal instead. Works on Docker Desktop and colima; if your Docker setup
       # doesn't support host.docker.internal, override with your host's LAN IP.
       OLLAMA_BASE_URL: http://host.docker.internal:11434
-      # Opt-in only (see llm_providers.py's module docstring) — Claude stays the default/
-      # primary provider for any request that doesn't explicitly pass provider:"ollama".
-      # Enabled here so the local-dev compose stack can actually exercise the fallback path
-      # end-to-end; a real deployment should set this deliberately, not inherit it silently.
-      LLM_PROVIDER: ollama
+      # LLM_PROVIDER deliberately NOT set here — defaults to config.py's "anthropic" (see
+      # llm_providers.py's module docstring: opt-in only, Claude stays primary). Previously
+      # this was hardcoded to "ollama" for one live-testing session and left in by mistake —
+      # that silently broke test_refine.py::test_refine_rejects_ollama_provider_when_not_enabled
+      # and its test_ask.py counterpart, since every test run against this compose stack
+      # inherited an opted-in deployment instead of the documented default. Caught by a full
+      # test-suite run, not assumed fixed. To exercise the Ollama path locally again, set it
+      # ad hoc: `LLM_PROVIDER=ollama docker compose up -d` — don't commit it back to this file.
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
