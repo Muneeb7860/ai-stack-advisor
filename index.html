@@ -687,24 +687,34 @@
     <div class="wiz-sub">This changes almost everything below — an existing app needs AI recommendations only, not a new cloud/database/backend stack you already have.</div>
     <div class="radio-list" data-group="scope">
       <div class="pick-radio" data-val="greenfield"><div><div class="pr-main">Building something new</div><div class="pr-sub">Full architecture — cloud, database, backend, AI, everything</div></div><div class="pr-dot"></div></div>
-      <div class="pick-radio" data-val="brownfield"><div><div class="pr-main">Adding AI to an app that already exists</div><div class="pr-sub">Chatbot / conversational assistant — your existing stack stays as-is</div></div><div class="pr-dot"></div></div>
+      <div class="pick-radio" data-val="brownfield"><div><div class="pr-main">Adding AI to an app that already exists</div><div class="pr-sub">Chatbot or omnichannel AI support — your existing stack stays as-is</div></div><div class="pr-dot"></div></div>
     </div>
   </div>
 
   <div class="wiz-step" data-step="2">
-    <div class="wiz-q">What are you building?</div>
-    <div class="wiz-sub">Pick as many as apply.</div>
-    <div class="chip-grid" data-group="building">
-      <div class="pick-chip" data-val="web"><span>🖥️</span>Web app</div>
-      <div class="pick-chip" data-val="mobile"><span>📱</span>Mobile app</div>
-      <div class="pick-chip" data-val="api"><span>🔌</span>API / backend service</div>
-      <div class="pick-chip" data-val="chatbot"><span>💬</span>AI chatbot / assistant</div>
-      <div class="pick-chip" data-val="data"><span>📊</span>Data / analytics platform</div>
-      <div class="pick-chip" data-val="internal"><span>🛠️</span>Internal tool</div>
-      <div class="pick-chip" data-val="admin"><span>📋</span>Admin / dashboard app</div>
-      <div class="pick-chip" data-val="ecommerce"><span>🛒</span>E-commerce / marketplace</div>
+    <div id="wizStep2Greenfield">
+      <div class="wiz-q">What are you building?</div>
+      <div class="wiz-sub">Pick as many as apply.</div>
+      <div class="chip-grid" data-group="building">
+        <div class="pick-chip" data-val="web"><span>🖥️</span>Web app</div>
+        <div class="pick-chip" data-val="mobile"><span>📱</span>Mobile app</div>
+        <div class="pick-chip" data-val="api"><span>🔌</span>API / backend service</div>
+        <div class="pick-chip" data-val="chatbot"><span>💬</span>AI chatbot / assistant</div>
+        <div class="pick-chip" data-val="data"><span>📊</span>Data / analytics platform</div>
+        <div class="pick-chip" data-val="internal"><span>🛠️</span>Internal tool</div>
+        <div class="pick-chip" data-val="admin"><span>📋</span>Admin / dashboard app</div>
+        <div class="pick-chip" data-val="ecommerce"><span>🛒</span>E-commerce / marketplace</div>
+      </div>
+      <button type="button" class="glide-trigger" onclick="openGlidePanel('building')">☰ Browse all options in a panel</button>
     </div>
-    <button type="button" class="glide-trigger" onclick="openGlidePanel('building')">☰ Browse all options in a panel</button>
+    <div id="wizStep2Brownfield" style="display:none;">
+      <div class="wiz-q">Which AI capability are you adding?</div>
+      <div class="wiz-sub">These are architecturally different, not just different labels — pick the one closest to what you're actually building.</div>
+      <div class="radio-list" data-group="aiPattern">
+        <div class="pick-radio" data-val="chatbot"><div><div class="pr-main">💬 Chatbot / conversational assistant</div><div class="pr-sub">One interface, bolted onto your existing backend via an API route or webhook</div></div><div class="pr-dot"></div></div>
+        <div class="pick-radio" data-val="omnichannel"><div><div class="pr-main">📡 Omnichannel AI support</div><div class="pr-sub">One AI core, consistent across multiple channels (web widget, WhatsApp, email, voice/IVR) — needs a routing layer, not just an API route</div></div><div class="pr-dot"></div></div>
+      </div>
+    </div>
   </div>
 
   <div class="wiz-step" data-step="3">
@@ -1003,7 +1013,12 @@ function detectSignals(text){
     // synthesized prefix sentence below, which always contains this exact phrasing so the
     // wizard path is authoritative); free-text-only users typing something equivalent
     // organically also get caught by the same signal — one detection path, not two.
-    brownfieldAiOnly: has(['already have an existing application','already have an existing app','already have an application in production','existing application in production','add ai to our existing','only want to add ai','add a chatbot to our existing','adding a chatbot to our existing']),
+    brownfieldAiOnly: has(['already have an existing application','already have an existing app','already have an application in production','existing application in production','add ai to our existing','only want to add ai','add a chatbot to our existing','adding a chatbot to our existing','add omnichannel ai support']),
+    // Pattern #2 — a genuinely different architecture shape from plain chatbot-only: needs a
+    // channel-routing/session-continuity layer, not just an API route. Checked independently of
+    // brownfieldAiOnly (both fire together on the wizard path) so a free-text user describing
+    // multi-channel AI support organically still gets the right Integration-section content.
+    brownfieldOmnichannel: has(['omnichannel ai support','omnichannel support','omni-channel ai','multiple channels','across channels','web widget, whatsapp','channel routing']),
     smallTeam: has(['small team','2 engineers','3 engineers','4 engineers','5 engineers','6 engineers','solo founder','few engineers'])
       || /\b([1-9]|1[0-2])[- ]?(person|people)\b/.test(t) || /team of\s*([1-9]|1[0-2])\b/.test(t),
     largeTeam: has(['large team','many teams','multiple teams','platform team']),
@@ -1670,6 +1685,22 @@ function pickMCP(s){
 // Grounded in the same signals already detected (compliance/onPrem/enterprise), not generic
 // filler, same bar as the rest of this file.
 function pickIntegrationGuidance(s){
+  // Pattern #2 (omnichannel) is architecturally different from pattern #1 (chatbot-only), not
+  // a bigger version of it — the hard part isn't the model, it's a channel-routing/session-
+  // continuity layer sitting in front of one AI core. Branch the whole guidance set, not just
+  // patch individual fields, so the omnichannel case doesn't inherit chatbot-only assumptions
+  // (e.g. "one webhook route" is simply wrong once there are multiple channel adapters).
+  if (s.brownfieldOmnichannel){
+    const integrationPath = s.onPrem
+      ? {v:'Internal channel-routing service — no public webhooks', why:'An air-gapped/on-prem existing system has no public ingress for any channel adapter to call. The routing layer and every channel adapter it fronts (web widget, WhatsApp, email, voice/IVR) have to run inside the same network boundary — some channels (WhatsApp Business API, public voice carriers) fundamentally require internet reachability, so confirm which channels are actually in scope before committing to full air-gap for all of them.'}
+      : {v:'A channel-routing/orchestration layer in front of one shared AI core, with a distinct adapter per channel (web widget, WhatsApp Business API, email, voice/IVR)', why:'This is the piece pattern #1 doesn\'t need: each channel has its own message format, delivery guarantees, and identity model (a phone number for WhatsApp, an email address, a session cookie for the widget) — the routing layer\'s job is normalizing all of that into one representation before it ever reaches the AI core, and translating the core\'s response back into each channel\'s native format.'};
+    const authNote = 'Each channel authenticates differently (WhatsApp verifies phone numbers, email has no real-time auth at all, your web widget can reuse existing session cookies) — resolve every channel\'s identity to the SAME internal user/session ID at the routing layer, before the AI core ever sees the request. The AI core should never need to know which channel a message arrived on to identify who\'s asking.';
+    const sessionNote = 'This is the hardest part of pattern #2, worth calling out explicitly: session/conversation state must be keyed by the resolved internal user ID (not per-channel), so a conversation started on the web widget and continued over WhatsApp is the SAME conversation, not two. Store it centrally (one session store the routing layer and AI core both read/write), not per-channel-adapter — a per-channel session store is exactly how "channel amnesia" (the bot forgetting context when a user switches channels) happens in practice.';
+    const scopeNote = s.compliance
+      ? 'Scope what the AI core can see and do explicitly, same as pattern #1 — but also scope each CHANNEL ADAPTER\'s permissions independently (e.g. the email adapter shouldn\'t be able to trigger actions only the authenticated web-widget channel should allow), since channels carry different trust levels for the same underlying user.'
+      : 'Give the routing layer its own scoped credentials against your existing backend, and treat each channel adapter as a separate trust boundary — a compromised WhatsApp webhook shouldn\'t have the same blast radius as a compromised authenticated web-widget session.';
+    return {integrationPath, authNote, sessionNote, scopeNote, patternLabel:'omnichannel AI support', patternAssumption:'This section assumes pattern #2 — omnichannel AI support across multiple channels sharing one AI core. Pattern #1 (single-channel chatbot) uses simpler, single-webhook guidance instead — you\'ll see that version if you pick that pattern. Event-driven notification/feedback engines and per-microservice-vs-centralized AI gateway patterns are real, different architectures — not built yet, flagged rather than force-fit into this guidance.'};
+  }
   const integrationPath = s.onPrem
     ? {v:'Internal service call — no public webhook', why:'An air-gapped/on-prem existing system has no public ingress to receive a webhook from; the chatbot service has to be deployed inside the same network boundary and called as an internal service (gRPC/REST over your private network), not integrated via an external callback URL.'}
     : {v:'A new API route or webhook on your existing backend, calling out to the chatbot service', why:'The chatbot doesn\'t need to live inside your existing application\'s codebase — a thin new route (e.g. POST /api/chat) that proxies to a separately-deployed chatbot service keeps the integration surface small and the two deployable independently. Avoids a large refactor of code that\'s already working.'};
@@ -1680,7 +1711,7 @@ function pickIntegrationGuidance(s){
   const scopeNote = s.compliance
     ? 'Scope what the chatbot can see and do explicitly — for a regulated existing system, the chatbot should read from a defined, reviewed subset of your data (via an API your team controls), never given direct database access. That boundary is also what makes the Guardrails section below enforceable.'
     : 'Give the chatbot service its own scoped API key/credentials against your existing backend — least-privilege, not the same credentials your main application uses internally.';
-  return {integrationPath, authNote, sessionNote, scopeNote};
+  return {integrationPath, authNote, sessionNote, scopeNote, patternLabel:'chatbot / conversational assistant', patternAssumption:'This section assumes pattern #1 — a standalone chatbot bolted onto one existing application. Omnichannel AI support uses a different, channel-routing-focused version of this guidance instead — you\'ll see that version if you pick that pattern. Event-driven notification/feedback engines and per-microservice-vs-centralized AI gateway patterns are real, different architectures — not built yet, flagged rather than force-fit into this guidance.'};
 }
 const RAG_TYPES = [
   'Naive RAG','Retrieve-and-Rerank RAG','Hybrid (keyword + vector) RAG','Hierarchical / Multi-level RAG',
@@ -2310,18 +2341,20 @@ function renderRecommendations(s, rec){
   // stack cards — no anchor for the eye to land on first. This gives the page one clear headline
   // before the detail grid, built from fields that are always present (cloud/database picks),
   // not a hand-authored summary requiring new NLG logic.
-  // Brownfield/AI-only scope (pattern #1 — chatbot-only): cloud/db picks still get computed
-  // (nothing upstream changes — every pickX() function still runs, this only changes what
-  // RENDERS) but they're meaningless as a headline when the user explicitly said their
-  // infrastructure is already decided, so build the headline from the AI pick instead.
+  // Brownfield/AI-only scope: cloud/db picks still get computed (nothing upstream changes —
+  // every pickX() function still runs, this only changes what RENDERS) but they're meaningless
+  // as a headline when the user explicitly said their infrastructure is already decided, so
+  // build the headline from the AI pick instead. Branches by pattern (#1 chatbot vs #2 omnichannel).
   const heroHeadline = s.brownfieldAiOnly
-    ? (llm[0] ? `Chatbot: ${llm[0].name.split(/[(,]/)[0].trim()}` : 'Chatbot integration plan')
+    ? (s.brownfieldOmnichannel
+        ? (llm[0] ? `Omnichannel AI: ${llm[0].name.split(/[(,]/)[0].trim()}` : 'Omnichannel AI integration plan')
+        : (llm[0] ? `Chatbot: ${llm[0].name.split(/[(,]/)[0].trim()}` : 'Chatbot integration plan'))
     : `${cloud.v.split(/[(—]/)[0].trim()} + ${db.v.split(/[(—·]/)[0].trim()}`;
   const brownfieldBanner = s.brownfieldAiOnly ? `
       <div class="brownfield-banner">
         <b>🔌 AI-only scope detected</b> — you said your application already exists, so infrastructure
         recommendations (cloud, database, backend language, CI/CD, etc.) are skipped below. Everything
-        shown assumes your current stack stays exactly as it is; only the AI/chatbot layer is new.
+        shown assumes your current stack stays exactly as it is; only the ${s.brownfieldOmnichannel ? 'omnichannel AI' : 'AI/chatbot'} layer is new.
       </div>` : '';
   const signalsHtml = `<div class="results-hero">
       <div class="rh-eyebrow">${activeSignals.length} signal${activeSignals.length===1?'':'s'} detected</div>
@@ -2377,16 +2410,16 @@ function renderRecommendations(s, rec){
 
   if (s.brownfieldAiOnly){
     const ig = pickIntegrationGuidance(s);
-    sec('integration', 'Integration', 'Integrating Into Your Existing Application',
+    sec('integration', 'Integration', `Integrating Into Your Existing Application <span style="color:var(--muted); text-transform:none; letter-spacing:0; font-weight:400;">— ${ig.patternLabel}</span>`,
       `<div class="card">
         <div class="rag-pick"><div class="head"><div class="name">${ig.integrationPath.v}</div></div><div class="why">${ig.integrationPath.why}</div></div>
         <div class="subhead">Auth &amp; access</div>
         <div class="opt-item"><div class="w">${ig.authNote}</div></div>
-        <div class="subhead">Conversation / session state</div>
+        <div class="subhead">${s.brownfieldOmnichannel ? 'Cross-channel session continuity' : 'Conversation / session state'}</div>
         <div class="opt-item"><div class="w">${ig.sessionNote}</div></div>
         <div class="subhead">Data access scope</div>
         <div class="opt-item"><div class="w">${ig.scopeNote}</div></div>
-        <div class="assumption">This section assumes pattern #1 — a standalone chatbot bolted onto one existing application. Omnichannel routing, event-driven notification/feedback engines, and per-microservice vs. centralized AI gateway patterns are real, different architectures — not built yet, flagged rather than force-fit into this guidance.</div>
+        <div class="assumption">${ig.patternAssumption}</div>
       </div>`);
   }
 
@@ -2838,22 +2871,23 @@ syncThemeToggleIcon(); // reflect whatever the <head> inline script already appl
    ================================================================================ */
 
 // ---------------- Mode picker + wizard (decisions #3, #5, #6, #7) ----------------
-const wizState = { scope:null, building:[], audience:null, compliance:[], teamsize:null, teamskills:[], ai:[] };
+const wizState = { scope:null, aiPattern:null, building:[], audience:null, compliance:[], teamsize:null, teamskills:[], ai:[] };
 let wizCurrentStep = 1;
 const WIZ_STEP_ORDER = [1,2,3,4,5,6,7,8];
 
 function wizVisibleSteps(){
   // Two skip rules now, not one:
   //  - compliance (step 4) skipped when audience=internal, same as before (renumbered from 3).
-  //  - brownfield scope (step 1 = 'adding AI to an existing app', pattern #1 — chatbot-only for
-  //    now) skips everything that only matters for choosing NEW infra: building-type (2),
-  //    team-size (5), team-skills (6), and the AI-feature picker (7) — we already know it's a
-  //    chatbot from the scope choice itself. Leaves scope(1) -> audience(3) -> compliance(4,
-  //    still its own skip) -> freetext(8), a 2-4 step flow instead of 7.
+  //  - brownfield scope (step 1 = 'adding AI to an existing app') skips everything that only
+  //    matters for choosing NEW infra: team-size (5), team-skills (6), and the AI-feature
+  //    picker (7) — step 2 is NOT skipped for brownfield anymore (pattern #2, omnichannel,
+  //    added a second brownfield sub-pattern, so step 2 now asks WHICH ai capability instead
+  //    of being skipped — see wizStep2Brownfield). Leaves scope(1) -> ai-pattern(2) ->
+  //    audience(3) -> compliance(4, still its own skip) -> freetext(8), a 3-5 step flow.
   const brownfield = wizState.scope === 'brownfield';
   return WIZ_STEP_ORDER.filter(s => {
     if (s===4 && wizState.audience==='internal') return false;
-    if (brownfield && (s===2 || s===5 || s===6 || s===7)) return false;
+    if (brownfield && (s===5 || s===6 || s===7)) return false;
     return true;
   });
 }
@@ -2863,7 +2897,7 @@ function wizUpdateNextEnabled(){
   const step = wizCurrentStep;
   let ok = true;
   if (step===1) ok = !!wizState.scope;
-  if (step===2) ok = wizState.building.length>0;
+  if (step===2) ok = wizState.scope==='brownfield' ? !!wizState.aiPattern : wizState.building.length>0;
   if (step===3) ok = !!wizState.audience;
   if (step===4) ok = wizState.compliance.length>0;
   if (step===5) ok = !!wizState.teamsize;
@@ -2879,7 +2913,7 @@ function wizMaybeShowInference(){
     strip.innerHTML = '<b>Skipping the compliance question</b> — internal-only tools rarely carry the same regulatory scope, so we\'ll default to "none" and you can add detail at the end if that\'s wrong.';
     strip.classList.add('show');
   } else if (wizCurrentStep===1 && wizState.scope==='brownfield'){
-    strip.innerHTML = '<b>Skipping the infrastructure questions</b> — building type, team size, team skills, and the AI-feature picker only matter when choosing new infra. Since your app already exists, we\'ll go straight to compliance and a short description of what you want to add.';
+    strip.innerHTML = '<b>Skipping team size, team skills, and the AI-feature picker</b> — those only matter when choosing new infra. Since your app already exists, we\'ll ask which AI capability you\'re adding, then go straight to compliance and a short description.';
     strip.classList.add('show');
   } else {
     strip.classList.remove('show');
@@ -2895,19 +2929,31 @@ function wizRenderStep(){
   document.getElementById('wizStepLabel').textContent = `Step ${pos} of ${vis.length}`;
   document.getElementById('wizBackBtn').style.visibility = pos===1 ? 'hidden' : 'visible';
   document.getElementById('wizInferStrip').classList.remove('show');
+  // Step 2 shows a different question entirely depending on scope — greenfield asks "what are
+  // you building" (chip grid), brownfield asks "which AI capability" (chatbot vs omnichannel).
+  // Both blocks exist in the DOM at all times; only one is visible, matching the pattern
+  // already used for the audience-dependent compliance skip.
+  if (wizCurrentStep===2){
+    const brownfield = wizState.scope === 'brownfield';
+    document.getElementById('wizStep2Greenfield').style.display = brownfield ? 'none' : 'block';
+    document.getElementById('wizStep2Brownfield').style.display = brownfield ? 'block' : 'none';
+  }
   // Step 8's copy changes for brownfield — "anything else" reads oddly when it's actually the
   // ONLY open-ended question in a 4-step flow, and it needs to actually prompt for what the
   // freetext-driven synthesis needs (what the existing app is, what the chatbot should do).
   if (wizCurrentStep===8){
     const brownfield = wizState.scope === 'brownfield';
+    const omnichannel = brownfield && wizState.aiPattern === 'omnichannel';
     document.getElementById('wizStep8Q').textContent = brownfield
-      ? 'Tell us about your existing application and what you want the chatbot to do'
+      ? (omnichannel ? 'Tell us about your existing application and which channels need AI support' : 'Tell us about your existing application and what you want the chatbot to do')
       : 'Anything else worth knowing?';
     document.getElementById('wizStep8Sub').textContent = brownfield
-      ? 'e.g. what the app is built in, which channel (web widget, mobile in-app, etc.), and what the chatbot should actually handle — the more specific, the better the integration guidance.'
+      ? (omnichannel
+          ? 'e.g. what the app is built in, which channels are in scope (web widget, WhatsApp, email, voice/IVR), and whether users need to switch channels mid-conversation — the more specific, the better the routing guidance.'
+          : 'e.g. what the app is built in, which channel (web widget, mobile in-app, etc.), and what the chatbot should actually handle — the more specific, the better the integration guidance.')
       : 'Optional — existing cloud provider, latency needs, budget constraints, anything the questions above didn\'t cover.';
     document.getElementById('wizStep8Skip').textContent = brownfield
-      ? 'Skip this and we\'ll give general chatbot-integration guidance without knowing your specific stack.'
+      ? (omnichannel ? 'Skip this and we\'ll give general omnichannel-routing guidance without knowing your specific channels.' : 'Skip this and we\'ll give general chatbot-integration guidance without knowing your specific stack.')
       : 'Skip this and we\'ll work from your answers above alone.';
   }
   wizUpdateNextEnabled();
@@ -2936,12 +2982,18 @@ function wizBack(){
 // lists, not guessed.
 function synthesizeRequirementText(state){
   const parts = [];
-  // Brownfield/AI-only scope (pattern #1 — chatbot-only): this exact phrasing is the
-  // authoritative trigger for detectSignals()'s brownfieldAiOnly signal (see its own comment)
-  // — the wizard path always produces it verbatim, so the render layer can suppress infra
-  // cards with confidence rather than guessing from looser free-text matches.
+  // Brownfield/AI-only scope, branched by pattern: this exact phrasing is the authoritative
+  // trigger for detectSignals()'s brownfieldAiOnly signal (see its own comment) — the wizard
+  // path always produces it verbatim, so the render layer can suppress infra cards with
+  // confidence rather than guessing from looser free-text matches. The omnichannel branch
+  // additionally triggers brownfieldOmnichannel, which swaps the Integration section's content
+  // from single-channel API-integration guidance to channel-routing/session-continuity guidance.
   if (state.scope === 'brownfield'){
-    parts.push('We already have an existing application in production. We only want to add AI — specifically a customer-facing chatbot — integrated into it. Do not recommend new infrastructure choices (cloud, database, backend language, CI/CD) since our existing stack is already decided and staying as-is.');
+    if (state.aiPattern === 'omnichannel'){
+      parts.push('We already have an existing application in production. We only want to add omnichannel AI support — one AI core, consistent across multiple channels (web widget, WhatsApp, email, voice/IVR) — integrated into it. Do not recommend new infrastructure choices (cloud, database, backend language, CI/CD) since our existing stack is already decided and staying as-is.');
+    } else {
+      parts.push('We already have an existing application in production. We only want to add AI — specifically a customer-facing chatbot — integrated into it. Do not recommend new infrastructure choices (cloud, database, backend language, CI/CD) since our existing stack is already decided and staying as-is.');
+    }
   }
   const buildingMap = {
     web: 'a web application', mobile: 'a mobile app for iOS and Android',
@@ -3201,7 +3253,7 @@ function startWizard(){
   // since the chip .selected classes below WERE cleared, so the UI looked reset while the
   // underlying state wasn't — the two-view-one-state design in openGlidePanel/toggleGlideItem
   // means letting them drift apart like this is exactly the failure mode that comment warns about).
-  wizState.scope=null; wizState.building=[]; wizState.audience=null; wizState.compliance=[]; wizState.teamsize=null; wizState.teamskills=[]; wizState.ai=[];
+  wizState.scope=null; wizState.aiPattern=null; wizState.building=[]; wizState.audience=null; wizState.compliance=[]; wizState.teamsize=null; wizState.teamskills=[]; wizState.ai=[];
   document.querySelectorAll('#screenWizard .pick-chip.selected, #screenWizard .pick-radio.selected').forEach(el => el.classList.remove('selected'));
   document.getElementById('wizFreetext').value='';
   renderSelectedTiles('teamskills');
