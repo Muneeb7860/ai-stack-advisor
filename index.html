@@ -959,13 +959,31 @@ function detectSignals(text){
     // ci-platform/iac, observability.
     postgresMentioned: has(['postgres','postgresql']),
     mongoMentioned: has(['mongo','mongodb']),
+    mysqlMentioned: has(['mysql']),
+    oracleDbMentioned: has(['oracle database','oracle db','oracle sql']),
+    sqlServerMentioned: has(['sql server','mssql','microsoft sql server']),
     reactMentioned: /\breact\b/.test(t) && !has(['reaction','reactive']),
     angularMentioned: has(['angular']),
     vueMentioned: has(['vue.js','vuejs']) || /\bvue\b/.test(t),
+    vanillaWebMentioned: has(['html5','html/css','vanilla javascript','vanilla js']) || (has(['html']) && has(['css'])),
+    dockerMentioned: has(['docker']),
+    kubernetesMentioned: has(['kubernetes','k8s']),
+    openshiftMentioned: has(['openshift']),
+    pineconeMentioned: has(['pinecone']),
+    weaviateMentioned: has(['weaviate']),
+    qdrantMentioned: has(['qdrant']),
     terraformMentioned: has(['terraform']),
     githubActionsMentioned: has(['github actions']),
+    jenkinsMentioned: has(['jenkins']),
+    gitlabCiMentioned: has(['gitlab ci','gitlab-ci','gitlab pipelines']),
+    circleciMentioned: has(['circleci','circle ci']),
+    azureDevopsMentioned: has(['azure devops','azure pipelines']),
     datadogMentioned: has(['datadog']),
     prometheusMentioned: has(['prometheus']) || (has(['grafana']) && !has(['datadog'])),
+    splunkMentioned: has(['splunk']),
+    dynatraceMentioned: has(['dynatrace']),
+    newrelicMentioned: has(['new relic','newrelic']),
+    elkMentioned: has(['elk stack','elasticsearch','opensearch']),
     smallTeam: has(['small team','2 engineers','3 engineers','4 engineers','5 engineers','6 engineers','solo founder','few engineers'])
       || /\b([1-9]|1[0-2])[- ]?(person|people)\b/.test(t) || /team of\s*([1-9]|1[0-2])\b/.test(t),
     largeTeam: has(['large team','many teams','multiple teams','platform team']),
@@ -1491,14 +1509,23 @@ function pickDatabase(s){
   // Analytics/ETL/reporting-centric workload with no transactional/chat/RAG signal = a warehouse question, not an OLTP-database question.
   const warehouseNeed = s.dataHeavy && !s.structured && !s.chatbot && !s.ragNeed;
   if(warehouseNeed){ picks.push('Cloud data warehouse (BigQuery / Snowflake / Redshift) as the analytics store'); hits++; }
-  if(s.structured || s.finance || s.postgresMentioned || (!s.unstructured && !warehouseNeed && !s.mongoMentioned)){ picks.push('PostgreSQL (primary transactional store)'); if(s.structured||s.finance||s.postgresMentioned) hits++; }
+  // Team-skill RDBMS choice: a SINGLE relational store, not "Postgres AND MySQL AND Oracle"
+  // stacked as if they're all primary at once — pick whichever specific one the team already
+  // knows (checked in a fixed order since a team can only realistically pick one signal here;
+  // Postgres stays the fallback default absent any explicit team-skill match, same as before).
+  let rdbmsName = 'PostgreSQL', rdbmsSkillNote = '';
+  if(s.mysqlMentioned){ rdbmsName = 'MySQL'; rdbmsSkillNote = ' — matches your team\'s existing MySQL experience'; }
+  else if(s.sqlServerMentioned){ rdbmsName = 'Microsoft SQL Server'; rdbmsSkillNote = ' — matches your team\'s existing SQL Server experience'; }
+  else if(s.oracleDbMentioned){ rdbmsName = 'Oracle Database'; rdbmsSkillNote = ' — matches your team\'s existing Oracle experience'; }
+  const rdbmsSkillHit = s.mysqlMentioned || s.sqlServerMentioned || s.oracleDbMentioned;
+  if(s.structured || s.finance || s.postgresMentioned || rdbmsSkillHit || (!s.unstructured && !warehouseNeed && !s.mongoMentioned)){ picks.push(`${rdbmsName} (primary transactional store)${rdbmsSkillNote}`); if(s.structured||s.finance||s.postgresMentioned||rdbmsSkillHit) hits++; }
   if(s.unstructured || s.chatbot || s.ragNeed || s.mongoMentioned){ picks.push('MongoDB (flexible schema for content, chat history, documents)'); if(s.unstructured||s.mongoMentioned) hits++; }
   if(s.iot || (s.highScale && s.dataHeavy)){ picks.push('Cassandra (write-heavy, high-scale, multi-region time-series/event data)'); hits++; }
   if(picks.length===0) picks.push('PostgreSQL as primary store');
   let why = warehouseNeed
     ? 'Your workload reads as analytics/ETL/reporting-centric rather than transactional — a columnar cloud warehouse is built for exactly that (large scans, aggregations, BI-tool integration), which Postgres/Mongo/Cassandra are not optimized for. Add Postgres alongside it only if you also have an operational/transactional app component; add Cassandra alongside it if you also have high-volume write ingestion (e.g. IoT/event streams) feeding the warehouse.'
-    : 'Postgres for relational/transactional integrity, MongoDB for flexible document data, Cassandra only when write volume and multi-region needs exceed what Postgres/Mongo comfortably handle.';
-  if(s.postgresMentioned || s.mongoMentioned){ why += ' Included because your team already knows ' + [s.postgresMentioned&&'Postgres', s.mongoMentioned&&'MongoDB'].filter(Boolean).join(' and ') + ' — matching existing skills beats a theoretically-better choice on most timelines.'; }
+    : `${rdbmsName} for relational/transactional integrity, MongoDB for flexible document data, Cassandra only when write volume and multi-region needs exceed what ${rdbmsName}/Mongo comfortably handle.`;
+  if(s.postgresMentioned || s.mongoMentioned || rdbmsSkillHit){ why += ' Included because your team already knows ' + [s.postgresMentioned&&'Postgres', s.mysqlMentioned&&'MySQL', s.sqlServerMentioned&&'SQL Server', s.oracleDbMentioned&&'Oracle', s.mongoMentioned&&'MongoDB'].filter(Boolean).join(' and ') + ' — matching existing skills beats a theoretically-better choice on most timelines.'; }
   // Geospatial (location tracking, nearby-matching, live maps) doesn't automatically change the
   // primary-store pick — Postgres with the PostGIS extension handles geospatial indexing/queries
   // (nearest-neighbor, radius search) well and is usually still right — but it's worth calling out
@@ -1511,9 +1538,17 @@ function pickDatabase(s){
   return {v:picks.join(' · '), why, conf: hits>=1?'high':'medium'};
 }
 function pickContainers(s){
+  // OpenShift is a specific-enough team-skill signal to override the generic managed-K8s
+  // default outright (not just a confidence bump) — it's a real, complete alternative that
+  // genuinely fits both on-prem and cloud, so retraining a team off it has a real cost with
+  // no corresponding benefit for most workloads.
+  if(s.openshiftMentioned) return {v:'Docker + OpenShift (Red Hat\'s enterprise Kubernetes distribution)' + (s.onPrem ? ', self-managed' : ''), why:'Your team already knows OpenShift — staying on it avoids retraining onto a different Kubernetes distribution for no real workload-driven reason, and OpenShift genuinely supports both on-prem and cloud deployment.', conf:'high'};
   if(s.onPrem) return {v:'Docker + self-managed Kubernetes (kubeadm/Rancher/RKE2 on bare metal or VMware) — not EKS/GKE/AKS', why:'Managed Kubernetes offerings are public-cloud services; an air-gapped/on-prem environment needs a self-managed distribution you can run entirely inside your network boundary.', conf:'high'};
   if(s.startupMvp) return {v:'Docker + managed serverless containers (Cloud Run / Fargate)', why:'Keep container benefits without managing a Kubernetes control plane.', conf:'high'};
-  return {v:'Docker + Kubernetes (EKS/GKE/AKS matching chosen cloud)', why:'Standard for portable, scalable container orchestration once team/scale justify it.', conf: (s.enterprise||s.highScale)?'high':'medium'};
+  let why = 'Standard for portable, scalable container orchestration once team/scale justify it.';
+  let conf = (s.enterprise||s.highScale)?'high':'medium';
+  if(s.dockerMentioned || s.kubernetesMentioned){ why += ' Your team already knows ' + [s.dockerMentioned&&'Docker', s.kubernetesMentioned&&'Kubernetes'].filter(Boolean).join(' and ') + ' — this isn\'t introducing a new skillset.'; conf='high'; }
+  return {v:'Docker + Kubernetes (EKS/GKE/AKS matching chosen cloud)', why, conf};
 }
 function pickObservability(s){
   if(s.onPrem) return {v:'OpenTelemetry (instrumentation standard) + self-hosted Grafana + Prometheus + Loki (or ELK/OpenSearch)', why:'SaaS observability platforms (Datadog, Splunk Cloud, Dynatrace SaaS) require sending telemetry to the vendor\'s cloud, which an air-gapped network can\'t reach — self-hosted OSS observability is the only realistic option inside the boundary.', conf:'high'};
@@ -1522,8 +1557,15 @@ function pickObservability(s){
   let conf = 'low';
   if(s.enterprise && s.compliance){ apm='Splunk (+ Datadog or Dynatrace for APM)'; why='Enterprises with heavy compliance/audit needs often standardize log management on Splunk alongside a dedicated APM tool.'; conf='high'; }
   else if(s.enterprise && s.highScale){ apm='Dynatrace'; why='Strong automatic root-cause analysis (AI-assisted) valuable at large, complex enterprise scale.'; conf='high'; }
+  // Team-skill vendor matches, checked before the generic startupMvp fallback so an explicit
+  // "we already run X" beats a budget-shaped guess — same priority rule as elsewhere in this
+  // feature. Order here is arbitrary among equals; first real signal wins.
   else if(s.prometheusMentioned){ apm='Grafana + Prometheus (OSS)'; why='Your team already runs Prometheus/Grafana — sticking with what they know beats introducing a new SaaS vendor and its onboarding cost.'; conf='high'; }
   else if(s.datadogMentioned){ apm='Datadog'; why='Your team already has Datadog experience — matching existing familiarity over evaluating a new vendor.'; conf='high'; }
+  else if(s.splunkMentioned){ apm='Splunk (+ a dedicated APM tool for tracing/metrics)'; why='Your team already runs Splunk for log management — keep it and add a focused APM tool alongside rather than replacing an established platform.'; conf='high'; }
+  else if(s.dynatraceMentioned){ apm='Dynatrace'; why='Your team already has Dynatrace experience — matching existing familiarity over evaluating a new vendor.'; conf='high'; }
+  else if(s.newrelicMentioned){ apm='New Relic'; why='Your team already knows New Relic — sticking with it avoids a vendor migration with no workload-driven reason to switch.'; conf='high'; }
+  else if(s.elkMentioned){ apm='Elastic Stack (Elasticsearch + Kibana)'; why='Your team already runs the Elastic Stack — a solid self-hosted or Elastic Cloud log/observability platform, no need to introduce a second one.'; conf='high'; }
   else if(s.startupMvp){ apm='Grafana + Prometheus (OSS) or Datadog free tier'; why='Lower cost for a small team; upgrade to Datadog/Dynatrace as scale and budget grow.'; conf='medium'; }
   return {v:`OpenTelemetry (instrumentation standard) + ${apm}`, why:`Instrument everything with OpenTelemetry (vendor-neutral) and ship to ${apm.split(' ')[0]}. ${why}`, conf};
 }
@@ -1545,6 +1587,7 @@ function pickFrontend(s){
   if(s.mobile){ picks.push('Flutter (single codebase for iOS + Android)'); hits++; }
   if(picks.length===0) picks.push('React');
   if(s.reactMentioned||s.angularMentioned||s.vueMentioned){ why += ' Your team already knows ' + [s.reactMentioned&&'React', s.angularMentioned&&'Angular', s.vueMentioned&&'Vue'].filter(Boolean).join('/') + ' — that beats the generic default above.'; }
+  else if(s.vanillaWebMentioned){ why += ' Your team already knows core HTML/CSS/JavaScript fundamentals, which transfer directly to whichever framework above — that\'s a real head start, just not itself a reason to pick one framework over another.'; }
   return {v:picks.join(' + '), why, conf: hits>=1?'high':'low'};
 }
 function pickLLM(s){
@@ -1615,18 +1658,30 @@ function pickGuardrails(s){
   return g;
 }
 function pickCICD(s){
-  // Team-skill note: GitHub Actions and Terraform already appear in every non-air-gapped
-  // branch below, so an explicit team-skill match doesn't change the tool pick itself — it
-  // upgrades confidence and says so, rather than silently agreeing by coincidence.
+  // Team-skill picks the actual CI platform name (a real, interchangeable choice) rather than
+  // always defaulting to GitHub Actions — same "matching skills beats a theoretically-better
+  // pick" rule as the rest of this feature. Checked in a fixed order since a team realistically
+  // names one primary CI tool; falls back to GitHub Actions absent any explicit match.
+  let ci = 'GitHub Actions', ciSkillHit = false;
+  if(s.jenkinsMentioned){ ci = 'Jenkins'; ciSkillHit = true; }
+  else if(s.gitlabCiMentioned){ ci = 'GitLab CI'; ciSkillHit = true; }
+  else if(s.circleciMentioned){ ci = 'CircleCI'; ciSkillHit = true; }
+  else if(s.azureDevopsMentioned){ ci = 'Azure DevOps Pipelines'; ciSkillHit = true; }
+  else if(s.githubActionsMentioned){ ciSkillHit = true; }
   const skillNote = (v) => {
-    const known = [s.githubActionsMentioned && 'GitHub Actions', s.terraformMentioned && 'Terraform'].filter(Boolean);
+    const known = [ciSkillHit && ci, s.terraformMentioned && 'Terraform'].filter(Boolean);
     if(!known.length) return v;
     return {v: v.v, why: v.why + ` Bonus: your team already knows ${known.join(' and ')}, so this isn't just the balanced default — it matches existing skills too.`, conf: v.conf==='high'?'high':'medium'};
   };
-  if(s.onPrem) return {v:'Self-hosted GitLab CE or Jenkins with self-hosted runners, deploying via Terraform to your private infrastructure', why:'Cloud-hosted CI/CD (GitHub Actions cloud runners, Vercel) needs internet connectivity to reach your infrastructure — an air-gapped environment needs the entire pipeline, including runners, inside the network boundary.', conf:'high'};
-  if(s.startupMvp) return skillNote({v:'GitHub Actions → Vercel (frontend) + Cloud Run/Fargate (backend)', why:'Fastest path to production for a small team, minimal infra to manage.', conf:'high'});
-  if(s.enterprise) return skillNote({v:'GitHub Actions/GitLab CI → ArgoCD (GitOps) → Kubernetes, Terraform for infra-as-code', why:'GitOps gives auditable, repeatable deployments at enterprise scale with multiple environments/teams.', conf:'high'});
-  return skillNote({v:'GitHub Actions → Terraform + Kubernetes (or Vercel for frontend-only pieces)', why:'Balanced CI/CD with infra-as-code as the team and service count grow.', conf:'low'});
+  if(s.onPrem){
+    // Air-gapped runners must be self-hosted regardless — but still honor a named team-known
+    // tool over the generic "GitLab CE or Jenkins either-or" phrasing when one was stated.
+    const onPremCi = s.jenkinsMentioned ? 'Jenkins' : s.gitlabCiMentioned ? 'GitLab CE' : 'GitLab CE or Jenkins';
+    return {v:`Self-hosted ${onPremCi} with self-hosted runners, deploying via Terraform to your private infrastructure`, why:'Cloud-hosted CI/CD (GitHub Actions cloud runners, Vercel) needs internet connectivity to reach your infrastructure — an air-gapped environment needs the entire pipeline, including runners, inside the network boundary.', conf:'high'};
+  }
+  if(s.startupMvp) return skillNote({v:`${ci} → Vercel (frontend) + Cloud Run/Fargate (backend)`, why:'Fastest path to production for a small team, minimal infra to manage.', conf:'high'});
+  if(s.enterprise) return skillNote({v:`${ci} → ArgoCD (GitOps) → Kubernetes, Terraform for infra-as-code`, why:'GitOps gives auditable, repeatable deployments at enterprise scale with multiple environments/teams.', conf:'high'});
+  return skillNote({v:`${ci} → Terraform + Kubernetes (or Vercel for frontend-only pieces)`, why:'Balanced CI/CD with infra-as-code as the team and service count grow.', conf:'low'});
 }
 function pickDNS(s){
   if(s.onPrem) return {v:'Internal DNS (BIND / Windows DNS / private zone) — no public DNS provider', conf:'high'};
@@ -1797,10 +1852,20 @@ function pickVectorDBPlacement(s, ragResult){
     return {needed:false, where:'', dbChoice:'', why:'Your retrieval need is over structured/relational data — that\'s served by querying your existing database (text-to-SQL or schema-aware retrieval), not a vector index. A vector DB would be the wrong tool here.'};
   }
   let dbChoice;
-  if(!s.dataHeavy && !s.enterprise && !s.highScale) dbChoice = 'pgvector extension on your existing PostgreSQL instance';
+  // Team-skill override takes priority over the scale-based default below — if the team
+  // already runs a specific vector DB, that avoids introducing a new operational system
+  // regardless of scale, same "matching skills beats a theoretically-better pick" rule used
+  // throughout this feature. Falls through to the scale-based logic when no vendor is named.
+  if(s.pineconeMentioned) dbChoice = 'Pinecone — matches your team\'s existing experience, fully managed so no new infra to operate';
+  else if(s.weaviateMentioned) dbChoice = 'Weaviate — matches your team\'s existing experience';
+  else if(s.qdrantMentioned) dbChoice = 'Qdrant — matches your team\'s existing experience';
+  else if(!s.dataHeavy && !s.enterprise && !s.highScale) dbChoice = 'pgvector extension on your existing PostgreSQL instance';
   else if(s.unstructured && !s.structured) dbChoice = 'A dedicated vector database (Qdrant, Weaviate, or Milvus) — or Pinecone if you prefer fully managed';
   else dbChoice = 'MongoDB Atlas Vector Search (if MongoDB is already your document store) or a dedicated vector DB (Qdrant/Weaviate/Milvus/Pinecone) if you need hybrid search and metadata filtering at scale';
-  const why = !s.dataHeavy && !s.enterprise && !s.highScale
+  const vectorSkillHit = s.pineconeMentioned || s.weaviateMentioned || s.qdrantMentioned;
+  const why = vectorSkillHit
+    ? 'Sticking with a vector database your team already operates avoids the ramp-up cost of a new system, and all three (Pinecone/Weaviate/Qdrant) are legitimate general-purpose choices — there\'s no workload-driven reason to switch away from one your team already knows.'
+    : !s.dataHeavy && !s.enterprise && !s.highScale
     ? 'At your current scale, adding pgvector to a database you already operate avoids introducing an entirely new system to run, back up, and monitor. Migrate to a dedicated vector DB once query volume or index size makes pgvector\'s performance a bottleneck.'
     : 'At your scale, a purpose-built vector database gives you approximate-nearest-neighbor performance, hybrid (keyword + vector) search, and metadata filtering that general-purpose databases only support with real caveats.';
   return {
@@ -2787,17 +2852,35 @@ function synthesizeRequirementText(state){
     ruby: 'Our team already knows Ruby on Rails.',
     php: 'Our team already knows PHP and Laravel.',
     postgres: 'Our team already knows PostgreSQL.',
+    mysql: 'Our team already knows MySQL.',
+    sqlserver: 'Our team already knows SQL Server.',
+    oracle: 'Our team already knows Oracle Database.',
     mongo: 'Our team already knows MongoDB.',
+    pinecone: 'Our team already knows Pinecone.',
+    weaviate: 'Our team already knows Weaviate.',
+    qdrant: 'Our team already knows Qdrant.',
+    html: 'Our team already knows HTML and CSS and core JavaScript fundamentals.',
     react: 'Our team already knows React.',
     angular: 'Our team already knows Angular.',
     vue: 'Our team already knows Vue.',
     aws: 'Our team already uses AWS.',
     azure: 'Our team already uses Azure.',
     gcp: 'Our team already uses Google Cloud (GCP).',
+    docker: 'Our team already knows Docker.',
+    kubernetes: 'Our team already knows Kubernetes.',
+    openshift: 'Our team already knows OpenShift.',
     terraform: 'Our team already knows Terraform.',
     githubactions: 'Our team already knows GitHub Actions.',
+    jenkins: 'Our team already knows Jenkins.',
+    gitlabci: 'Our team already knows GitLab CI.',
+    circleci: 'Our team already knows CircleCI.',
+    azuredevops: 'Our team already knows Azure DevOps.',
     datadog: 'Our team already knows Datadog.',
     prometheus: 'Our team already knows Prometheus and Grafana.',
+    splunk: 'Our team already knows Splunk.',
+    dynatrace: 'Our team already knows Dynatrace.',
+    newrelic: 'Our team already knows New Relic.',
+    elk: 'Our team already knows the Elastic Stack (ELK).',
   };
   const teamSkillSel = (state.teamskills||[]).filter(x => x!=='none');
   if (teamSkillSel.length) parts.push(teamSkillSel.map(x => teamSkillMap[x]).filter(Boolean).join(' '));
@@ -2863,17 +2946,35 @@ const GLIDE_CONFIGS = {
       {val:'ruby', icon:'💎', label:'Ruby on Rails', category:'Backend language'},
       {val:'php', icon:'🐘', label:'PHP / Laravel', category:'Backend language'},
       {val:'postgres', icon:'🐘', label:'PostgreSQL', category:'Database'},
+      {val:'mysql', icon:'🐬', label:'MySQL', category:'Database'},
+      {val:'sqlserver', icon:'🗄️', label:'SQL Server', category:'Database'},
+      {val:'oracle', icon:'🔴', label:'Oracle Database', category:'Database'},
       {val:'mongo', icon:'🍃', label:'MongoDB', category:'Database'},
+      {val:'pinecone', icon:'🌲', label:'Pinecone (vector DB)', category:'Database'},
+      {val:'weaviate', icon:'🔷', label:'Weaviate (vector DB)', category:'Database'},
+      {val:'qdrant', icon:'🔶', label:'Qdrant (vector DB)', category:'Database'},
+      {val:'html', icon:'🧩', label:'HTML / CSS / JavaScript', category:'Frontend framework'},
       {val:'react', icon:'⚛️', label:'React', category:'Frontend framework'},
       {val:'angular', icon:'🅰️', label:'Angular', category:'Frontend framework'},
       {val:'vue', icon:'💚', label:'Vue', category:'Frontend framework'},
       {val:'aws', icon:'☁️', label:'AWS', category:'Cloud'},
       {val:'azure', icon:'☁️', label:'Azure', category:'Cloud'},
       {val:'gcp', icon:'☁️', label:'Google Cloud (GCP)', category:'Cloud'},
-      {val:'terraform', icon:'🧱', label:'Terraform / IaC', category:'DevOps'},
-      {val:'githubactions', icon:'⚙️', label:'GitHub Actions', category:'DevOps'},
+      {val:'docker', icon:'🐳', label:'Docker', category:'Containers / Orchestration'},
+      {val:'kubernetes', icon:'☸️', label:'Kubernetes', category:'Containers / Orchestration'},
+      {val:'openshift', icon:'🎩', label:'OpenShift', category:'Containers / Orchestration'},
+      {val:'terraform', icon:'🧱', label:'Terraform / IaC', category:'DevOps / CI-CD'},
+      {val:'githubactions', icon:'⚙️', label:'GitHub Actions', category:'DevOps / CI-CD'},
+      {val:'jenkins', icon:'🔧', label:'Jenkins', category:'DevOps / CI-CD'},
+      {val:'gitlabci', icon:'🦊', label:'GitLab CI', category:'DevOps / CI-CD'},
+      {val:'circleci', icon:'⭕', label:'CircleCI', category:'DevOps / CI-CD'},
+      {val:'azuredevops', icon:'🔷', label:'Azure DevOps', category:'DevOps / CI-CD'},
       {val:'datadog', icon:'🐶', label:'Datadog', category:'Monitoring'},
       {val:'prometheus', icon:'📈', label:'Prometheus / Grafana', category:'Monitoring'},
+      {val:'splunk', icon:'📊', label:'Splunk', category:'Monitoring'},
+      {val:'dynatrace', icon:'🔵', label:'Dynatrace', category:'Monitoring'},
+      {val:'newrelic', icon:'🚗', label:'New Relic', category:'Monitoring'},
+      {val:'elk', icon:'🔍', label:'Elastic Stack (ELK)', category:'Monitoring'},
     ],
   },
 };
@@ -3122,11 +3223,11 @@ const STACK_CARD_SIGNALS = {
   messaging: ['liveMultiplayer','collabEditing','highScale','realtime','finance','gcpShop','startupMvp'],
   mesh: ['mtlsMentioned','compliance','enterprise','largeTeam'],
   cache: [], // always Redis — no signal drives this one
-  database: ['liveMultiplayer','feedFanout','highScale','dataHeavy','structured','chatbot','ragNeed','finance','unstructured','iot','geospatial','postgresMentioned','mongoMentioned'],
-  containers: ['onPrem','startupMvp','enterprise','highScale'],
-  observability: ['onPrem','enterprise','compliance','highScale','startupMvp','datadogMentioned','prometheusMentioned'],
-  frontend: ['web','mobile','enterprise','reactMentioned','angularMentioned','vueMentioned'],
-  cicd: ['onPrem','startupMvp','enterprise','terraformMentioned','githubActionsMentioned'],
+  database: ['liveMultiplayer','feedFanout','highScale','dataHeavy','structured','chatbot','ragNeed','finance','unstructured','iot','geospatial','postgresMentioned','mongoMentioned','mysqlMentioned','sqlServerMentioned','oracleDbMentioned'],
+  containers: ['onPrem','startupMvp','enterprise','highScale','dockerMentioned','kubernetesMentioned','openshiftMentioned'],
+  observability: ['onPrem','enterprise','compliance','highScale','startupMvp','datadogMentioned','prometheusMentioned','splunkMentioned','dynatraceMentioned','newrelicMentioned','elkMentioned'],
+  frontend: ['web','mobile','enterprise','reactMentioned','angularMentioned','vueMentioned','vanillaWebMentioned'],
+  cicd: ['onPrem','startupMvp','enterprise','terraformMentioned','githubActionsMentioned','jenkinsMentioned','gitlabCiMentioned','circleciMentioned','azureDevopsMentioned'],
   dns: ['onPrem','awsShop'],
 };
 
@@ -3709,8 +3810,14 @@ function buildAdrInput(){
   const compliance = (wizState.compliance || []).filter(c => c !== 'none').map(c => complianceMap[c] || c);
 
   const teamSkillMap = {java:'java', python:'python', node:'node.js', dotnet:'.net', go:'go', ruby:'ruby', php:'php',
-    postgres:'postgresql', mongo:'mongodb', react:'react', angular:'angular', vue:'vue', aws:'aws', azure:'azure',
-    gcp:'gcp', terraform:'terraform', githubactions:'github actions', datadog:'datadog', prometheus:'prometheus/grafana'};
+    postgres:'postgresql', mysql:'mysql', sqlserver:'sql server', oracle:'oracle database', mongo:'mongodb',
+    pinecone:'pinecone', weaviate:'weaviate', qdrant:'qdrant', html:'html/css/js',
+    react:'react', angular:'angular', vue:'vue', aws:'aws', azure:'azure', gcp:'gcp',
+    docker:'docker', kubernetes:'kubernetes', openshift:'openshift',
+    terraform:'terraform', githubactions:'github actions', jenkins:'jenkins', gitlabci:'gitlab ci',
+    circleci:'circleci', azuredevops:'azure devops',
+    datadog:'datadog', prometheus:'prometheus/grafana', splunk:'splunk', dynatrace:'dynatrace',
+    newrelic:'new relic', elk:'elastic stack'};
   const existingStack = (wizState.teamskills || []).filter(x => x !== 'none').map(x => teamSkillMap[x] || x);
 
   const buildLabels = (wizState.building || []).map(b => buildingLabels[b]).filter(Boolean);
