@@ -10,7 +10,7 @@ must stay that way** (PRD NFR-5) — nothing here is a hard dependency for the c
 | Share links | **Built, tested** | `POST /api/analyses`, `POST /api/analyses/{id}/share`, `GET /api/analyses/shared/{slug}` |
 | LLM refinement | **Built, tested** | `POST /api/refine` — see `app/routers/refine.py` docstring for the constrained-reasoning design, RAG grounding, and a resolved gap (optional `analysis_id`) not covered by the original spec |
 | Grounded follow-up Q&A | **Built, tested** | `POST /api/ask` — see `app/routers/ask.py` docstring; scoped structurally to one `analysis_id`, replays full conversation history each turn, RAG-grounded on the follow-up question |
-| RAG retrieval | **Built, tested** | `app/retrieval.py` — two-stage retrieval (routing + content, see module docstring) over `../docs/use-case-knowledge-base/`, backed by ChromaDB + a local Ollama embedding model (`nomic-embed-text`), not TF-IDF anymore; backs both endpoints above. `tests/test_retrieval_eval.py`'s 23-test eval: **before** (TF-IDF) 21 passed/1 xfailed/1 xpassed, **after** (embeddings) 20 passed/3 xfailed/0 xpassed — the embeddings swap fixed the one paraphrase-gap case TF-IDF was known to fail, and surfaced two new disclosed semantic-neighbor-confusion cases in exchange; see that file's `KNOWN_XFAIL_IDS`/`_XFAIL_REASONS` for the real per-case detail |
+| RAG retrieval | **Built, tested** | `app/retrieval.py` — two-stage retrieval (routing + content, see module docstring) over `../docs/use-case-knowledge-base/`, backed by hybrid ChromaDB embeddings (`nomic-embed-text`) + hand-rolled BM25 lexical scoring, fused via Reciprocal Rank Fusion, plus an embedding-model version pin that fails loudly on drift — not pure embeddings and not TF-IDF anymore. `tests/test_retrieval_eval.py`'s 24-test eval: **TF-IDF** (pre-migration) 21 passed/1 xfailed/1 xpassed; **pure embeddings** (one commit later) 20 passed/3 xfailed/0 xpassed — a real, re-verified regression (2 genuine new failures, not the "fixed 1 cost 3" the aggregate count first suggested — see the file's top-of-file comment for the corrected per-case story); **hybrid RRF** (current) 22 passed/1 xfailed/0 xpassed — both regressions recovered, only the pre-existing, long-documented case 21 (needs a learned reranker) remains open. See that file's `KNOWN_XFAIL_IDS`/`_XFAIL_REASONS` for the full per-case detail |
 | Local-model fallback | **Built, tested (opt-in, degraded)** | `POST /api/refine` / `POST /api/ask` with `provider: "ollama"` — see `app/llm_providers.py`. Claude stays primary/default; this only activates when the deployment sets `LLM_PROVIDER=ollama` AND the caller explicitly opts in per-request. Real measured structured-output pass rates against `qwen2.5:7b`/`mistral:latest` (native tool-calling + a JSON-parse fallback) are in that module's docstring — shipped as a genuine fallback for both endpoints, not narrowed to ask-only, because the measured combined reliability supported it |
 | MCP tool wrapper | **Built, tested — exercised end-to-end over real stdio** | `app/mcp/server.py` — `recommend_stack()` tool, backed by `app/rule_engine.py` (Python port of `index.html`'s rule engine, verified against it — see `../docs/adr/0001-mcp-rule-engine-port.md`). A real stdio JSON-RPC client (initialize → tools/list → tools/call) confirmed it end-to-end; found in the process that the `mcp` SDK does not inherit arbitrary env vars into the server subprocess by default (`mcp.client.stdio.get_default_environment()` only passes an allowlist like `PATH`/`HOME`) — a real Claude Desktop/Code MCP config for this server needs an explicit `"env": {"DATABASE_URL": "..."}` block, or it falls back to `config.py`'s default and silently can't reach Postgres |
 
@@ -45,8 +45,9 @@ uvicorn app.main:app --reload
 pytest tests/ -v
 ```
 
-93 tests currently (90 passing, 3 xfailed by design — see `test_retrieval_eval.py` below for
-why that count changed from the TF-IDF era):
+100 tests currently (99 passing, 1 xfailed by design — see `test_retrieval_eval.py` below for
+the retrieval eval's own count and why it changed across the TF-IDF -> pure-embeddings ->
+hybrid-RRF history):
 - `test_guided_synthesis.py` (7): validates `index.html`'s guided-mode wizard synthesis
   (`synthesizeRequirementText()`) via a Python mirror, verified byte-for-byte against the real
   JS before being trusted — 7 scenarios covering every wizard branch including the skip-logic
@@ -88,20 +89,27 @@ why that count changed from the TF-IDF era):
   swallowed by a broad exception handler instead of erroring, so no unit test calling the
   function with a hand-built argument could have caught it. Only driving a real stdio
   JSON-RPC session end-to-end and checking what actually landed in Postgres did.
-- `test_retrieval_eval.py` (23): the 21-case retrieval eval set from
+- `test_retrieval_eval.py` (24): the 21-case retrieval eval set from
   `../docs/use-case-knowledge-base/` (direct retrieval, anti-pattern "is X okay?" phrasing,
   cross-document queries, decision-point boundary cases, negative controls) wired to the real
   `app/retrieval.py` implementation — a structural check that a Signals/triggers chunk is
-  never returned as citable content for any of the 21 queries, and a regression test (found
-  during audit) confirming a genuinely missing corpus degrades to "no grounding" instead of a
-  500. Real before/after numbers from the TF-IDF → ChromaDB/embeddings migration: **before**
-  21 passed / 1 xfailed (case 15, a paraphrase gap) / 1 xpassed (case 21, a negative-control
-  false positive that happened to squeak under threshold); **after** 20 passed / 3 xfailed —
-  case 15 is now a genuine pass (embeddings closed that paraphrase gap, the whole reason for
-  the migration), case 21 stays a disclosed gap, and two NEW disclosed gaps appeared (case 7:
-  a semantic-neighbor confusion — "fraud-scoring model" vs. a marketplace doc's "Trust &
-  safety pipeline" section; case 20: a negative control whose score now sits above the
-  weakest genuine hit, a known property of embedding cosine similarity's narrower score band).
+  never returned as citable content for any of the 21 queries, a regression test (found during
+  audit) confirming a genuinely missing corpus degrades to "no grounding" instead of a 500,
+  and a regression test confirming a confirmed embedding-model version mismatch fails loudly
+  (ERROR log + forced index rebuild) instead of silently serving vectors computed by a
+  different model version. Real per-case numbers across this file's full history (not just
+  aggregate pass/fail counts, and independently re-derived rather than trusted from a prior
+  write-up — see the file's own top-of-file comment for the full story of the correction):
+  **TF-IDF** (pre-migration) 21 passed / 1 xfailed (case 21) / 1 xpassed (case 15 — a stale
+  xfail marker on an already-passing case, not a real failure); **pure embeddings** (one
+  commit later) 20 passed / 3 xfailed (cases 7, 20, 21) / 0 xpassed — exactly 2 genuine new
+  regressions (cases 7 and 20) plus 1 label correction (case 15), not the "fixed 1, broke 3"
+  an aggregate-count-only read suggested; **hybrid retrieval** (current — BM25 lexical + the
+  same embeddings, fused via Reciprocal Rank Fusion) 22 passed / 1 xfailed (case 21 only) /
+  0 xpassed — both real regressions recovered (case 7 via RRF-boosted lexical routing, case 20
+  via a fused-confidence abstention gate — see `MIN_CONFIDENT_RRF` in `app/retrieval.py`),
+  leaving only case 21's long-documented, pre-existing "needs a learned reranker" gap, which
+  predates every retrieval-metric change in this file's history and none of them have closed.
   See that file's `KNOWN_XFAIL_IDS`/`_XFAIL_REASONS` for the full per-case reasoning — nothing
   here was tuned away to force green.
 

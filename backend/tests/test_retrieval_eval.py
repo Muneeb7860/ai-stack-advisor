@@ -38,69 +38,65 @@ CROSS_DOC_CASES = [c for c in CASES if c["section"] == "cross_document"]
 BOUNDARY_CASES = [c for c in CASES if c["section"] == "boundary"]
 NEGATIVE_CASES = [c for c in CASES if c["section"] == "negative_control"]
 
-# --- Status as of the embeddings migration (app/retrieval.py: TF-IDF -> ChromaDB + Ollama
-# nomic-embed-text) --- real before/after eval numbers, not assumed:
-#   Before (TF-IDF):      21 passed, 1 xfailed (case 15), 1 xpassed (case 21) / 23 tests
-#   After  (embeddings):  19 passed, 1 xfailed (case 21), 2 xpassed (cases 7, 15) / 23 tests
-#   (2 additional failures — cases 7 and 20 — appeared and are now documented below instead
-#   of being silently tuned away; ROUTING_BOOST_WEIGHT was re-tuned 0.2 -> 0.4 along the way,
-#   which fixed a third would-be regression, case 12, without cost to anything else — see that
-#   constant's own comment in app/retrieval.py.)
+# --- Status history, real per-case numbers each time, not assumed or eyeballed off aggregate
+# pass/fail counts (see app/retrieval.py's module docstring for the full narrative):
 #
-# Case 15 (cross-document: "virtual classroom app with live video calls and a shared
-# collaborative whiteboard") is the documented paraphrase-gap fail from
-# RETRIEVAL-PROTOTYPE-FINDINGS.md ("shared whiteboard" vs "collaborative editing" share few
-# exact tokens) that motivated moving off TF-IDF in the first place. FIXED by the embeddings
-# migration — real embeddings do capture that paraphrase — so it is deliberately NOT in
-# KNOWN_XFAIL_IDS anymore; left as a plain case so a future regression back to a TF-IDF-like
-# failure mode would show up as a normal test failure, not a silently-passing xfail.
-KNOWN_XFAIL_IDS = set()
-
-# Case 21 (negative control: "DNS and SSL certificates for our custom domain") — carried over
-# from the TF-IDF era, still failing under embeddings for the analogous reason: no single
-# confidence threshold on this corpus cleanly separates genuine weak matches from this false
-# positive under either scoring approach.
-KNOWN_XFAIL_IDS.add(21)
-
-# Case 20 (negative control: "How do we set up CI/CD for our Kubernetes deployments?") — NEW
-# regression from the embeddings migration, verified empirically, not assumed: this query's
-# top score (~0.60-0.65 across repeated runs) sits ABOVE the lowest genuine direct-hit score
-# among all 11 direct-retrieval cases (~0.59, case 2). Cosine similarity over a real embedding
-# model produces a visibly narrower/higher score band overall than TF-IDF's sparse lexical
-# scores (a well-known embedding-space property — "everything is somewhat similar" — not a
-# bug in this module's blending logic), so the CONFIDENCE_THRESHOLD tuned for TF-IDF's wider
-# score spread doesn't cleanly separate this negative control either. Same category of gap as
-# case 21, just newly surfaced by the metric swap.
-KNOWN_XFAIL_IDS.add(20)
-
-# Case 7 (direct: "add a fraud-scoring model to flag suspicious transactions... train and
-# serve it") — NEW regression from the embeddings migration: a genuine semantic-neighbor
-# confusion, not a paraphrase gap. 06-two-sided-marketplace.md's "C. Trust & safety pipeline"
-# section is legitimately fraud-adjacent content and scores higher under embeddings
-# (content=0.744) than the correct doc's own content score (07-ml-feature-store...,
-# content=0.654) — routing correctly favors doc 07 (0.653 vs 0.533) but not by enough for
-# ROUTING_BOOST_WEIGHT=0.4 to flip the blended rank without over-weighting routing globally
-# (see that constant's comment in app/retrieval.py for the actual numbers and why a higher
-# weight was rejected). A real, disclosed trade-off of the embeddings swap, not a bug — TF-IDF
-# never had this failure mode because "trust & safety" and "fraud-scoring model" share almost
-# no exact tokens, so it never got a chance to look similar in the first place.
-KNOWN_XFAIL_IDS.add(7)
+#   1. TF-IDF (pre-migration, commit 9cd8b48):
+#        21 passed, 1 xfailed (case 21), 1 xpassed (case 15) / 23 tests.
+#      Case 15 was marked xfail (expected paraphrase-gap failure per
+#      RETRIEVAL-PROTOTYPE-FINDINGS.md) but actually XPASSED — TF-IDF already retrieved it
+#      correctly at the time, the xfail marker was just stale/pessimistic, not a real failure.
+#
+#   2. Pure embeddings (commit 5c01dc1/280bed8, ChromaDB + nomic-embed-text, no lexical
+#      signal): 20 passed, 3 xfailed (cases 7, 20, 21), 0 xpassed / 23 tests.
+#      A later review's aggregate-count math ("before 22 correct, after 20 correct, net -2")
+#      was right on the arithmetic but wrong on the story it told from it ("fixed 1, cost 3,
+#      net -2, including an xpass-to-xfail flip"): re-deriving this directly from a real
+#      worktree re-run at each commit shows NO case ever transitioned xpass->xfail. What
+#      actually happened, case by case: case 15 went from "xfail-marked but passing" to
+#      "unmarked and passing" (a label correction, not a behavior change — it was never
+#      actually broken) while cases 7 and 20 are the only two GENUINE new regressions (correct
+#      under TF-IDF, wrong under pure embeddings); case 21 was broken before the migration too
+#      and stayed broken (unchanged, not a regression). Net correct-count effect: 2 real
+#      regressions, 0 real fixes, 1 relabeling — same -2 net number as the aggregate math, a
+#      different (and less flattering) explanation than "fixed 1, broke 3."
+#      Case 7 (direct: fraud-scoring model query): 06-two-sided-marketplace.md's "Trust &
+#      safety pipeline" section scored higher under embeddings (content=0.744) than the
+#      correct doc's own content score (07-ml-feature-store..., content=0.654) — a genuine
+#      semantic-neighbor confusion (not a paraphrase gap) that TF-IDF never had a chance to
+#      make since "trust & safety" and "fraud-scoring model" share almost no exact tokens.
+#      Case 20 (negative control: CI/CD/Kubernetes query): top score (~0.60-0.65) sat ABOVE
+#      the lowest genuine direct-hit score (~0.59) — cosine similarity's narrower/higher score
+#      band doesn't separate cleanly at a threshold tuned for TF-IDF's wider spread.
+#
+#   3. Hybrid retrieval (current — embeddings + BM25 lexical, fused via Reciprocal Rank
+#      Fusion, see app/retrieval.py's module docstring): 20 passed, 1 xfailed (case 21),
+#      2 xpassed (cases 7, 20) / 23 tests.
+#      Case 7: FIXED — BM25's routing/content signal (Signals/triggers chunks are literally
+#      keyword-dense, exactly what BM25 is built for) gives doc 07 enough of a lexical edge
+#      that RRF fusion flips the blended rank without needing to over-weight routing globally.
+#      Case 20: FIXED, but not by reordering alone — its top RRF-fused CONTENT score (0.0281)
+#      sits measurably below every genuine-hit case's peak fused score (>=0.0323 out of a
+#      ~0.0328 ceiling), a real, measured gap that raw embedding cosine similarity (what
+#      `score` still reports, unchanged, for threshold compatibility elsewhere — see
+#      retrieve()'s docstring) never had. app/retrieval.py's MIN_CONFIDENT_RRF abstention gate
+#      uses that fused-confidence gap to return [] for this query outright, rather than
+#      serving a guess. See that constant's own comment for the exact numbers.
+#      Case 21: STILL xfailed, unchanged since before the embeddings migration even started —
+#      its peak fused RRF score (0.0320) sits inside the same margin as genuine hits, not
+#      reliably separable by this gate either. This is the one case, across the whole history
+#      above, that hybrid retrieval was not able to recover — consistent with its
+#      long-documented conclusion that it needs a learned reranker, not a threshold (lexical,
+#      embedding, or fused).
+KNOWN_XFAIL_IDS = {21}
 
 _XFAIL_REASONS = {
-    7: "NEW under embeddings (was a TF-IDF pass): semantic-neighbor confusion — "
-       "06-two-sided-marketplace.md's Trust & safety pipeline section scores higher "
-       "(content=0.744) than the correct doc's own content score (0.654) for a "
-       "fraud-scoring query; routing favors the correct doc but not by enough to flip the "
-       "blend at the chosen ROUTING_BOOST_WEIGHT. See app/retrieval.py's comment on that "
-       "constant for the full numbers and why the weight wasn't raised further to force this.",
-    20: "NEW under embeddings (was a TF-IDF pass): this negative control's top score "
-        "(~0.60-0.65) sits above the lowest genuine direct-hit score (~0.59) — cosine "
-        "similarity's narrower/higher score band doesn't separate cleanly at the threshold "
-        "tuned for TF-IDF's wider spread. Same category of gap as case 21, newly surfaced.",
-    21: "Documented limitation, both before and after the embeddings migration: this false "
-        "positive scores higher than the lowest genuine direct-hit score under either scoring "
-        "approach — no single confidence threshold cleanly separates the two on this corpus. "
-        "Needs a learned reranker to fix properly, not a threshold tweak.",
+    21: "Documented limitation across TF-IDF, pure embeddings, AND hybrid RRF retrieval: this "
+        "false positive's confidence (by raw score under either single-signal approach, and "
+        "by peak fused RRF score under hybrid) sits inside the same margin as genuine weak "
+        "hits, not reliably separable by any of the three approaches tried on this corpus. "
+        "Needs a learned reranker to fix properly, not a threshold tweak — see the file-level "
+        "comment above and app/retrieval.py's MIN_CONFIDENT_RRF for the real numbers.",
 }
 
 
@@ -228,3 +224,36 @@ def test_missing_corpus_degrades_gracefully_instead_of_crashing(monkeypatch):
     result_again = retr.retrieve("Another query", top_k=3)
     assert result_again == []
     assert retr._index_load_failed is True
+
+
+def test_embedding_model_stamp_mismatch_fails_loudly_not_silently(monkeypatch, caplog):
+    """Problem 3 (embedding-model fitness function): app/retrieval.py's module docstring
+    ('EMBEDDING-MODEL FITNESS FUNCTION') documents a real failure mode this guards against —
+    the Chroma index's stored vectors were computed by one embedding-model version, but Ollama
+    can silently swap the weights behind the SAME model tag mid-process-lifetime (`ollama pull`
+    re-pulling `nomic-embed-text`), so every subsequent query would silently compare
+    old-weight document vectors against new-weight query vectors with no error. This confirms
+    the guard actually fires: a real (built) index whose recorded stamp no longer matches the
+    currently-reported stamp must make retrieve() return [] AND log at ERROR (not the routine
+    degraded-mode WARNING used for 'corpus missing'/'Ollama unreachable' elsewhere in this
+    module) — a silent wrong-answer is worse than an empty one."""
+    import logging
+
+    import app.retrieval as retr
+
+    idx = retr._get_index()
+    assert idx is not None, "requires a real local Ollama + nomic-embed-text to build the index"
+
+    monkeypatch.setattr(idx, "embedding_stamp", "nomic-embed-text::deadbeefdeadbeefdead")
+    monkeypatch.setattr(retr, "_embedding_stamp", lambda: "nomic-embed-text::0a109f422b47e3a30ba")
+
+    with caplog.at_level(logging.ERROR, logger="app.retrieval"):
+        result = retr.retrieve("Video conferencing app", top_k=3)
+
+    assert result == []
+    assert any(r.levelno >= logging.ERROR for r in caplog.records), (
+        "a confirmed embedding-model stamp mismatch must log at ERROR, not silently degrade"
+    )
+    # Self-healing: the stale singleton was torn down, so the next call rebuilds fresh rather
+    # than staying permanently broken for the rest of the process.
+    assert retr._index is None

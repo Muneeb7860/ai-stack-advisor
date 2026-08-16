@@ -38,6 +38,20 @@ http://localhost:11434/api/chat with REFINEMENT_TOOL to reproduce):
   specifically because the measured combined reliability (native-or-fallback) was ~89-100%,
   not because it was assumed to work.
 
+  CAVEAT ON WHAT "89%" ACTUALLY MEANS — read before citing this number anywhere else. It's a
+  ceiling measured under favorable conditions, not a production figure: (1) num_ctx=8192 with
+  short, few-hundred-token test-batch prompts — tool-calling reliability on these local models
+  is observed to degrade as context fills, and a real /api/refine call carries the actual
+  system prompt, rule-engine recommendations JSON, and RAG grounding text, which run
+  meaningfully longer than the test batch; this number has not been re-measured at that
+  realistic length. (2) "89% native" also literally means roughly 1-in-9 calls fails outright
+  on the native tool_calls path alone, before the fallback-parse layer even gets a chance to
+  engage — that is "usable behind a retry harness," not "reliable" as a standalone claim. The
+  retry-once behavior in run_ollama_refinement() below is the correct engineering response to
+  that reality (sporadic per-call failures, not a systematic bug — see its own docstring), and
+  is precisely what makes this fallback path defensible to ship at all; the number alone,
+  without the retry harness sitting behind it, would not be.
+
 /api/ask does not need tool-calling at all (it returns prose, same as the Claude path) so its
 local path is a plain chat completion — inherently lower-risk than the schema-constrained
 refine path.
