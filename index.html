@@ -109,6 +109,9 @@
   .glide-item.selected .gi-check{background:linear-gradient(135deg, var(--accent), var(--accent2)); border-color:transparent; color:#fff;}
   .glide-item .gi-icon{font-size:16px; flex-shrink:0;}
   .glide-item .gi-label{font-size:var(--fs-base); font-weight:600;}
+  .glide-category{font-size:var(--fs-xs); text-transform:uppercase; letter-spacing:0.05em; color:var(--muted);
+    font-weight:700; padding:14px 11px 6px; }
+  .glide-category:first-child{padding-top:4px;}
   .glide-trigger{
     background:transparent; border:1px dashed var(--border); color:var(--muted); padding:9px 14px;
     border-radius:var(--radius); font-size:12px; cursor:pointer; margin-top:10px; display:inline-flex; align-items:center; gap:6px;
@@ -950,6 +953,19 @@ function detectSignals(text){
     rubyMentioned: has(['ruby on rails','ruby/rails','rails app']) || /\bruby\b/.test(t),
     // "php" alone is unambiguous enough (not an English word / common abbreviation collision).
     phpMentioned: has(['php','laravel','symfony framework']),
+    // Team-gravity signals beyond backend language — same "what does your team already ship
+    // in" philosophy, extended to DB/frontend/DevOps/observability per the KB's own domain
+    // list (docs checked directly, not guessed): database-oltp/nosql, frontend-framework,
+    // ci-platform/iac, observability.
+    postgresMentioned: has(['postgres','postgresql']),
+    mongoMentioned: has(['mongo','mongodb']),
+    reactMentioned: /\breact\b/.test(t) && !has(['reaction','reactive']),
+    angularMentioned: has(['angular']),
+    vueMentioned: has(['vue.js','vuejs']) || /\bvue\b/.test(t),
+    terraformMentioned: has(['terraform']),
+    githubActionsMentioned: has(['github actions']),
+    datadogMentioned: has(['datadog']),
+    prometheusMentioned: has(['prometheus']) || (has(['grafana']) && !has(['datadog'])),
     smallTeam: has(['small team','2 engineers','3 engineers','4 engineers','5 engineers','6 engineers','solo founder','few engineers'])
       || /\b([1-9]|1[0-2])[- ]?(person|people)\b/.test(t) || /team of\s*([1-9]|1[0-2])\b/.test(t),
     largeTeam: has(['large team','many teams','multiple teams','platform team']),
@@ -1475,13 +1491,14 @@ function pickDatabase(s){
   // Analytics/ETL/reporting-centric workload with no transactional/chat/RAG signal = a warehouse question, not an OLTP-database question.
   const warehouseNeed = s.dataHeavy && !s.structured && !s.chatbot && !s.ragNeed;
   if(warehouseNeed){ picks.push('Cloud data warehouse (BigQuery / Snowflake / Redshift) as the analytics store'); hits++; }
-  if(s.structured || s.finance || (!s.unstructured && !warehouseNeed)){ picks.push('PostgreSQL (primary transactional store)'); if(s.structured||s.finance) hits++; }
-  if(s.unstructured || s.chatbot || s.ragNeed){ picks.push('MongoDB (flexible schema for content, chat history, documents)'); if(s.unstructured) hits++; }
+  if(s.structured || s.finance || s.postgresMentioned || (!s.unstructured && !warehouseNeed && !s.mongoMentioned)){ picks.push('PostgreSQL (primary transactional store)'); if(s.structured||s.finance||s.postgresMentioned) hits++; }
+  if(s.unstructured || s.chatbot || s.ragNeed || s.mongoMentioned){ picks.push('MongoDB (flexible schema for content, chat history, documents)'); if(s.unstructured||s.mongoMentioned) hits++; }
   if(s.iot || (s.highScale && s.dataHeavy)){ picks.push('Cassandra (write-heavy, high-scale, multi-region time-series/event data)'); hits++; }
   if(picks.length===0) picks.push('PostgreSQL as primary store');
   let why = warehouseNeed
     ? 'Your workload reads as analytics/ETL/reporting-centric rather than transactional — a columnar cloud warehouse is built for exactly that (large scans, aggregations, BI-tool integration), which Postgres/Mongo/Cassandra are not optimized for. Add Postgres alongside it only if you also have an operational/transactional app component; add Cassandra alongside it if you also have high-volume write ingestion (e.g. IoT/event streams) feeding the warehouse.'
     : 'Postgres for relational/transactional integrity, MongoDB for flexible document data, Cassandra only when write volume and multi-region needs exceed what Postgres/Mongo comfortably handle.';
+  if(s.postgresMentioned || s.mongoMentioned){ why += ' Included because your team already knows ' + [s.postgresMentioned&&'Postgres', s.mongoMentioned&&'MongoDB'].filter(Boolean).join(' and ') + ' — matching existing skills beats a theoretically-better choice on most timelines.'; }
   // Geospatial (location tracking, nearby-matching, live maps) doesn't automatically change the
   // primary-store pick — Postgres with the PostGIS extension handles geospatial indexing/queries
   // (nearest-neighbor, radius search) well and is usually still right — but it's worth calling out
@@ -1505,15 +1522,30 @@ function pickObservability(s){
   let conf = 'low';
   if(s.enterprise && s.compliance){ apm='Splunk (+ Datadog or Dynatrace for APM)'; why='Enterprises with heavy compliance/audit needs often standardize log management on Splunk alongside a dedicated APM tool.'; conf='high'; }
   else if(s.enterprise && s.highScale){ apm='Dynatrace'; why='Strong automatic root-cause analysis (AI-assisted) valuable at large, complex enterprise scale.'; conf='high'; }
+  else if(s.prometheusMentioned){ apm='Grafana + Prometheus (OSS)'; why='Your team already runs Prometheus/Grafana — sticking with what they know beats introducing a new SaaS vendor and its onboarding cost.'; conf='high'; }
+  else if(s.datadogMentioned){ apm='Datadog'; why='Your team already has Datadog experience — matching existing familiarity over evaluating a new vendor.'; conf='high'; }
   else if(s.startupMvp){ apm='Grafana + Prometheus (OSS) or Datadog free tier'; why='Lower cost for a small team; upgrade to Datadog/Dynatrace as scale and budget grow.'; conf='medium'; }
   return {v:`OpenTelemetry (instrumentation standard) + ${apm}`, why:`Instrument everything with OpenTelemetry (vendor-neutral) and ship to ${apm.split(' ')[0]}. ${why}`, conf};
 }
 function pickFrontend(s){
   const picks=[]; let hits=0;
-  if(s.web || (!s.mobile)){ picks.push(s.enterprise ? 'Angular' : 'React'); if(s.web) hits++; }
+  let why = 'React for fastest ecosystem/hiring fit (Angular if already an enterprise Angular shop); Flutter when both iOS and Android are needed from one codebase.';
+  if(s.web || (!s.mobile)){
+    // Team-skill override: an explicit team-skill match beats the enterprise-defaults-to-
+    // Angular heuristic, same "matching skills beats a theoretically-better pick" rule as
+    // pickLanguages/pickDatabase above — a team that already knows Vue shouldn't get steered
+    // to Angular just because the audience is enterprise.
+    let fw = s.enterprise ? 'Angular' : 'React';
+    if(s.angularMentioned) fw = 'Angular';
+    else if(s.vueMentioned) fw = 'Vue';
+    else if(s.reactMentioned) fw = 'React';
+    picks.push(fw);
+    if(s.web || s.reactMentioned || s.angularMentioned || s.vueMentioned) hits++;
+  }
   if(s.mobile){ picks.push('Flutter (single codebase for iOS + Android)'); hits++; }
   if(picks.length===0) picks.push('React');
-  return {v:picks.join(' + '), why:'React for fastest ecosystem/hiring fit (Angular if already an enterprise Angular shop); Flutter when both iOS and Android are needed from one codebase.', conf: hits>=1?'high':'low'};
+  if(s.reactMentioned||s.angularMentioned||s.vueMentioned){ why += ' Your team already knows ' + [s.reactMentioned&&'React', s.angularMentioned&&'Angular', s.vueMentioned&&'Vue'].filter(Boolean).join('/') + ' — that beats the generic default above.'; }
+  return {v:picks.join(' + '), why, conf: hits>=1?'high':'low'};
 }
 function pickLLM(s){
   const picks=[];
@@ -1583,10 +1615,18 @@ function pickGuardrails(s){
   return g;
 }
 function pickCICD(s){
+  // Team-skill note: GitHub Actions and Terraform already appear in every non-air-gapped
+  // branch below, so an explicit team-skill match doesn't change the tool pick itself — it
+  // upgrades confidence and says so, rather than silently agreeing by coincidence.
+  const skillNote = (v) => {
+    const known = [s.githubActionsMentioned && 'GitHub Actions', s.terraformMentioned && 'Terraform'].filter(Boolean);
+    if(!known.length) return v;
+    return {v: v.v, why: v.why + ` Bonus: your team already knows ${known.join(' and ')}, so this isn't just the balanced default — it matches existing skills too.`, conf: v.conf==='high'?'high':'medium'};
+  };
   if(s.onPrem) return {v:'Self-hosted GitLab CE or Jenkins with self-hosted runners, deploying via Terraform to your private infrastructure', why:'Cloud-hosted CI/CD (GitHub Actions cloud runners, Vercel) needs internet connectivity to reach your infrastructure — an air-gapped environment needs the entire pipeline, including runners, inside the network boundary.', conf:'high'};
-  if(s.startupMvp) return {v:'GitHub Actions → Vercel (frontend) + Cloud Run/Fargate (backend)', why:'Fastest path to production for a small team, minimal infra to manage.', conf:'high'};
-  if(s.enterprise) return {v:'GitHub Actions/GitLab CI → ArgoCD (GitOps) → Kubernetes, Terraform for infra-as-code', why:'GitOps gives auditable, repeatable deployments at enterprise scale with multiple environments/teams.', conf:'high'};
-  return {v:'GitHub Actions → Terraform + Kubernetes (or Vercel for frontend-only pieces)', why:'Balanced CI/CD with infra-as-code as the team and service count grow.', conf:'low'};
+  if(s.startupMvp) return skillNote({v:'GitHub Actions → Vercel (frontend) + Cloud Run/Fargate (backend)', why:'Fastest path to production for a small team, minimal infra to manage.', conf:'high'});
+  if(s.enterprise) return skillNote({v:'GitHub Actions/GitLab CI → ArgoCD (GitOps) → Kubernetes, Terraform for infra-as-code', why:'GitOps gives auditable, repeatable deployments at enterprise scale with multiple environments/teams.', conf:'high'});
+  return skillNote({v:'GitHub Actions → Terraform + Kubernetes (or Vercel for frontend-only pieces)', why:'Balanced CI/CD with infra-as-code as the team and service count grow.', conf:'low'});
 }
 function pickDNS(s){
   if(s.onPrem) return {v:'Internal DNS (BIND / Windows DNS / private zone) — no public DNS provider', conf:'high'};
@@ -2746,6 +2786,18 @@ function synthesizeRequirementText(state){
     go: 'Our team already knows Go.',
     ruby: 'Our team already knows Ruby on Rails.',
     php: 'Our team already knows PHP and Laravel.',
+    postgres: 'Our team already knows PostgreSQL.',
+    mongo: 'Our team already knows MongoDB.',
+    react: 'Our team already knows React.',
+    angular: 'Our team already knows Angular.',
+    vue: 'Our team already knows Vue.',
+    aws: 'Our team already uses AWS.',
+    azure: 'Our team already uses Azure.',
+    gcp: 'Our team already uses Google Cloud (GCP).',
+    terraform: 'Our team already knows Terraform.',
+    githubactions: 'Our team already knows GitHub Actions.',
+    datadog: 'Our team already knows Datadog.',
+    prometheus: 'Our team already knows Prometheus and Grafana.',
   };
   const teamSkillSel = (state.teamskills||[]).filter(x => x!=='none');
   if (teamSkillSel.length) parts.push(teamSkillSel.map(x => teamSkillMap[x]).filter(Boolean).join(' '));
@@ -2791,20 +2843,37 @@ const GLIDE_CONFIGS = {
       {val:'ecommerce', icon:'🛒', label:'E-commerce / marketplace'},
     ],
   },
-  // Items list intentionally matches the inline chip-grid HTML for this step exactly (same
-  // vals, icons, labels) — the panel is an alternate view onto the same options, not a
-  // separately-curated list, so the two can't silently drift apart into different option sets.
+  // Items list's backend-language entries intentionally match the inline chip-grid HTML for
+  // this step exactly (same vals, icons, labels) — the panel is an alternate view onto the
+  // same options for that category, not a separately-curated list. The panel additionally
+  // covers DB/Frontend/Cloud/DevOps/Observability, which don't fit the inline grid at all —
+  // every one of these maps to a real signal that changes a real pick (see pickDatabase/
+  // pickFrontend/pickCloud/pickCICD/pickObservability), grounded against the actual KB
+  // technology list (checked data/stack-kb.json's database-oltp/nosql, frontend-framework,
+  // cloud, ci-platform/iac, observability categories directly, not guessed).
   teamskills: {
     title: 'What does your team already know?',
     items: [
-      {val:'none', icon:'—', label:'No strong preference'},
-      {val:'java', icon:'☕', label:'Java / Spring'},
-      {val:'python', icon:'🐍', label:'Python'},
-      {val:'node', icon:'🟩', label:'Node.js / JavaScript'},
-      {val:'dotnet', icon:'🔷', label:'.NET / C#'},
-      {val:'go', icon:'🐹', label:'Go'},
-      {val:'ruby', icon:'💎', label:'Ruby on Rails'},
-      {val:'php', icon:'🐘', label:'PHP / Laravel'},
+      {val:'none', icon:'—', label:'No strong preference', category:'General'},
+      {val:'java', icon:'☕', label:'Java / Spring', category:'Backend language'},
+      {val:'python', icon:'🐍', label:'Python', category:'Backend language'},
+      {val:'node', icon:'🟩', label:'Node.js / JavaScript', category:'Backend language'},
+      {val:'dotnet', icon:'🔷', label:'.NET / C#', category:'Backend language'},
+      {val:'go', icon:'🐹', label:'Go', category:'Backend language'},
+      {val:'ruby', icon:'💎', label:'Ruby on Rails', category:'Backend language'},
+      {val:'php', icon:'🐘', label:'PHP / Laravel', category:'Backend language'},
+      {val:'postgres', icon:'🐘', label:'PostgreSQL', category:'Database'},
+      {val:'mongo', icon:'🍃', label:'MongoDB', category:'Database'},
+      {val:'react', icon:'⚛️', label:'React', category:'Frontend framework'},
+      {val:'angular', icon:'🅰️', label:'Angular', category:'Frontend framework'},
+      {val:'vue', icon:'💚', label:'Vue', category:'Frontend framework'},
+      {val:'aws', icon:'☁️', label:'AWS', category:'Cloud'},
+      {val:'azure', icon:'☁️', label:'Azure', category:'Cloud'},
+      {val:'gcp', icon:'☁️', label:'Google Cloud (GCP)', category:'Cloud'},
+      {val:'terraform', icon:'🧱', label:'Terraform / IaC', category:'DevOps'},
+      {val:'githubactions', icon:'⚙️', label:'GitHub Actions', category:'DevOps'},
+      {val:'datadog', icon:'🐶', label:'Datadog', category:'Monitoring'},
+      {val:'prometheus', icon:'📈', label:'Prometheus / Grafana', category:'Monitoring'},
     ],
   },
 };
@@ -2843,10 +2912,20 @@ function openGlidePanel(groupKey){
   if (!cfg) return;
   document.getElementById('glideTitle').textContent = cfg.title;
   const selectedVals = wizState[groupKey] || [];
-  document.getElementById('glideList').innerHTML = cfg.items.map(it => `
-    <div class="glide-item ${selectedVals.includes(it.val)?'selected':''}" data-val="${it.val}" onclick="toggleGlideItem('${groupKey}','${it.val}', this)">
+  // Category headers: only rendered when items actually carry a `category` (teamskills does,
+  // building doesn't) — printed once per group change, not per item, so a flat list (no
+  // categories) renders exactly as before with zero header markup.
+  let lastCategory = null;
+  document.getElementById('glideList').innerHTML = cfg.items.map(it => {
+    let headerHtml = '';
+    if (it.category && it.category !== lastCategory){
+      headerHtml = `<div class="glide-category">${it.category}</div>`;
+      lastCategory = it.category;
+    }
+    return `${headerHtml}<div class="glide-item ${selectedVals.includes(it.val)?'selected':''}" data-val="${it.val}" onclick="toggleGlideItem('${groupKey}','${it.val}', this)">
       <div class="gi-check">✓</div><span class="gi-icon">${it.icon}</span><span class="gi-label">${it.label}</span>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   document.getElementById('glidePanel').classList.add('show');
   document.getElementById('glideBackdrop').classList.add('show');
 }
@@ -3043,11 +3122,11 @@ const STACK_CARD_SIGNALS = {
   messaging: ['liveMultiplayer','collabEditing','highScale','realtime','finance','gcpShop','startupMvp'],
   mesh: ['mtlsMentioned','compliance','enterprise','largeTeam'],
   cache: [], // always Redis — no signal drives this one
-  database: ['liveMultiplayer','feedFanout','highScale','dataHeavy','structured','chatbot','ragNeed','finance','unstructured','iot','geospatial'],
+  database: ['liveMultiplayer','feedFanout','highScale','dataHeavy','structured','chatbot','ragNeed','finance','unstructured','iot','geospatial','postgresMentioned','mongoMentioned'],
   containers: ['onPrem','startupMvp','enterprise','highScale'],
-  observability: ['onPrem','enterprise','compliance','highScale','startupMvp'],
-  frontend: ['web','mobile','enterprise'],
-  cicd: ['onPrem','startupMvp','enterprise'],
+  observability: ['onPrem','enterprise','compliance','highScale','startupMvp','datadogMentioned','prometheusMentioned'],
+  frontend: ['web','mobile','enterprise','reactMentioned','angularMentioned','vueMentioned'],
+  cicd: ['onPrem','startupMvp','enterprise','terraformMentioned','githubActionsMentioned'],
   dns: ['onPrem','awsShop'],
 };
 
@@ -3629,7 +3708,9 @@ function buildAdrInput(){
   const complianceMap = {hipaa:'hipaa', pci:'pci', soc2:'soc2', gov:'gov'};
   const compliance = (wizState.compliance || []).filter(c => c !== 'none').map(c => complianceMap[c] || c);
 
-  const teamSkillMap = {java:'java', python:'python', node:'node.js', dotnet:'.net', go:'go', ruby:'ruby', php:'php'};
+  const teamSkillMap = {java:'java', python:'python', node:'node.js', dotnet:'.net', go:'go', ruby:'ruby', php:'php',
+    postgres:'postgresql', mongo:'mongodb', react:'react', angular:'angular', vue:'vue', aws:'aws', azure:'azure',
+    gcp:'gcp', terraform:'terraform', githubactions:'github actions', datadog:'datadog', prometheus:'prometheus/grafana'};
   const existingStack = (wizState.teamskills || []).filter(x => x !== 'none').map(x => teamSkillMap[x] || x);
 
   const buildLabels = (wizState.building || []).map(b => buildingLabels[b]).filter(Boolean);
