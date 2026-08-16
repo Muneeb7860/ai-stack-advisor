@@ -31,7 +31,7 @@ its own container/component, not a route on the API).
 """
 import sys
 
-from mcp.server.mcpserver import Context, MCPServer
+from mcp.server.fastmcp import Context, FastMCP
 from sqlalchemy import text
 
 from .. import models
@@ -39,9 +39,8 @@ from ..config import settings
 from ..db import SessionLocal, engine
 from ..rule_engine import recommend_stack as _recommend_stack
 
-mcp = MCPServer(
-    name="ai-stack-advisor",
-    version="0.1.0",
+mcp = FastMCP(
+    "ai-stack-advisor",
     instructions=(
         "Recommends a full technology + AI architecture (cloud, database, LLM strategy, "
         "RAG, guardrails, cost/throughput, governance, and more) from a free-text business "
@@ -93,28 +92,20 @@ def _log_and_recommend(requirement_text: str, client_name: str | None) -> dict:
 def _client_name_from_context(ctx: Context) -> str | None:
     """Isolated specifically so this can be unit-tested against a mock shaped like the real
     mcp.types.InitializeRequestParams pydantic model, without needing a live stdio session.
-
-    NOTE the attribute is client_info (snake_case), not clientInfo — this got it wrong once
-    already: mcp.types.InitializeRequestParams uses Python attribute names in snake_case
-    (client_info) and camelCase only as its JSON serialization alias (clientInfo). The
-    original version of this function used .clientInfo, which silently returned None via the
-    except-Exception below instead of erroring — confirmed broken by driving a REAL stdio
-    JSON-RPC session end-to-end (initialize → tools/call) and checking the persisted
-    McpInvocation.client_name in Postgres, not just calling this function in-process. Calling
-    the underlying function directly, or even mcp.call_tool() without a live client, would
-    never have caught this — there was no live client_params to read the wrong attribute name
-    from either way. See tests/test_mcp_server.py::test_client_name_from_context_uses_correct_attribute_name
-    for the regression test this bug earned.
+    Supports both clientInfo (camelCase) and client_info (snake_case) across SDK versions.
     """
     try:
-        return ctx.session.client_params.client_info.name  # type: ignore[union-attr]
+        session = getattr(ctx, "session", None)
+        if session is None:
+            return None
+        client_params = getattr(session, "client_params", None)
+        if client_params is None:
+            return None
+        info = getattr(client_params, "clientInfo", None) or getattr(client_params, "client_info", None)
+        if info is not None:
+            return getattr(info, "name", None)
+        return None
     except Exception:
-        # Deliberately broad: ctx.session raises ValueError (not AttributeError) outside a
-        # live request context, and client_params/client_info can plausibly be None depending
-        # on the client's handshake (DDD 4.4: this is nullable/best-effort, not a verified
-        # identity). This metadata must never be able to break the actual tool call — but a
-        # broad catch is also exactly why the .clientInfo typo went unnoticed until end-to-end
-        # testing, so it stays paired with a real regression test, not just "trust the catch."
         return None
 
 
