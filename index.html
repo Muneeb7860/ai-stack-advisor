@@ -114,6 +114,22 @@
     border-radius:var(--radius); font-size:12px; cursor:pointer; margin-top:10px; display:inline-flex; align-items:center; gap:6px;
   }
   .glide-trigger:hover{color:var(--text); border-color:var(--accent);}
+  /* Selected-tiles row: makes the current selection visible as removable pills, independent
+     of whether the pick happened via the inline chip grid or the glide panel — both write to
+     the same wizState array, this just renders it back out with a delete affordance neither
+     of those input methods has on its own. */
+  .selected-tiles{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px;}
+  .selected-tiles:empty{margin-top:0;}
+  .sel-tile{display:inline-flex; align-items:center; gap:7px; background:var(--conf-high-bg);
+    border:1px solid var(--conf-high-border); color:var(--text); padding:6px 8px 6px 12px;
+    border-radius:20px; font-size:12.5px; font-weight:600;}
+  .sel-tile .st-x{display:flex; align-items:center; justify-content:center; width:18px; height:18px;
+    border-radius:50%; background:rgba(255,255,255,0.08); cursor:pointer; font-size:11px; line-height:1;
+    color:var(--muted2); flex-shrink:0;}
+  /* No dedicated "danger" token in this palette (only --good/--warn) — --warn is the closest
+     fit for a delete affordance and keeps the tile row inside the existing semantic palette
+     rather than introducing an unrelated red. */
+  .sel-tile .st-x:hover{background:var(--warn); color:var(--bg);}
   body{
     margin:0; font-family:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     /* Was a corner-glow radial gradient — close to a template signature at this point (the
@@ -719,7 +735,11 @@
       <div class="pick-chip" data-val="node"><span>🟩</span>Node.js / JavaScript</div>
       <div class="pick-chip" data-val="dotnet"><span>🔷</span>.NET / C#</div>
       <div class="pick-chip" data-val="go"><span>🐹</span>Go</div>
+      <div class="pick-chip" data-val="ruby"><span>💎</span>Ruby on Rails</div>
+      <div class="pick-chip" data-val="php"><span>🐘</span>PHP / Laravel</div>
     </div>
+    <button type="button" class="glide-trigger" onclick="openGlidePanel('teamskills')">☰ Browse all options in a panel</button>
+    <div class="selected-tiles" id="teamskillsTiles"></div>
   </div>
 
   <div class="wiz-step" data-step="6">
@@ -853,7 +873,13 @@ function detectSignals(text){
   // "on-prem" alone is ambiguous with a hybrid setup that explicitly also mentions cloud
   // ("hybrid on-prem and cloud systems") — only the unambiguous air-gapped/no-cloud phrasings
   // should override regardless of nearby "hybrid"/"cloud" wording.
-  const strongOnPrem = hasRaw(['air-gapped','air gapped','airgapped','cannot use any public cloud','no public cloud','private cloud only','bare metal deployment']);
+  // Real bug found via live testing: "my own server"/"our own server" fell through to no
+  // on-prem signal at all (only the PLURAL "own servers" existed, and only in selfHostInfra
+  // below — which pickCloud() doesn't even read) — so it silently defaulted to AWS with zero
+  // acknowledgment that a non-cloud hosting intent was stated. "Own server(s)" is specific
+  // enough (unlike bare "self-hosted", which can mean "self-hosted software on a cloud VM") to
+  // treat as a real on-prem signal, same tier as "bare metal deployment".
+  const strongOnPrem = hasRaw(['air-gapped','air gapped','airgapped','cannot use any public cloud','no public cloud','private cloud only','bare metal deployment','own server','own servers','in-house server','in-house servers','in house server','in house servers']);
   const softOnPrem = hasRaw(['on-prem','on premises','on-premise']) && !(hasRaw(['hybrid']) && hasRaw(['cloud']));
   return {
     onPrem: strongOnPrem || softOnPrem,
@@ -895,7 +921,7 @@ function detectSignals(text){
     mlFeatureStore: has(['recommendation model','recommender system','fraud scoring','fraud detection model','risk scoring model','ranking model','forecasting model','demand forecasting','churn model','propensity model','custom ml model','feature store','model training pipeline','model registry']),
     searchRecommendation: has(['search bar','product search','site search','search relevance','autocomplete','instant search','faceted search','recommendations','recommended for you','you may also like','personalized feed','for you page','discovery feed','similar items','related products']),
     routingGuardrailService: has(['route between models','multiple llm providers','cost-optimize llm calls','model selection per task','different models per task','llm gateway','llm proxy','ai gateway','centralized guardrails','prompt injection','jailbreak','pii redaction','content policy enforcement','semantic router','model router','fall back to a stronger model']),
-    selfHostInfra: has(['docker','kubernetes','k8s','self-hosted','self hosted','own gpu','own gpus','own servers','own infrastructure','own hardware','on our own hardware','ollama']),
+    selfHostInfra: has(['docker','kubernetes','k8s','self-hosted','self hosted','own gpu','own gpus','own server','own servers','own infrastructure','own hardware','on our own hardware','ollama']),
     awsShop: has(['aws','amazon web services']),
     azureShop: has(['azure','microsoft']),
     gcpShop: has(['gcp','google cloud']),
@@ -921,6 +947,9 @@ function detectSignals(text){
     // Multi-word phrasings only — plain "node" alone is ambiguous (k8s node, a graph node).
     nodeMentioned: has(['node.js','nodejs','node js']),
     dotnetMentioned: has(['.net','dotnet','asp.net','c#']),
+    rubyMentioned: has(['ruby on rails','ruby/rails','rails app']) || /\bruby\b/.test(t),
+    // "php" alone is unambiguous enough (not an English word / common abbreviation collision).
+    phpMentioned: has(['php','laravel','symfony framework']),
     smallTeam: has(['small team','2 engineers','3 engineers','4 engineers','5 engineers','6 engineers','solo founder','few engineers'])
       || /\b([1-9]|1[0-2])[- ]?(person|people)\b/.test(t) || /team of\s*([1-9]|1[0-2])\b/.test(t),
     largeTeam: has(['large team','many teams','multiple teams','platform team']),
@@ -1340,6 +1369,8 @@ function pickLanguages(s){
   // language entries rather than folding into an existing one.
   if(s.nodeMentioned){ picks.push('Node.js (TypeScript) for services your team already knows'); hits++; }
   if(s.dotnetMentioned){ picks.push('.NET (C#) for services your team already knows'); hits++; }
+  if(s.rubyMentioned){ picks.push('Ruby on Rails for services your team already knows'); hits++; }
+  if(s.phpMentioned){ picks.push('PHP (Laravel) for services your team already knows'); hits++; }
   if(picks.length===0) picks.push('Python (FastAPI) for AI-heavy services, Java (Spring Boot) or Go for core backend');
   return {v:picks.join(' · '), why:'Split by workload: Java/Go for performance-critical transactional paths, Python for AI/ML and RAG pipelines where the ecosystem (LangChain, LlamaIndex, etc.) lives. Any language your team already ships in is included even absent a workload-based reason to pick it — matching existing team skills beats a theoretically-better choice on most timelines.', conf: hits>=1?'high':picks.length? 'medium':'low'};
 }
@@ -2713,6 +2744,8 @@ function synthesizeRequirementText(state){
     node: 'Our team already knows Node.js and JavaScript.',
     dotnet: 'Our team already knows .NET and C#.',
     go: 'Our team already knows Go.',
+    ruby: 'Our team already knows Ruby on Rails.',
+    php: 'Our team already knows PHP and Laravel.',
   };
   const teamSkillSel = (state.teamskills||[]).filter(x => x!=='none');
   if (teamSkillSel.length) parts.push(teamSkillSel.map(x => teamSkillMap[x]).filter(Boolean).join(' '));
@@ -2758,7 +2791,52 @@ const GLIDE_CONFIGS = {
       {val:'ecommerce', icon:'🛒', label:'E-commerce / marketplace'},
     ],
   },
+  // Items list intentionally matches the inline chip-grid HTML for this step exactly (same
+  // vals, icons, labels) — the panel is an alternate view onto the same options, not a
+  // separately-curated list, so the two can't silently drift apart into different option sets.
+  teamskills: {
+    title: 'What does your team already know?',
+    items: [
+      {val:'none', icon:'—', label:'No strong preference'},
+      {val:'java', icon:'☕', label:'Java / Spring'},
+      {val:'python', icon:'🐍', label:'Python'},
+      {val:'node', icon:'🟩', label:'Node.js / JavaScript'},
+      {val:'dotnet', icon:'🔷', label:'.NET / C#'},
+      {val:'go', icon:'🐹', label:'Go'},
+      {val:'ruby', icon:'💎', label:'Ruby on Rails'},
+      {val:'php', icon:'🐘', label:'PHP / Laravel'},
+    ],
+  },
 };
+
+// Selected-tiles row (playbook follow-up: "select by clicking, X to delete" request) — a
+// generic renderer keyed off GLIDE_CONFIGS so it never needs its own separate label list.
+// No-ops for any group that doesn't have a `${groupKey}Tiles` container in the DOM, so wiring
+// it into the shared chip/glide toggle paths below is safe for every OTHER wizard step too.
+function renderSelectedTiles(groupKey){
+  const container = document.getElementById(`${groupKey}Tiles`);
+  if (!container) return;
+  const items = (GLIDE_CONFIGS[groupKey] && GLIDE_CONFIGS[groupKey].items) || [];
+  const labelFor = val => { const it = items.find(i => i.val===val); return it ? `${it.icon} ${it.label}` : val; };
+  const arr = wizState[groupKey] || [];
+  container.innerHTML = arr.map(val => `
+    <span class="sel-tile" data-val="${val}">${labelFor(val)}<span class="st-x" title="Remove" onclick="removeTileItem('${groupKey}','${val}')">✕</span></span>
+  `).join('');
+}
+function removeTileItem(groupKey, val){
+  const arr = wizState[groupKey];
+  const idx = arr.indexOf(val);
+  if (idx > -1) arr.splice(idx, 1);
+  // Keep all three views (inline chip, glide-panel item, tile) in sync — same "one wizState,
+  // multiple views" rule the rest of this pattern already follows.
+  const chip = document.querySelector(`.chip-grid[data-group="${groupKey}"] .pick-chip[data-val="${val}"]`);
+  if (chip) chip.classList.remove('selected');
+  const glideItem = document.querySelector(`#glideList .glide-item[data-val="${val}"]`);
+  if (glideItem) glideItem.classList.remove('selected');
+  renderSelectedTiles(groupKey);
+  wizUpdateNextEnabled();
+  wizMaybeShowInference();
+}
 
 function openGlidePanel(groupKey){
   const cfg = GLIDE_CONFIGS[groupKey];
@@ -2785,6 +2863,7 @@ function toggleGlideItem(groupKey, val, el){
   // wizState, not a separate source of truth, so switching between them mid-step is safe.
   const chip = document.querySelector(`.chip-grid[data-group="${groupKey}"] .pick-chip[data-val="${val}"]`);
   if (chip) chip.classList.toggle('selected', arr.includes(val));
+  renderSelectedTiles(groupKey);
   wizUpdateNextEnabled();
   wizMaybeShowInference();
 }
@@ -2795,9 +2874,15 @@ function showScreen(id){
   });
 }
 function startWizard(){
-  wizState.building=[]; wizState.audience=null; wizState.compliance=[]; wizState.teamsize=null; wizState.ai=[];
+  // Bug found via live testing: teamskills was missing from this reset list — restarting the
+  // wizard left a previous session's skill picks silently stuck in wizState (invisible too,
+  // since the chip .selected classes below WERE cleared, so the UI looked reset while the
+  // underlying state wasn't — the two-view-one-state design in openGlidePanel/toggleGlideItem
+  // means letting them drift apart like this is exactly the failure mode that comment warns about).
+  wizState.building=[]; wizState.audience=null; wizState.compliance=[]; wizState.teamsize=null; wizState.teamskills=[]; wizState.ai=[];
   document.querySelectorAll('#screenWizard .pick-chip.selected, #screenWizard .pick-radio.selected').forEach(el => el.classList.remove('selected'));
   document.getElementById('wizFreetext').value='';
+  renderSelectedTiles('teamskills');
   wizCurrentStep=1;
   wizRenderStep();
   showScreen('screenWizard');
@@ -2814,6 +2899,7 @@ document.querySelectorAll('#screenWizard .chip-grid').forEach(grid => {
       const arr = wizState[group];
       const idx = arr.indexOf(val);
       if (idx>-1) arr.splice(idx,1); else arr.push(val);
+      renderSelectedTiles(group);
       wizUpdateNextEnabled();
       wizMaybeShowInference();
     });
@@ -2951,7 +3037,7 @@ const STACK_CARD_SIGNALS = {
   iam: ['onPrem','oktaMentioned','entraMentioned','azureShop','gcpShop','awsShop','pingMentioned',
     'forgerockMentioned','oracleIamMentioned','enterprise','largeTeam','compliance','security',
     'deviceMgmt','startupMvp','smallTeam'],
-  languages: ['javaMentioned','enterprise','finance','pythonMentioned','agentic','dataHeavy','ragNeed','goMentioned','highScale','nodeMentioned','dotnetMentioned'],
+  languages: ['javaMentioned','enterprise','finance','pythonMentioned','agentic','dataHeavy','ragNeed','goMentioned','highScale','nodeMentioned','dotnetMentioned','rubyMentioned','phpMentioned'],
   architecture: ['startupMvp','smallTeam','enterprise','compliance','largeTeam'],
   compute: ['onPrem','startupMvp','smallTeam','highScale','enterprise','realtime','liveMultiplayer','videoConferencing'],
   messaging: ['liveMultiplayer','collabEditing','highScale','realtime','finance','gcpShop','startupMvp'],
@@ -3543,7 +3629,7 @@ function buildAdrInput(){
   const complianceMap = {hipaa:'hipaa', pci:'pci', soc2:'soc2', gov:'gov'};
   const compliance = (wizState.compliance || []).filter(c => c !== 'none').map(c => complianceMap[c] || c);
 
-  const teamSkillMap = {java:'java', python:'python', node:'node.js', dotnet:'.net', go:'go'};
+  const teamSkillMap = {java:'java', python:'python', node:'node.js', dotnet:'.net', go:'go', ruby:'ruby', php:'php'};
   const existingStack = (wizState.teamskills || []).filter(x => x !== 'none').map(x => teamSkillMap[x] || x);
 
   const buildLabels = (wizState.building || []).map(b => buildingLabels[b]).filter(Boolean);
