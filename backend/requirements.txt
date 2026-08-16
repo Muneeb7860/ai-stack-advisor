@@ -20,3 +20,10 @@ chromadb>=1.5
 # indirect dependency via fastapi/anthropic, pinned here because both modules import it
 # directly rather than relying on it being present transitively.
 httpx>=0.27
+# Test-only deps, kept in this file (not split into requirements-dev.txt) since the backend
+# image is built once via `docker compose up --build` and README.md documents running the
+# suite with `docker exec ... python -m pytest tests/ -v` directly inside that same container
+# — no separate dev-install step. tests/test_refine.py etc. rely on pytest fixtures/monkeypatch,
+# and test_refine-style mocking uses pytest-mock's `mocker` fixture.
+pytest>=8
+pytest-mock>=3
