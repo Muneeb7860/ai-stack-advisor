@@ -32,6 +32,7 @@ children.push(reqTable(
     ['1.1', 'Updated after a two-pass rule-engine expansion (separate session, frontend-only): signal count grew from ~35 to 65+, pickX() functions from ~30 to 45, spanning 8 new use-case domains, a directional cost estimator, a semantic-routing/guardrail-service dimension, and governance/security dimensions. Also new: a 12-file RAG knowledge-base corpus (docs/use-case-knowledge-base/) and a 21-case retrieval evaluation set. Section counts (16) and the core client-side-only architecture (NFR-5) are unchanged.'],
     ['1.2', 'v2 backend built and tested in a later session (FastAPI + Postgres + Alembic; share links, /api/refine, /api/ask, and the MCP tool wrapper — FR-27/28/29 all shipped, /api/refine and /api/ask grounded in the 1.1 RAG corpus). Updated Section 7.7, 9.2, and the Release Plan (Section 11) to reflect that; no functional requirement content changed, only status.'],
     ['1.3', 'Found via a documentation-vs-code validation pass: FR-27–29 marked "Shipped" based on the backend alone, without ever stating whether index.html actually called those endpoints — for a real stretch of this project it didn\'t (confirmed by grep: zero fetch() calls). Rewrote Section 7.7 to state both layers explicitly, added FR-27a (independent ask), FR-30 (why-this-pick signal inspection), and FR-31 (real cost display) — all shipped but previously undocumented. Corrected the Release Plan\'s stale "44 passing tests" to the actual 93 (verified via a live pytest run, not the prior static count).'],
+    ['1.4', 'Resolved Open Questions in Section 13 (target segment hypothesis, telemetry privacy policy, low-overhead feedback mechanism) and formalized Flow View as FR-31a with cross-reference to v1.5 Release Plan.'],
   ]
 ));
 
@@ -149,6 +150,7 @@ children.push(reqTable(['ID', 'Requirement', 'Status'], [1000, 5600, 1800], [
   ['FR-29', 'MCP tool wrapper (recommend_stack(...)) callable from Claude Desktop/Code directly.', 'Shipped'],
   ['FR-30', 'Show which specific detected signals drove each stack card\'s recommendation, not just a confidence badge, so the "why" is inspectable per pick rather than only stated as prose.', 'Shipped — client-side only, no backend dependency'],
   ['FR-31', 'Show real LLM token cost (from the Anthropic response) alongside the existing directional cost estimate once a refine/ask call has been made.', 'Shipped — backend returns real usage from message.usage; not persisted to any table'],
+  ['FR-31a', 'Flow View: interactive node-canvas visualization of the architecture recommendation (pan/zoom canvas, minimap, tier-colored nodes) as an alternate to the 16-section card view. Cross-references Release Plan v1.5.', 'Shipped — client-side only, no backend dependency'],
 ]));
 
 // ---------- Non-functional ----------
@@ -202,11 +204,11 @@ children.push(bullet('The docs/use-case-knowledge-base/ corpus is written for RA
 
 // ---------- Open questions ----------
 children.push(h1('13. Open Questions'));
-children.push(numbered('Which of the three target segments (Section 5 / BRD Section 5) should the product formally commit to, and how much should the depth/hand-holding balance change per segment?', 0, 'numbered-list-2'));
+children.push(numbered('RESOLVED (v1.4): Target segment commitment — committed direction is Segment 2 (Tech Leads & Staff Architects at scaling startups/SMBs) as the primary ICP, with Segment 1 (solo founders) as the frictionless on-ramp. This is a committed direction, not yet confirmed by usage — the existing Segment Concentration metric in Section 10 / BRD Section 7 is specifically what will validate or overturn this hypothesis.', 0, 'numbered-list-2'));
 children.push(numbered('RESOLVED (v1.1): a directional monthly cost estimator was added — compute/database/LLM-API bands by scale tier, with LLM cost broken out by model tier specifically. Deliberately a range, not a point estimate, and explicitly caveated as a planning figure, not a quote, since a client-side tool has no live pricing API. See docs/use-case-knowledge-base/09-cost-estimation-methodology.md for full sourcing.', 0, 'numbered-list-2'));
-children.push(numbered('What instrumentation is needed to capture the success metrics in Section 10 without violating NFR-1 (no data leaves the browser) — this is a real tension between measurement and the current privacy posture that needs an explicit decision.', 0, 'numbered-list-2'));
-children.push(numbered('Once real users are exposed to the tool (BRD BR-7), what is the process for feeding disagreement/feedback back into rule-engine updates?', 0, 'numbered-list-2'));
-children.push(numbered('Should the new Flow View (node-canvas visualization of the recommendation, added after this PRD was first drafted) be formalized as its own FR item in the next revision?', 0, 'numbered-list-2'));
+children.push(numbered('RESOLVED (v1.4): Telemetry & privacy policy (NFR-1) — never transmit free-text inputs, diagram payloads, or entity names. If telemetry is ever built, it must be strictly opt-in and restricted to anonymous categorical event counts (e.g. export format clicked, diagram format uploaded). No receiving backend endpoint or telemetry infrastructure exists today, and this policy decision does not constitute a commitment to build one.', 0, 'numbered-list-2'));
+children.push(numbered('RESOLVED (v1.4): Rule-engine feedback mechanism — adopt a low-overhead "Disagree with pick → Open GitHub Issue / Copy Markdown" workflow that formats the active signal, rule ID, and pick rationale. Known limitation: requiring a GitHub issue is real friction for a mid-review staff engineer, so conversion is expected to be low — a clean zero-backend starting point, not a claim of high adoption.', 0, 'numbered-list-2'));
+children.push(numbered('RESOLVED (v1.4): Flow View formalization — formalized as FR-31a in Section 7.7, cross-referenced against the existing v1.5 Release Plan entry rather than treated as newly discovered.', 0, 'numbered-list-2'));
 
 const doc = baseDoc({
   sections: [standardPage(children, 'Product Requirements Document')],
