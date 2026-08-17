@@ -493,7 +493,6 @@
   .mode-card .mc-icon{font-size:24px; margin-bottom:11px;}
   .mode-card .mc-title{font-size:var(--fs-md); font-weight:700; margin-bottom:6px;}
   .mode-card .mc-desc{font-size:var(--fs-sm); color:var(--muted); line-height:1.55;}
-  .mode-card .mc-time{font-size:10px; color:var(--accent2); font-weight:700; text-transform:uppercase; letter-spacing:0.04em; margin-top:13px;}
   @media (max-width:560px){ .mode-cards{grid-template-columns:1fr;} #screenMode{min-height:0; margin-top:30px;} }
 
   /* ---- Wizard (decision #6/#7: 6 questions, one skip case) ---- */
@@ -654,9 +653,9 @@
 <!-- ================= Mode picker (decision #3: equal weight, no default) ================= -->
 <div id="screenMode">
   <div class="mode-head">
-    <div class="mode-eyebrow">🧭 AI Stack Advisor — runs entirely in your browser, no signup</div>
-    <h1>One paragraph in.<br><span class="hl-accent">A full architecture out.</span></h1>
-    <p>Cloud, database, LLM strategy, RAG, cost, and governance — every pick backed by a confidence rating and a cited reason, not a black box.</p>
+    <div class="mode-eyebrow">🧭 AI Stack Advisor</div>
+    <h1>Architecture recommendations, <span class="hl-accent">cited not guessed.</span></h1>
+    <p>Cloud, database, LLM strategy, RAG, cost, and governance — every pick backed by a confidence rating and a cited reason.</p>
   </div>
   <!-- Real proof of value, not a text-chip promise: these are the actual .stack-card / .conf
        components the results page renders, reused verbatim (pointer-events:none, static
@@ -679,14 +678,12 @@
     <div class="mode-card" onclick="startWizard()">
       <div class="mc-icon">💬</div>
       <div class="mc-title">Answer a few questions</div>
-      <div class="mc-desc">Up to 8 short questions, skips what doesn't apply to you — as few as 4 if you're only adding AI to an app you already have. No jargon required.</div>
-      <div class="mc-time">~2 minutes</div>
+      <div class="mc-desc">Up to 8 short questions, skips what doesn't apply to you — as few as 4 if you're only adding AI to an app you already have.</div>
     </div>
     <div class="mode-card" onclick="startFreetext()">
       <div class="mc-icon">📝</div>
       <div class="mc-title">Paste your own description</div>
       <div class="mc-desc">Already have a PRD, brief, or a paragraph describing the product? Paste it in and skip the questions.</div>
-      <div class="mc-time">~20 seconds</div>
     </div>
   </div>
 </div>
