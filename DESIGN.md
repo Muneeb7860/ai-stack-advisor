@@ -16,16 +16,18 @@ suppresses Tier 2 findings declared here.
   temperature rather than a warm grey that would fight it.
 - **Status colours:** `--good` (green), `--warn` (amber) are reserved for problem/warning
   states only — the on-prem hosting-constraint errors, exit-cost badges, innovation-token
-  overage. Phase 4's confidence-basis badges must NOT reuse these; see Type/basis note below.
+  overage. Phase 4's confidence-basis badges do NOT reuse these (implemented with distinct neutral
+  blue/violet/chip tones); see Type/basis note below.
 
 ## Type
 
 - **Text:** Inter — unchanged, already integrated, well-hinted at UI sizes. Not replacing it;
   replacing a working, legible UI font for its own sake is exactly the kind of unforced
   visual churn this pass should avoid.
-- **Display/data:** adding a real second family — `ui-monospace, SFMono-Regular, Menlo,
-  Consolas, monospace` (system stack, zero load cost) — for technical/literal tokens:
-  technology names in comparison tables, cost figures, confidence-basis codes, ADR excerpts.
+- **Display/data:** second family — `ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`
+  (`--font-mono`, system stack, zero load cost) — implemented for technical/literal tokens:
+  technology names in comparison tables and stack cards (`.pick`), cost figures (`.cost-value`),
+  confidence-basis codes (`.conf-basis`), signal chips (`.sig`), and exit-cost badges.
   This is a genuine different-job pairing (prose vs. literal-value), not decoration — it's
   the same signal monospace always carries ("this is an exact value, not phrasing"), and it
   fits a tool whose entire premise is citing specific things rather than paraphrasing.
@@ -58,10 +60,9 @@ suppresses Tier 2 findings declared here.
   Naming it here formally: **"advisor-ease"** — a fast-start, gentle-settle curve (steep
   initial acceleration, soft landing, no overshoot) chosen to feel decisive rather than bouncy,
   matching a tool that's supposed to read as confident, not playful.
-- **Reduced motion:** `prefers-reduced-motion: reduce` should collapse the glide-panel slide
-  and wizard step fade to opacity-only crossfades — not yet implemented, flagging as a real
-  gap to fix in Phase 2 (falls under the checker's general accessibility intent even though
-  it's not one of the 7 rule ids that fired).
+- **Reduced motion:** `prefers-reduced-motion: reduce` media query implemented (Phase 4),
+  collapsing glide-panel slide, wizard step fade, hover transforms, and button active scale
+  to instant state transitions for users with vestibular sensitivities.
 
 ## The signature
 
