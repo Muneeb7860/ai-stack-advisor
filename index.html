@@ -503,7 +503,7 @@
   }
   .hp-cards{display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:16px;}
   @media (max-width:640px){ .hp-cards{grid-template-columns:1fr;} }
-  .mode-cards{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  .mode-cards{display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px;}
   .mode-card{
     background:linear-gradient(180deg, var(--panel-glass), var(--panel2-glass));
     backdrop-filter:blur(var(--glass-blur)) saturate(160%); -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(160%);
@@ -515,6 +515,55 @@
   .mode-card .mc-title{font-size:var(--fs-md); font-weight:700; margin-bottom:6px;}
   .mode-card .mc-desc{font-size:var(--fs-sm); color:var(--muted); line-height:1.55;}
   @media (max-width:560px){ .mode-cards{grid-template-columns:1fr;} #screenMode{min-height:0; margin-top:30px;} }
+
+  /* ---- Diagram Upload & Dropzone (Wave 1) ---- */
+  #screenUpload{display:none;}
+  #screenUpload.active{display:block;}
+  .dropzone{
+    border:2px dashed var(--border); border-radius:var(--radius-lg); padding:36px 20px;
+    text-align:center; cursor:pointer; background:rgba(18,21,29,0.4);
+    transition:border-color .2s var(--ease), background .2s var(--ease), transform .2s var(--ease);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+  }
+  .dropzone:hover, .dropzone.dragover{
+    border-color:var(--accent); background:rgba(91,141,239,0.06); transform:scale(1.005);
+  }
+  .dropzone-icon{
+    width:56px; height:56px; border-radius:50%; background:var(--chip);
+    display:flex; align-items:center; justify-content:center; margin-bottom:14px;
+    color:var(--accent); border:1px solid var(--border);
+  }
+  .dropzone-title{font-size:15px; font-weight:700; color:var(--text); margin-bottom:6px;}
+  .dropzone-sub{font-size:12px; color:var(--muted); max-width:480px; line-height:1.5;}
+  .upload-samples{margin-top:16px; padding-top:14px; border-top:1px solid var(--border);}
+  
+  /* ---- Export Dropdown Menu (Wave 1) ---- */
+  .export-dropdown{position:relative; display:inline-block;}
+  .export-menu{
+    position:absolute; right:0; top:calc(100% + 6px); z-index:100;
+    min-width:280px; background:var(--panel); border:1px solid var(--border);
+    border-radius:var(--radius-lg); box-shadow:0 12px 36px rgba(0,0,0,0.6);
+    padding:6px; display:none; flex-direction:column; gap:2px;
+    backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    animation:menuFadeIn .15s var(--ease);
+  }
+  @keyframes menuFadeIn{from{opacity:0; transform:translateY(-4px);} to{opacity:1; transform:none;}}
+  .export-menu.open{display:flex;}
+  .export-menu-header{
+    font-size:10px; text-transform:uppercase; letter-spacing:0.04em;
+    color:var(--muted2); font-weight:700; padding:6px 10px 4px;
+  }
+  .export-menu-item{
+    background:transparent; border:none; color:var(--text); width:100%;
+    padding:8px 10px; border-radius:8px; cursor:pointer; text-align:left;
+    display:flex; align-items:center; gap:10px; transition:background .12s var(--ease);
+  }
+  .export-menu-item:hover{background:var(--chip); color:var(--accent);}
+  .export-menu-item svg{flex-shrink:0; color:var(--muted);}
+  .export-menu-item:hover svg{color:var(--accent);}
+  .export-menu-item span{display:flex; flex-direction:column;}
+  .export-menu-item span strong{font-size:12px; font-weight:600; line-height:1.3;}
+  .export-menu-item span small{font-size:10.5px; color:var(--muted); line-height:1.3;}
 
   /* ---- Wizard (decision #6/#7: 6 questions, one skip case) ---- */
   #screenWizard{max-width:640px; margin:0 auto; padding:8px 0 20px; display:none;}
@@ -722,6 +771,11 @@
       <div class="mc-title">Paste your own description</div>
       <div class="mc-desc">Already have a PRD, brief, or a paragraph describing the product? Paste it in and skip the questions.</div>
     </div>
+    <div class="mode-card" onclick="startUpload()">
+      <div class="mc-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"/></svg></div>
+      <div class="mc-title">Upload architecture diagram</div>
+      <div class="mc-desc">Have a Draw.io (.drawio/.xml), Mermaid (.mmd), PlantUML (.puml), or SVG file? Drag it in to parse components directly.</div>
+    </div>
   </div>
 </div>
 
@@ -847,6 +901,53 @@
   </div>
 </div>
 
+<!-- ================= Diagram Upload screen (Wave 1) ================= -->
+<div class="wrap" id="screenUpload" style="display:none; max-width:760px; margin:0 auto; padding:8px 0 20px;">
+  <div class="intro-col">
+    <header>
+      <h1>Upload Architecture Diagram</h1>
+      <div class="sub">Upload an existing Draw.io (.drawio/.xml), Mermaid (.mmd), PlantUML (.puml), or SVG diagram. The engine extracts components deterministically to run a rule-based analysis.</div>
+      <div class="sub" style="margin-top:8px;"><a href="#" onclick="backToMode(); return false;" style="color:var(--accent); text-decoration:none;">← choose a different way to describe this</a></div>
+    </header>
+
+    <div class="card" style="padding:28px 24px;">
+      <div class="dropzone" id="diagramDropzone" tabindex="0" role="button" aria-label="Upload architecture diagram file" onclick="document.getElementById('diagramFileInput').click()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('diagramFileInput').click();}">
+        <input type="file" id="diagramFileInput" accept=".drawio,.xml,.mmd,.mermaid,.puml,.plantuml,.svg,.txt" style="display:none;" onchange="handleDiagramFileSelect(event)">
+        <div class="dropzone-icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"/></svg>
+        </div>
+        <div class="dropzone-title">Drop your architecture diagram here, or <span style="color:var(--accent); text-decoration:underline;">browse files</span></div>
+        <div class="dropzone-sub">Supports <strong>.drawio XML</strong>, <strong>Mermaid (.mmd)</strong>, <strong>PlantUML (.puml)</strong>, <strong>SVG</strong>, or paste text/XML directly with <strong>Cmd+V / Ctrl+V</strong></div>
+      </div>
+
+      <div class="upload-samples">
+        <span style="font-size:12px; color:var(--muted); font-weight:600;">Or try a sample architecture diagram:</span>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+          <button type="button" class="ex-btn" onclick="loadSampleDiagram('drawio')">Sample Draw.io (AWS + Postgres + Redis)</button>
+          <button type="button" class="ex-btn" onclick="loadSampleDiagram('mermaid')">Sample Mermaid (Microservices + LLM)</button>
+        </div>
+      </div>
+
+      <div id="diagramPreviewCard" style="display:none; margin-top:20px; padding:16px; background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div>
+            <strong id="diagramFileName" style="font-size:14px; color:var(--text);">Parsed Diagram</strong>
+            <div id="diagramSourceBadge" style="font-size:11.5px; color:var(--accent); margin-top:2px;"></div>
+          </div>
+          <button type="button" class="ghost" style="font-size:12px; padding:4px 10px;" onclick="resetDiagramUpload()">Remove</button>
+        </div>
+        
+        <div style="font-size:12px; color:var(--muted); margin-bottom:8px;">Detected Components (Click to toggle/remove):</div>
+        <div class="chip-grid" id="diagramEntitiesGrid"></div>
+
+        <div style="margin-top:16px; display:flex; gap:10px;">
+          <button type="button" class="primary" id="analyzeDiagramBtn" onclick="analyzeDiagramEntities()">Run Architecture Analysis</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="wrap" id="screenFreetext">
  <div class="intro-col">
   <header>
@@ -886,7 +987,45 @@
     <div id="sharedBanner"></div>
     <div class="results-header" id="resultsHeader" style="display:none;">
       <div id="refineHistoryControls" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
-      <button class="share-btn icon-btn" id="exportAdrBtn" onclick="onExportAdrClick()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg> Export as ADR</button>
+      <div class="export-dropdown" id="exportDropdown">
+        <button class="share-btn icon-btn" id="exportMainBtn" onclick="toggleExportMenu(event)" aria-haspopup="true" aria-expanded="false" aria-controls="exportMenu">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
+          Export / Download ▾
+        </button>
+        <div class="export-menu" id="exportMenu" role="menu">
+          <div class="export-menu-header" role="presentation">Architecture Decisions &amp; Docs</div>
+          <button type="button" class="export-menu-item" role="menuitem" onclick="onExportAdrClick(); closeExportMenu();">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"/></svg>
+            <span><strong>Export as ADR Pack (.md)</strong><small>Markdown decision record bundle</small></span>
+          </button>
+          <button type="button" class="export-menu-item" role="menuitem" onclick="onExportJsonClick(); closeExportMenu();">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5"/></svg>
+            <span><strong>Export Blueprint (.json)</strong><small>Machine state &amp; recommendations</small></span>
+          </button>
+          <div class="export-menu-header" role="presentation">Diagrams &amp; Visual Formats</div>
+          <button type="button" class="export-menu-item" role="menuitem" onclick="onExportDrawioClick(); closeExportMenu();">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z"/></svg>
+            <span><strong>Download Draw.io (.drawio)</strong><small>Open in diagrams.net / VS Code</small></span>
+          </button>
+          <button type="button" class="export-menu-item" role="menuitem" onclick="onExportMermaidClick(); closeExportMenu();">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/></svg>
+            <span><strong>Download Mermaid (.mmd)</strong><small>C4 flow syntax for GitHub markdown</small></span>
+          </button>
+          <button type="button" class="export-menu-item" role="menuitem" onclick="onCopyMermaidClick(); closeExportMenu();">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75"/></svg>
+            <span><strong>Copy Mermaid Syntax</strong><small>Paste into Notion, PRs, or chats</small></span>
+          </button>
+          <button type="button" class="export-menu-item" role="menuitem" onclick="onExportSvgClick(); closeExportMenu();">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"/></svg>
+            <span><strong>Download SVG Vector (.svg)</strong><small>Vector graphic for design tools</small></span>
+          </button>
+          <div class="export-menu-header" role="presentation">1-Click Tool Hand-off</div>
+          <button type="button" class="export-menu-item" role="menuitem" onclick="onOpenDiagramsNetClick(); closeExportMenu();">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/></svg>
+            <span><strong>Open in Diagrams.net ↗</strong><small>Launch web editor in new tab (zero login)</small></span>
+          </button>
+        </div>
+      </div>
       <button class="share-btn icon-btn" id="shareBtn" onclick="onShareClick()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244"/></svg> Share this analysis</button>
     </div>
     <div id="results"></div>
@@ -3409,16 +3548,12 @@ function toggleGlideItem(groupKey, val, el){
 }
 
 function showScreen(id){
-  ['screenMode','screenWizard','screenFreetext'].forEach(s => {
-    document.getElementById(s).classList.toggle('active', s===id);
+  ['screenMode','screenWizard','screenFreetext','screenUpload'].forEach(s => {
+    const el = document.getElementById(s);
+    if (el) el.classList.toggle('active', s===id);
   });
 }
 function startWizard(){
-  // Bug found via live testing: teamskills was missing from this reset list — restarting the
-  // wizard left a previous session's skill picks silently stuck in wizState (invisible too,
-  // since the chip .selected classes below WERE cleared, so the UI looked reset while the
-  // underlying state wasn't — the two-view-one-state design in openGlidePanel/toggleGlideItem
-  // means letting them drift apart like this is exactly the failure mode that comment warns about).
   wizState.scope=null; wizState.aiPattern=null; wizState.building=[]; wizState.audience=null; wizState.compliance=[]; wizState.teamsize=null; wizState.teamskills=[]; wizState.ai=[];
   document.querySelectorAll('#screenWizard .pick-chip.selected, #screenWizard .pick-radio.selected').forEach(el => el.classList.remove('selected'));
   document.getElementById('wizFreetext').value='';
@@ -3428,6 +3563,10 @@ function startWizard(){
   showScreen('screenWizard');
 }
 function startFreetext(){ showScreen('screenFreetext'); }
+function startUpload(){
+  resetDiagramUpload();
+  showScreen('screenUpload');
+}
 function backToMode(){ showScreen('screenMode'); }
 
 // Real defect found in the ui-craft Tier 1 pass, missed by the static checker (it pattern-
@@ -4289,10 +4428,81 @@ function buildAdrInput(s){
   };
 }
 
+// ---------------- Generic File Download Helper ----------------
+function downloadGenericFile(filename, text, mimeType = 'text/plain;charset=utf-8') {
+  const blob = new Blob([text], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function escapeXml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function getPickVal(rec, key) {
+  if (!rec) return '';
+  const map = {
+    Frontend: rec.fe?.v,
+    Gateway: rec.gw?.v,
+    Compute: rec.compute?.v,
+    Database: rec.db?.v,
+    AI: rec.llm?.v,
+    Cache: rec.cache?.v,
+    Messaging: rec.msg?.v,
+    Observability: rec.obs?.v,
+    Cloud: rec.cloud?.v,
+    Languages: rec.lang?.v,
+    RAG: rec.rag?.v
+  };
+  return map[key] || '';
+}
+
+// ---------------- Export Dropdown & Exporters (Wave 1) ----------------
+function toggleExportMenu(e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById('exportMenu');
+  const btn = document.getElementById('exportMainBtn');
+  if (menu) {
+    const isOpen = menu.classList.toggle('open');
+    if (btn) btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  }
+}
+
+function closeExportMenu() {
+  const menu = document.getElementById('exportMenu');
+  const btn = document.getElementById('exportMainBtn');
+  if (menu) menu.classList.remove('open');
+  if (btn) btn.setAttribute('aria-expanded', 'false');
+}
+
+document.addEventListener('click', (e) => {
+  const dropdown = document.getElementById('exportDropdown');
+  if (dropdown && !dropdown.contains(e.target)) {
+    closeExportMenu();
+  }
+});
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeExportMenu();
+  }
+});
+
 function onExportAdrClick(){
-  const btn = document.getElementById('exportAdrBtn');
-  if (!lastRecommendations || !lastSignals){ alert('Run an analysis first, then export as ADR.'); return; }
-  const original = btn.textContent;
+  const btn = document.getElementById('exportMainBtn');
+  if (!lastRecommendations || !lastSignals){ alert('Run an analysis first, then export.'); return; }
   try {
     if (!window.AdrExport || typeof window.AdrExport.buildExports !== 'function'){
       throw new Error('ADR exporter did not load correctly.');
@@ -4306,9 +4516,6 @@ function onExportAdrClick(){
     const input = buildAdrInput(lastSignals);
     const out = window.AdrExport.buildExports({kb, input, recommendations, omitted});
 
-    // Gap B.4 — the KB's own design philosophy is "visible gap, not silent omission" (see its
-    // CLAUDE.md). Categories this app recommends that the KB doesn't yet cover are appended
-    // honestly rather than papered over.
     const omittedSection = [
       '', '## Categories not covered by this knowledge base', '',
       '_AI Stack Advisor recommends more categories than the current ADR knowledge base models. Per the knowledge base\'s own design, gaps are listed explicitly rather than dropped silently:_', '',
@@ -4316,15 +4523,484 @@ function onExportAdrClick(){
     ].join('\n');
 
     const finalBundle = out.bundle + '\n---\n' + omittedSection;
-    window.AdrExport.downloadText(`architecture-decision-pack-${new Date().toISOString().slice(0,10)}.md`, finalBundle);
-    btn.textContent = '✓ Downloaded';
+    downloadGenericFile(`architecture-decision-pack-${new Date().toISOString().slice(0,10)}.md`, finalBundle, 'text/markdown;charset=utf-8');
   } catch(e){
     console.error('ADR export failed:', e);
     alert('ADR export failed: ' + e.message);
-  } finally {
-    setTimeout(() => { btn.textContent = original; }, 2500);
   }
 }
+
+function generateDrawioXml(rec, signals) {
+  const categories = [
+    { key: 'Frontend', name: 'Frontend Client', color: '#EAF0F6', stroke: '#1F3B57' },
+    { key: 'Gateway', name: 'API Gateway / Routing', color: '#E1EAF2', stroke: '#2E5C8A' },
+    { key: 'Compute', name: 'Compute / Application', color: '#E1EAF2', stroke: '#2E5C8A' },
+    { key: 'Database', name: 'Primary Database', color: '#EAF6EE', stroke: '#2E7D4F' },
+    { key: 'AI', name: 'AI / Model Serving', color: '#FDF3E7', stroke: '#A85D00' },
+    { key: 'Cache', name: 'Cache Layer', color: '#EAF6EE', stroke: '#2E7D4F' },
+    { key: 'Messaging', name: 'Message Queue / Events', color: '#E1EAF2', stroke: '#2E5C8A' },
+    { key: 'Observability', name: 'Observability & Monitoring', color: '#F3EBF9', stroke: '#7C5BEF' }
+  ];
+
+  let cellsXml = `<mxCell id="0"/><mxCell id="1" parent="0"/>`;
+  let y = 70;
+  let prevId = null;
+
+  cellsXml += `
+    <mxCell id="title_node" value="&lt;b&gt;AI Stack Advisor — Architecture Blueprint&lt;/b&gt;&lt;br/&gt;&lt;small&gt;Generated: ${new Date().toLocaleDateString()}&lt;/small&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1F3B57;strokeColor=#1F3B57;fontFamily=Helvetica;fontSize=13;fontColor=#FFFFFF;" vertex="1" parent="1">
+      <mxGeometry x="60" y="20" width="360" height="40" as="geometry"/>
+    </mxCell>
+  `;
+
+  let idx = 2;
+  for (const cat of categories) {
+    const val = getPickVal(rec, cat.key);
+    if (!val) continue;
+    const nodeId = `node_${idx++}`;
+    const escapedCat = escapeXml(cat.name);
+    const escapedVal = escapeXml(val);
+    // Real bug found via live verification: a literal " inside this inline style attribute
+    // breaks the OUTER value="..." XML attribute it's nested in — DOMParser confirmed
+    // "attributes construct error" on the generated file, meaning draw.io would fail to open
+    // it. escapeXml() correctly escapes the actual pick text; the fix here is using single
+    // quotes for this hardcoded inner HTML attribute so it can never collide with the double-
+    // quoted outer XML attribute, regardless of what's escaped elsewhere.
+    const label = `&lt;b&gt;${escapedCat}&lt;/b&gt;&lt;br/&gt;&lt;span style='font-size:11px;'&gt;${escapedVal}&lt;/span&gt;`;
+
+    cellsXml += `
+      <mxCell id="${nodeId}" value="${label}" style="rounded=1;whiteSpace=wrap;html=1;fillColor=${cat.color};strokeColor=${cat.stroke};fontFamily=Helvetica;fontSize=12;fontColor=#1F3B57;strokeWidth=1.5;" vertex="1" parent="1">
+        <mxGeometry x="100" y="${y}" width="280" height="55" as="geometry"/>
+      </mxCell>
+    `;
+
+    if (prevId) {
+      const edgeId = `edge_${idx++}`;
+      cellsXml += `
+        <mxCell id="${edgeId}" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#5B6B7C;strokeWidth=1.5;" edge="1" parent="1" source="${prevId}" target="${nodeId}">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      `;
+    }
+
+    prevId = nodeId;
+    y += 85;
+  }
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="${new Date().toISOString()}" agent="AI-Stack-Advisor" version="21.0.0">
+  <diagram id="stack-architecture" name="AI Stack Architecture">
+    <mxGraphModel dx="1000" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100">
+      <root>${cellsXml}</root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>`;
+}
+
+function onExportDrawioClick() {
+  if (!lastRecommendations) { alert('Run an analysis first, then export.'); return; }
+  const xml = generateDrawioXml(lastRecommendations, lastSignals);
+  downloadGenericFile(`architecture-diagram-${new Date().toISOString().slice(0,10)}.drawio`, xml, 'application/xml;charset=utf-8');
+}
+
+function generateMermaidDiagram(rec, signals) {
+  let mmd = 'graph TD\n';
+  mmd += '  %% AI Stack Advisor Architecture Export\n';
+  mmd += '  classDef client fill:#EAF0F6,stroke:#1F3B57,stroke-width:1.5px,color:#1F3B57;\n';
+  mmd += '  classDef edgeTier fill:#E1EAF2,stroke:#2E5C8A,stroke-width:1.5px,color:#1F3B57;\n';
+  mmd += '  classDef compute fill:#E1EAF2,stroke:#2E5C8A,stroke-width:1.5px,color:#1F3B57;\n';
+  mmd += '  classDef data fill:#EAF6EE,stroke:#2E7D4F,stroke-width:1.5px,color:#1F3B57;\n';
+  mmd += '  classDef ai fill:#FDF3E7,stroke:#A85D00,stroke-width:1.5px,color:#A85D00;\n';
+  mmd += '  classDef ops fill:#F3EBF9,stroke:#7C5BEF,stroke-width:1.5px,color:#1F3B57;\n\n';
+
+  const clean = (s) => (s || '').replace(/["[\](){}]/g, '').replace(/\s+/g, ' ').trim();
+
+  const fe = clean(getPickVal(rec, 'Frontend')) || 'Web Client';
+  const gw = clean(getPickVal(rec, 'Gateway')) || 'API Gateway';
+  const comp = clean(getPickVal(rec, 'Compute')) || 'Application Backend';
+  const db = clean(getPickVal(rec, 'Database')) || 'PostgreSQL';
+  const ai = clean(getPickVal(rec, 'AI')) || 'LLM Engine';
+  const cache = clean(getPickVal(rec, 'Cache'));
+  const msg = clean(getPickVal(rec, 'Messaging'));
+  const obs = clean(getPickVal(rec, 'Observability'));
+
+  mmd += `  Client["Frontend Client<br/><b>${fe}</b>"]:::client\n`;
+  mmd += `  Gateway["API Gateway / Edge<br/><b>${gw}</b>"]:::edgeTier\n`;
+  mmd += `  Compute["Backend Compute<br/><b>${comp}</b>"]:::compute\n`;
+  mmd += `  DB[("Primary Database<br/><b>${db}</b>")]:::data\n`;
+  mmd += `  AI["AI / Model Serving<br/><b>${ai}</b>"]:::ai\n`;
+
+  if (cache) mmd += `  Cache[("Cache Layer<br/><b>${cache}</b>")]:::data\n`;
+  if (msg) mmd += `  Queue["Message Queue<br/><b>${msg}</b>"]:::compute\n`;
+  if (obs) mmd += `  Obs["Observability<br/><b>${obs}</b>"]:::ops\n`;
+
+  mmd += '\n  Client -->|HTTPS / WSS| Gateway\n';
+  mmd += '  Gateway -->|Internal Routing| Compute\n';
+  mmd += '  Compute -->|Queries / Mutations| DB\n';
+  mmd += '  Compute -->|Inference / RAG| AI\n';
+  if (cache) mmd += '  Compute -->|Read/Write Cache| Cache\n';
+  if (msg) mmd += '  Compute -->|Async Tasks| Queue\n';
+  if (obs) mmd += '  Compute -.->|Metrics & Traces| Obs\n';
+
+  return mmd;
+}
+
+function onExportMermaidClick() {
+  if (!lastRecommendations) { alert('Run an analysis first, then export.'); return; }
+  const mmd = generateMermaidDiagram(lastRecommendations, lastSignals);
+  downloadGenericFile(`architecture-flow-${new Date().toISOString().slice(0,10)}.mmd`, mmd, 'text/plain;charset=utf-8');
+}
+
+function onCopyMermaidClick() {
+  if (!lastRecommendations) { alert('Run an analysis first, then export.'); return; }
+  const mmd = generateMermaidDiagram(lastRecommendations, lastSignals);
+  navigator.clipboard.writeText(mmd).then(() => {
+    alert('✓ Mermaid code copied to clipboard!');
+  }).catch(err => {
+    console.error('Clipboard copy failed:', err);
+    prompt('Copy Mermaid code below:', mmd);
+  });
+}
+
+function onOpenDiagramsNetClick() {
+  if (!lastRecommendations) { alert('Run an analysis first, then export.'); return; }
+  const xml = generateDrawioXml(lastRecommendations, lastSignals);
+  const encodedXml = encodeURIComponent(xml);
+  const targetUrl = `https://app.diagrams.net/#R${encodedXml}`;
+  window.open(targetUrl, '_blank', 'noopener,noreferrer');
+}
+
+function generateSvgDiagram(rec, signals) {
+  const categories = [
+    { name: 'Frontend', val: getPickVal(rec, 'Frontend') || 'Web App', color: '#EAF0F6', stroke: '#1F3B57' },
+    { name: 'API Gateway', val: getPickVal(rec, 'Gateway') || 'API Gateway', color: '#E1EAF2', stroke: '#2E5C8A' },
+    { name: 'Compute', val: getPickVal(rec, 'Compute') || 'Backend Services', color: '#E1EAF2', stroke: '#2E5C8A' },
+    { name: 'Database', val: getPickVal(rec, 'Database') || 'PostgreSQL', color: '#EAF6EE', stroke: '#2E7D4F' },
+    { name: 'AI / LLM', val: getPickVal(rec, 'AI') || 'Claude Sonnet + RAG', color: '#FDF3E7', stroke: '#A85D00' }
+  ];
+
+  let y = 60;
+  let boxes = '';
+  categories.forEach((c, i) => {
+    boxes += `
+      <rect x="50" y="${y}" width="400" height="50" rx="8" fill="${c.color}" stroke="${c.stroke}" stroke-width="1.5"/>
+      <text x="65" y="${y + 22}" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="700" fill="#1F3B57">${escapeXml(c.name)}</text>
+      <text x="65" y="${y + 40}" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#5B6B7C">${escapeXml(c.val)}</text>
+    `;
+    if (i < categories.length - 1) {
+      boxes += `<line x1="250" y1="${y + 50}" x2="250" y2="${y + 70}" stroke="#5B6B7C" stroke-width="1.5" stroke-dasharray="3,3"/>`;
+    }
+    y += 70;
+  });
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 ${y + 20}" width="100%" height="100%">
+    <rect width="100%" height="100%" fill="#0A0C11" rx="12"/>
+    <text x="50" y="38" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="800" fill="#FFFFFF">AI Stack Advisor Architecture</text>
+    ${boxes}
+  </svg>`;
+}
+
+function onExportSvgClick() {
+  if (!lastRecommendations) { alert('Run an analysis first, then export.'); return; }
+  const svg = generateSvgDiagram(lastRecommendations, lastSignals);
+  downloadGenericFile(`architecture-diagram-${new Date().toISOString().slice(0,10)}.svg`, svg, 'image/svg+xml;charset=utf-8');
+}
+
+function onExportJsonClick() {
+  if (!lastRecommendations || !lastSignals) { alert('Run an analysis first, then export.'); return; }
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    requirement: lastRequirementText,
+    signals: lastSignals,
+    recommendations: lastRecommendations
+  };
+  const jsonStr = JSON.stringify(payload, null, 2);
+  downloadGenericFile(`architecture-blueprint-${new Date().toISOString().slice(0,10)}.json`, jsonStr, 'application/json;charset=utf-8');
+}
+
+// ---------------- Diagram Ingestion & Tier A Parsers (Wave 1) ----------------
+let uploadedDiagramEntities = [];
+
+function resetDiagramUpload() {
+  uploadedDiagramEntities = [];
+  const fileInput = document.getElementById('diagramFileInput');
+  if (fileInput) fileInput.value = '';
+  const preview = document.getElementById('diagramPreviewCard');
+  if (preview) preview.style.display = 'none';
+  const grid = document.getElementById('diagramEntitiesGrid');
+  if (grid) grid.innerHTML = '';
+}
+
+function parseDrawioXml(xmlString) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlString, 'text/xml');
+  if (doc.querySelector('parsererror')) {
+    throw new Error('Malformed XML file.');
+  }
+
+  const entities = [];
+  const seen = new Set();
+  const cells = doc.querySelectorAll('mxCell[value], [label], [tooltip]');
+  
+  cells.forEach(cell => {
+    const rawVal = cell.getAttribute('value') || cell.getAttribute('label') || cell.getAttribute('tooltip') || '';
+    const style = cell.getAttribute('style') || '';
+    const cleanText = rawVal
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .trim();
+    if (cleanText.length > 1 && !cleanText.match(/^[0-9]+$/) && !seen.has(cleanText.toLowerCase())) {
+      seen.add(cleanText.toLowerCase());
+      entities.push({ text: cleanText, source: 'drawio-label', style });
+    }
+  });
+
+  return entities;
+}
+
+function parseMermaidText(mmdString) {
+  const entities = [];
+  const seen = new Set();
+  
+  // Clean comments and styling definitions
+  const cleanMmd = mmdString
+    .replace(/%%.*$/gm, '')
+    .replace(/^\s*classDef\s+.*$/gm, '')
+    .replace(/^\s*class\s+.*$/gm, '')
+    .replace(/^\s*style\s+.*$/gm, '');
+
+  // 1. Match bracketed nodes with composite delimiters
+  const nodeRegex = /([a-zA-Z0-9_-]+)\s*(?:\[\(|\(\[|\(\(|\[\[|\{\{|\{\[|\[|\(|\{)\s*(["']?)([\s\S]+?)\2\s*(?:\)\]|\]\)|[)\]\}]{1,2})/g;
+  let match;
+  while ((match = nodeRegex.exec(cleanMmd)) !== null) {
+    const [_, id, quote, rawLabel] = match;
+    let cleanLabel = rawLabel
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/\\n/g, ' ')
+      .trim();
+    if (cleanLabel.length > 1 && !seen.has(cleanLabel.toLowerCase())) {
+      seen.add(cleanLabel.toLowerCase());
+      entities.push({ text: cleanLabel, id, source: 'mermaid-node' });
+    }
+  }
+
+  // 2. Match subgraphs
+  const subgraphRegex = /subgraph\s+([a-zA-Z0-9_-]+)(?:\s*\[\s*(["']?)([\s\S]+?)\2\s*\])?/gi;
+  while ((match = subgraphRegex.exec(cleanMmd)) !== null) {
+    const [_, id, quote, label] = match;
+    const clean = (label || id).replace(/<[^>]*>/g, ' ').trim();
+    if (clean.length > 1 && !seen.has(clean.toLowerCase()) && !/^(subgraph|cluster|tier)$/i.test(clean)) {
+      seen.add(clean.toLowerCase());
+      entities.push({ text: clean, source: 'mermaid-subgraph' });
+    }
+  }
+
+  return entities;
+}
+
+function parseSvgText(svgString) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(svgString, 'image/svg+xml');
+  if (doc.querySelector('parsererror')) {
+    throw new Error('Malformed SVG file.');
+  }
+
+  const entities = [];
+  const seen = new Set();
+  const textElements = doc.querySelectorAll('text, tspan, title, desc');
+  
+  textElements.forEach(el => {
+    const cleanText = (el.textContent || '')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .trim();
+    if (cleanText.length > 2 && !cleanText.match(/^[0-9\s.,%-]+$/) && !seen.has(cleanText.toLowerCase())) {
+      seen.add(cleanText.toLowerCase());
+      entities.push({ text: cleanText, source: 'svg-text' });
+    }
+  });
+
+  return entities;
+}
+
+function parseDiagramInput(content, filename = 'diagram') {
+  const lower = filename.toLowerCase();
+  const trimmed = content.trim();
+  
+  if (lower.endsWith('.drawio') || lower.endsWith('.xml') || trimmed.startsWith('<mxfile') || trimmed.startsWith('<mxGraphModel')) {
+    return { type: 'drawio', entities: parseDrawioXml(content) };
+  } else if (lower.endsWith('.mmd') || lower.endsWith('.mermaid') || trimmed.startsWith('graph ') || trimmed.startsWith('flowchart ') || trimmed.startsWith('C4Context')) {
+    return { type: 'mermaid', entities: parseMermaidText(content) };
+  } else if (lower.endsWith('.svg') || trimmed.startsWith('<svg')) {
+    return { type: 'svg', entities: parseSvgText(content) };
+  } else {
+    // Fallback: Mermaid or line-by-line parser
+    let res = parseMermaidText(content);
+    if (!res.length) {
+      const lines = content.split('\n').map(l => l.trim()).filter(l => l.length > 2);
+      res = lines.slice(0, 15).map(l => ({ text: l, source: 'raw-text' }));
+    }
+    return { type: 'text', entities: res };
+  }
+}
+
+function handleDiagramFile(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const content = e.target.result;
+      const parsed = parseDiagramInput(content, file.name);
+      displayDiagramPreview(file.name, parsed.type, parsed.entities);
+    } catch(err) {
+      console.error('Diagram parse error:', err);
+      alert('Could not parse diagram: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function handleDiagramFileSelect(event) {
+  const file = event.target.files && event.target.files[0];
+  if (file) handleDiagramFile(file);
+}
+
+function displayDiagramPreview(fileName, type, entities) {
+  uploadedDiagramEntities = entities;
+  document.getElementById('diagramFileName').textContent = fileName;
+  document.getElementById('diagramSourceBadge').textContent = `Format: ${type.toUpperCase()} · ${entities.length} components detected`;
+  
+  const grid = document.getElementById('diagramEntitiesGrid');
+  grid.innerHTML = '';
+
+  entities.forEach((ent, idx) => {
+    const chip = document.createElement('div');
+    chip.className = 'pick-chip selected';
+    chip.setAttribute('tabindex', '0');
+    chip.setAttribute('role', 'checkbox');
+    chip.setAttribute('aria-checked', 'true');
+    chip.textContent = ent.text;
+    chip.dataset.idx = idx;
+    const toggle = () => {
+      const isSel = chip.classList.toggle('selected');
+      chip.setAttribute('aria-checked', isSel ? 'true' : 'false');
+    };
+    chip.onclick = toggle;
+    chip.onkeydown = (e) => {
+      if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
+        toggle();
+      }
+    };
+    grid.appendChild(chip);
+  });
+
+  document.getElementById('diagramPreviewCard').style.display = 'block';
+}
+
+function loadSampleDiagram(type) {
+  if (type === 'drawio') {
+    const sampleXml = `<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net">
+  <diagram id="sample">
+    <mxGraphModel>
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="2" value="React Frontend" vertex="1" parent="1"/>
+        <mxCell id="3" value="AWS API Gateway" vertex="1" parent="1"/>
+        <mxCell id="4" value="AWS Lambda Compute" vertex="1" parent="1"/>
+        <mxCell id="5" value="PostgreSQL RDS" vertex="1" parent="1"/>
+        <mxCell id="6" value="Redis ElastiCache" vertex="1" parent="1"/>
+        <mxCell id="7" value="AWS SQS Queue" vertex="1" parent="1"/>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>`;
+    const parsed = parseDiagramInput(sampleXml, 'aws-cloud-app.drawio');
+    displayDiagramPreview('aws-cloud-app.drawio', parsed.type, parsed.entities);
+  } else if (type === 'mermaid') {
+    const sampleMmd = `graph TD
+  Client["Web App Client (React)"] --> Gateway["Kong API Gateway"]
+  Gateway --> Service["FastAPI AI Microservice"]
+  Service --> DB[("PostgreSQL pgvector")]
+  Service --> LLM["Claude 3.5 Sonnet RAG"]
+  Service --> Cache[("Redis Cache")]
+  Service --> Queue["Kafka Event Bus"]`;
+    const parsed = parseDiagramInput(sampleMmd, 'ai-microservices.mmd');
+    displayDiagramPreview('ai-microservices.mmd', parsed.type, parsed.entities);
+  }
+}
+
+function analyzeDiagramEntities() {
+  const selectedChips = document.querySelectorAll('#diagramEntitiesGrid .pick-chip.selected');
+  const activeEntities = Array.from(selectedChips).map(c => c.textContent.trim());
+  if (!activeEntities.length) {
+    alert('Please select at least one detected component to analyze.');
+    return;
+  }
+
+  const synthesizedText = 'Existing architecture diagram components: ' + activeEntities.join(', ') + '. Evaluate stack modernization and AI additions.';
+  document.getElementById('input').value = synthesizedText;
+  
+  const s = detectSignals(synthesizedText);
+  const rec = computeRecommendations(s);
+  lastRequirementText = synthesizedText; lastSignals = s; lastRecommendations = rec;
+  if (typeof resetRefineSession === 'function') resetRefineSession();
+  renderRecommendations(s, rec);
+  if (typeof attachRefineUI === 'function') attachRefineUI();
+  
+  const header = document.getElementById('resultsHeader');
+  if (header) header.style.display = 'flex';
+  
+  // Smooth scroll to results
+  document.getElementById('resultsShell').scrollIntoView({ behavior: 'smooth' });
+}
+
+// Global Drag & Drop and Clipboard Paste Listeners
+window.addEventListener('DOMContentLoaded', () => {
+  const dropzone = document.getElementById('diagramDropzone');
+  if (dropzone) {
+    ['dragenter', 'dragover'].forEach(name => {
+      dropzone.addEventListener(name, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.add('dragover');
+      });
+    });
+    ['dragleave', 'drop'].forEach(name => {
+      dropzone.addEventListener(name, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.remove('dragover');
+      });
+    });
+    dropzone.addEventListener('drop', (e) => {
+      const dt = e.dataTransfer;
+      const files = dt.files;
+      if (files && files.length) {
+        handleDiagramFile(files[0]);
+      }
+    });
+  }
+
+  // Global Paste listener (Cmd+V / Ctrl+V)
+  window.addEventListener('paste', (e) => {
+    const activeScreen = document.querySelector('#screenUpload.active');
+    if (!activeScreen) return;
+    const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+    if (pastedText && pastedText.trim().length > 10) {
+      const parsed = parseDiagramInput(pastedText, 'pasted-diagram.txt');
+      if (parsed.entities.length) {
+        displayDiagramPreview('Pasted Diagram Payload', parsed.type, parsed.entities);
+      }
+    }
+  });
+});
 
 // ---------------- Share button + shared read-only view (decisions #12, #13) ----------------
 let isReadOnlyView = false;
