@@ -2,3 +2,29 @@
 docs/node_modules/
 
 .DS_Store
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+
+# Database / vector store
+*.db
+*.sqlite3
+backend/chroma_store/
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs & coverage
+*.log
+.coverage
+htmlcov/
