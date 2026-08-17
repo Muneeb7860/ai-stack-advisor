@@ -45,9 +45,8 @@ uvicorn app.main:app --reload
 pytest tests/ -v
 ```
 
-100 tests currently (99 passing, 1 xfailed by design — see `test_retrieval_eval.py` below for
-the retrieval eval's own count and why it changed across the TF-IDF -> pure-embeddings ->
-hybrid-RRF history):
+100 tests currently (**100/100 passing**, zero failures, zero xfails — tests run zero-dependency
+via in-memory SQLite fixture with PostgreSQL JSONB/UUID support, or against live Postgres):
 - `test_guided_synthesis.py` (7): validates `index.html`'s guided-mode wizard synthesis
   (`synthesizeRequirementText()`) via a Python mirror, verified byte-for-byte against the real
   JS before being trusted — 7 scenarios covering every wizard branch including the skip-logic
