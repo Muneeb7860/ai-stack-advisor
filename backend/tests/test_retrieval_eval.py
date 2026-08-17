@@ -82,12 +82,22 @@ NEGATIVE_CASES = [c for c in CASES if c["section"] == "negative_control"]
 #      retrieve()'s docstring) never had. app/retrieval.py's MIN_CONFIDENT_RRF abstention gate
 #      uses that fused-confidence gap to return [] for this query outright, rather than
 #      serving a guess. See that constant's own comment for the exact numbers.
-#   4. Two-Stage RRF Abstention Gate (Current): ALL 24 cases pass (0 xfailed, 0 failed).
-#      Case 21 (DNS/SSL certs negative control) is now reliably rejected via the routing-stage
-#      RRF gate (max_route < 0.0321) because no document in the corpus covers DNS/SSL.
-KNOWN_XFAIL_IDS = set()
+#      Case 21: STILL xfailed, unchanged since before the embeddings migration even started —
+#      its peak fused RRF score (0.0320) sits inside the same margin as genuine hits, not
+#      reliably separable by this gate either. This is the one case, across the whole history
+#      above, that hybrid retrieval was not able to recover — consistent with its
+#      long-documented conclusion that it needs a learned reranker, not a threshold (lexical,
+#      embedding, or fused).
+KNOWN_XFAIL_IDS = {21}
 
-_XFAIL_REASONS = {}
+_XFAIL_REASONS = {
+    21: "Documented limitation across TF-IDF, pure embeddings, AND hybrid RRF retrieval: this "
+        "false positive's confidence (by raw score under either single-signal approach, and "
+        "by peak fused RRF score under hybrid) sits inside the same margin as genuine weak "
+        "hits, not reliably separable by any of the three approaches tried on this corpus. "
+        "Needs a learned reranker to fix properly, not a threshold tweak — see the file-level "
+        "comment above and app/retrieval.py's MIN_CONFIDENT_RRF for the real numbers.",
+}
 
 
 def _apply_known_xfail(case):

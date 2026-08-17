@@ -1,19 +1,61 @@
-"""MCP tool wrapper — v2 milestone 4 (see backend/KICKOFF_BRIEF.md,
-docs/AI-Stack-Advisor-DDD.docx Section 3.4 "Integration Context", and PRD FR-29).
+"""Model Context Protocol (MCP) server for ai-stack-advisor.
 
-Port decision (was an open question in this file's original stub — now decided and recorded
-as docs/adr/0001-mcp-rule-engine-port.md): detectSignals()/pickX() are ported to Python in
-app/rule_engine.py, option (a) from the original docstring, not shelled out to Node or proxied
-over HTTP. That port was verified byte-for-byte against index.html's actual JavaScript across
-13 scenarios — the 5 built-in examples plus 8 covering every bug validation-report.md found
-and fixed (negation handling, on-prem override, warehouse detection, team-size conflicts,
-the small-team regex fallback) — with zero diffs, before this file was written. See the ADR
-for the verification method; see app/rule_engine.py's own docstring for the port-discipline
-rule going forward (transliterate index.html's current source, don't re-derive from the
-PRD/BRD's description of what it "should" do).
+Exposes recommend_stack as an MCP tool (decision #4 in KICKOFF_BRIEF.md — "reusable by
+agents and developer tooling, not trapped behind a UI").
 
-This module is a thin wrapper — a Conformist relationship to the Analysis Context (DDD 3.4):
-it adapts the MCP protocol onto rule_engine.recommend_stack() without changing that function's
+Decisions & architecture:
+- Reuses the deterministic rule engine (app/rule_engine.py) directly — no second
+  implementation of the recommendations, zero divergence between web app and MCP tool.
+- Reuses the shared Analysis model/table: every MCP invocation persists an Analysis row
+  (with the detected signals and recommendations JSON), identical to how the web app's
+  guided-mode/freetext inputs persist analyses. A tool call via Claude Desktop or an agent
+  framework is a first-class analysis, visible to /api/share and /api/refine just like a UI
+  session.
+- Protocol layer: built on Python's official mcp SDK. Provides cross-compatibility across
+  both mcp>=2.0 (MCPServer) in the container environment and local FastMCP SDK variants.
+- Tool input schema: mirrors the free-text input of index.html. A single `requirement_text`
+  string is enough for the rule engine to detect 45+ architectural dimensions. We
+  deliberately avoid forcing callers to pass 10 separate arguments (cloud preference, team
+  size, etc.) — the tool's whole value proposition is that it infers those signals from
+  natural-language prose, exactly like a human Solution Architect would. Callers CAN include
+  specific constraints ("must use GCP", "team of 3") directly in the text.
+- Tool return value: returns the full recommendation payload as structured JSON matching
+  the API schema. The MCP client formats it for the user or downstream agent.
+- Error handling: if the rule engine raises (e.g. empty input), the exception propagates as
+  an MCP tool error with the message intact. We do NOT catch and return a fake success dict —
+  MCP clients handle tool failures natively.
+- Testing: tests/test_mcp_server.py tests the MCP server logic directly without needing a
+  live stdio connection or a running Claude Desktop instance.
+
+Zero divergence: this file imports recommend_stack from app.rule_engine — it does NOT
+re-implement any recommendation logic. If a recommendation changes, it changes in
+rule_engine.py and is immediately live in both the web app and the MCP server.
+
+FastAPI decoupled: this server does NOT import or mount into app.main. It's a standalone
+entry point (run with `python -m app.mcp.server`) designed for stdio transport. It shares
+the database (app.db, app.models) and configuration (app.config) with the API, but has no
+HTTP routes of its own. This keeps the MCP server lightweight and runnable in environments
+where FastAPI is not needed (e.g., local CLI tools, Claude Desktop config).
+
+Clean separation: app/rule_engine.py has no dependency on mcp. It remains a pure-Python
+domain module. The MCP server is a thin adapter on top of it. This satisfies DDD layer
+isolation — the domain (rule_engine) knows nothing about the delivery mechanism (MCP,
+FastAPI, CLI). You can use rule_engine.py anywhere without pulling in MCP dependencies.
+
+Single tool: we expose ONE tool (`recommend_stack`), not 10 fine-grained tools (`pick_cloud`,
+`pick_database`, etc.). Why:
+1. The 45+ architectural decisions are interdependent — pick_database depends on cloud,
+   throughput, AND team size. Calling them independently loses the cross-cutting synthesis
+   that makes the advisor valuable.
+2. An agent calling this tool wants the full architecture in one turn, not 10 round-trips.
+3. The web app generates all categories in a single pass; the MCP tool should match that
+   behavior.
+4. Callers that only care about one category can read that specific key from the returned
+   JSON dict.
+
+Client-name logging: extracts client metadata from the MCP handshake (e.g. "Claude Desktop",
+"Cursor", "custom-agent") when available, for analytics on which tools/environments are
+driving usage. Best-effort — if the client doesn't provide it, we log None without altering
 behavior or asking it to accommodate MCP-specific concerns.
 
 McpInvocation logging (DDD 4.4): logged the INSTANT the tool is invoked, before the rule
@@ -31,24 +73,38 @@ its own container/component, not a route on the API).
 """
 import sys
 
-from mcp.server.fastmcp import Context, FastMCP
+try:
+    from mcp.server.mcpserver import Context, MCPServer
+    mcp = MCPServer(
+        name="ai-stack-advisor",
+        version="0.1.0",
+        instructions=(
+            "Recommends a full technology + AI architecture (cloud, database, LLM strategy, "
+            "RAG, guardrails, cost/throughput, governance, and more) from a free-text business "
+            "or product requirement. This is the same deterministic rule engine that powers the "
+            "AI Stack Advisor web app (index.html) — not an LLM call, so it's instant and its "
+            "reasoning is fully auditable back to specific keywords/phrases in the input."
+        ),
+    )
+except ImportError:
+    from mcp.server.fastmcp import Context, FastMCP  # type: ignore[no-redef]
+    mcp = FastMCP(  # type: ignore[assignment]
+        "ai-stack-advisor",
+        instructions=(
+            "Recommends a full technology + AI architecture (cloud, database, LLM strategy, "
+            "RAG, guardrails, cost/throughput, governance, and more) from a free-text business "
+            "or product requirement. This is the same deterministic rule engine that powers the "
+            "AI Stack Advisor web app (index.html) — not an LLM call, so it's instant and its "
+            "reasoning is fully auditable back to specific keywords/phrases in the input."
+        ),
+    )
+
 from sqlalchemy import text
 
 from .. import models
 from ..config import settings
 from ..db import SessionLocal, engine
 from ..rule_engine import recommend_stack as _recommend_stack
-
-mcp = FastMCP(
-    "ai-stack-advisor",
-    instructions=(
-        "Recommends a full technology + AI architecture (cloud, database, LLM strategy, "
-        "RAG, guardrails, cost/throughput, governance, and more) from a free-text business "
-        "or product requirement. This is the same deterministic rule engine that powers the "
-        "AI Stack Advisor web app (index.html) — not an LLM call, so it's instant and its "
-        "reasoning is fully auditable back to specific keywords/phrases in the input."
-    ),
-)
 
 
 def _log_and_recommend(requirement_text: str, client_name: str | None) -> dict:
@@ -92,21 +148,32 @@ def _log_and_recommend(requirement_text: str, client_name: str | None) -> dict:
 def _client_name_from_context(ctx: Context) -> str | None:
     """Isolated specifically so this can be unit-tested against a mock shaped like the real
     mcp.types.InitializeRequestParams pydantic model, without needing a live stdio session.
-    Supports both clientInfo (camelCase) and client_info (snake_case) across SDK versions.
+
+    NOTE the attribute is client_info (snake_case), not clientInfo — this got it wrong once
+    already: mcp.types.InitializeRequestParams uses Python attribute names in snake_case
+    (client_info) and camelCase only as its JSON serialization alias (clientInfo). The
+    original version of this function used .clientInfo, which silently returned None via the
+    except-Exception below instead of erroring — confirmed broken by driving a REAL stdio
+    JSON-RPC session end-to-end (initialize → tools/call) and checking the persisted
+    McpInvocation.client_name in Postgres, not just calling this function in-process. Calling
+    the underlying function directly, or even mcp.call_tool() without a live client, would
+    never have caught this — there was no live client_params to read the wrong attribute name
+    from either way. See tests/test_mcp_server.py::test_client_name_from_context_uses_correct_attribute_name
+    for the regression test this bug earned.
     """
     try:
-        session = getattr(ctx, "session", None)
-        if session is None:
-            return None
-        client_params = getattr(session, "client_params", None)
-        if client_params is None:
-            return None
-        info = getattr(client_params, "clientInfo", None) or getattr(client_params, "client_info", None)
-        if info is not None:
-            return getattr(info, "name", None)
-        return None
+        return ctx.session.client_params.client_info.name  # type: ignore[union-attr]
     except Exception:
-        return None
+        try:
+            return ctx.session.client_params.clientInfo.name  # type: ignore[union-attr]
+        except Exception:
+            # Deliberately broad: ctx.session raises ValueError (not AttributeError) outside a
+            # live request context, and client_params/client_info can plausibly be None depending
+            # on the client's handshake (DDD 4.4: this is nullable/best-effort, not a verified
+            # identity). This metadata must never be able to break the actual tool call — but a
+            # broad catch is also exactly why the .clientInfo typo went unnoticed until end-to-end
+            # testing, so it stays paired with a real regression test, not just "trust the catch."
+            return None
 
 
 @mcp.tool()
