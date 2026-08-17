@@ -2887,38 +2887,44 @@ const FLOW_CATS = {
 };
 let flowState = { zoom:1, panX:40, panY:40, graph:null, dragNodeId:null, panning:false, moved:false };
 
-function buildFlowGraph(ctx){
+// Core domain (hexagon center). Pure function of ctx: no document/window/fetch,
+// no file-format strings, no pixel coordinates. Every exporter (Mermaid, Draw.io,
+// SVG) and the Flow View canvas (via layoutFlowGraph below) derive from this same
+// graph instead of each re-deriving their own reduced topology. ctx has the same
+// shape as the destructured `rec` in renderRecommendations, so callers can pass
+// either that or lastRecommendations directly.
+function buildCanonicalArchitectureGraph(ctx){
   const {cloud,gw,iam,lang,arch,compute,msg,mesh,cache,db,containers,obs,fe,cicd,dns,llm,rag,mcp,guardrails,vectorDb} = ctx;
   const nodes = [], edges = [];
-  const N = (id,x,y,cat,title,sub,conf,why,persona,detail) => {
-    nodes.push({id,x,y,cat,color:FLOW_CATS[cat].color,title,sub:sub||'',conf:conf||null,why:why||'',persona:persona||'',detail:detail||null});
+  const N = (id,cat,title,sub,conf,why,persona,detail) => {
+    nodes.push({id,cat,title,sub:sub||'',conf:conf||null,why:why||'',persona:persona||'',detail:detail||null});
     return id;
   };
 
-  N('frontend',40,260,'client','Frontend', fe.v, fe.conf, fe.why, 'Application Architect');
-  N('gateway',300,40,'edge','API Gateway / Edge', gw.v, gw.conf, gw.why, 'Solution Architect');
-  N('iam',300,165,'edge','Identity & Access — '+iam.v, '', iam.conf, iam.why, 'Enterprise Architect',
+  N('frontend','client','Frontend', fe.v, fe.conf, fe.why, 'Application Architect');
+  N('gateway','edge','API Gateway / Edge', gw.v, gw.conf, gw.why, 'Solution Architect');
+  N('iam','edge','Identity & Access — '+iam.v, '', iam.conf, iam.why, 'Enterprise Architect',
     [`<b>Best bet: ${iam.v}</b> — ${iam.why}`, ...iam.alternatives.map(v=>`<b>${v.name}</b> (${v.cat}) — ${v.bestFor}. ${v.pricing}`), ...iam.complementary.map(c=>`<b>+ ${c.vendor}</b> (${c.cat} add-on) — ${c.why}`)]);
-  N('dns',300,290,'edge','DNS', dns.v, dns.conf, 'DNS routing and edge protection for your domain.', 'Solution Architect');
-  N('cloud',560,30,'compute','Cloud Provider', cloud.v, cloud.conf, cloud.why, 'Enterprise Architect');
-  N('arch',560,155,'compute','Architecture Style', arch.v, arch.conf, arch.why, 'Solution Architect');
-  N('computemodel',560,280,'compute','Compute Model', compute.v, compute.conf, compute.why, 'Solution Architect');
-  N('containers',560,405,'compute','Containers / Orchestration', containers.v, containers.conf, containers.why, 'SDE');
-  N('lang',560,530,'compute','Backend Language(s)', lang.v, lang.conf, lang.why, 'Application Architect');
-  N('db',820,90,'data','Primary Database', db.v, db.conf, db.why, 'Application Architect');
-  N('cache',820,215,'data','Caching', cache.v, cache.conf, cache.why, 'SDE');
-  N('messaging',820,340,'data','Messaging / Streaming', msg.v, msg.conf, msg.why, 'Application Architect');
-  N('mesh',820,465,'data','Service Mesh', mesh.v, mesh.conf, mesh.why, 'Enterprise Architect');
+  N('dns','edge','DNS', dns.v, dns.conf, 'DNS routing and edge protection for your domain.', 'Solution Architect');
+  N('cloud','compute','Cloud Provider', cloud.v, cloud.conf, cloud.why, 'Enterprise Architect');
+  N('arch','compute','Architecture Style', arch.v, arch.conf, arch.why, 'Solution Architect');
+  N('computemodel','compute','Compute Model', compute.v, compute.conf, compute.why, 'Solution Architect');
+  N('containers','compute','Containers / Orchestration', containers.v, containers.conf, containers.why, 'SDE');
+  N('lang','compute','Backend Language(s)', lang.v, lang.conf, lang.why, 'Application Architect');
+  N('db','data','Primary Database', db.v, db.conf, db.why, 'Application Architect');
+  N('cache','data','Caching', cache.v, cache.conf, cache.why, 'SDE');
+  N('messaging','data','Messaging / Streaming', msg.v, msg.conf, msg.why, 'Application Architect');
+  N('mesh','data','Service Mesh', mesh.v, mesh.conf, mesh.why, 'Enterprise Architect');
 
-  N('llm',1080,30,'ai','LLM — '+llm[0].name, llm.length>1 ? `+${llm.length-1} more model(s)` : llm[0].tag, null, '', 'AI Architect', llm.map(p=>`<b>${p.name}</b> — ${p.tag}`));
-  let aiY = 155, ragId = null, vecId = null;
-  if(rag.name !== 'RAG likely not required'){ N('rag',1080,aiY,'ai','RAG — '+rag.name, '', rag.conf, rag.why, 'AI Architect'); ragId='rag'; aiY += 125; }
-  if(vectorDb.needed){ N('vectordb',1080,aiY,'ai','Vector DB', vectorDb.dbChoice, null, vectorDb.why, 'AI Architect'); vecId='vectordb'; aiY += 125; }
-  N('mcp',1080,aiY,'ai','MCP Server(s)', mcp.length+' server type(s)', null, '', 'AI Architect', mcp); aiY += 125;
-  N('guardrails',1080,aiY,'ai','Guardrails', guardrails.length+' layer(s)', null, '', 'AI Architect', guardrails);
+  N('llm','ai','LLM — '+llm[0].name, llm.length>1 ? `+${llm.length-1} more model(s)` : llm[0].tag, null, '', 'AI Architect', llm.map(p=>`<b>${p.name}</b> — ${p.tag}`));
+  let ragId = null, vecId = null;
+  if(rag.name !== 'RAG likely not required'){ N('rag','ai','RAG — '+rag.name, '', rag.conf, rag.why, 'AI Architect'); ragId='rag'; }
+  if(vectorDb.needed){ N('vectordb','ai','Vector DB', vectorDb.dbChoice, null, vectorDb.why, 'AI Architect'); vecId='vectordb'; }
+  N('mcp','ai','MCP Server(s)', mcp.length+' server type(s)', null, '', 'AI Architect', mcp);
+  N('guardrails','ai','Guardrails', guardrails.length+' layer(s)', null, '', 'AI Architect', guardrails);
 
-  N('observability',1340,180,'ops','Observability', obs.v, obs.conf, obs.why, 'SDE / TPM');
-  N('cicd',1340,305,'ops','CI/CD & Deployment', cicd.v, cicd.conf, cicd.why, 'SDE');
+  N('observability','ops','Observability', obs.v, obs.conf, obs.why, 'SDE / TPM');
+  N('cicd','ops','CI/CD & Deployment', cicd.v, cicd.conf, cicd.why, 'SDE');
 
   const E = (a,b) => edges.push({from:a,to:b});
   E('frontend','gateway'); E('gateway','iam'); E('gateway','cloud');
@@ -2931,6 +2937,40 @@ function buildFlowGraph(ctx){
   E('computemodel','observability'); E('computemodel','cicd');
 
   return {nodes, edges};
+}
+
+// Layout adapter: decorates the canonical graph with pixel positions + theme colors
+// for the Flow View canvas. Presentation concern only — never consumed by exporters.
+const FLOW_LAYOUT = {
+  frontend:[40,260], gateway:[300,40], iam:[300,165], dns:[300,290],
+  cloud:[560,30], arch:[560,155], computemodel:[560,280], containers:[560,405], lang:[560,530],
+  db:[820,90], cache:[820,215], messaging:[820,340], mesh:[820,465],
+  llm:[1080,30], rag:[1080,155], vectordb:[1080,280], mcp:[1080,405], guardrails:[1080,530],
+  observability:[1340,180], cicd:[1340,305],
+};
+function layoutFlowGraph(graph){
+  // rag/vectordb/mcp/guardrails stack vertically only over whichever of them are
+  // actually present, matching the original buildFlowGraph's aiY accumulation.
+  const aiOrder = ['llm','rag','vectordb','mcp','guardrails'];
+  const presentAiIds = new Set(graph.nodes.map(n=>n.id));
+  let aiY = 155;
+  const aiPos = {};
+  aiOrder.forEach(id=>{
+    if(!presentAiIds.has(id)) return;
+    if(id==='llm'){ aiPos[id] = 30; return; }
+    aiPos[id] = aiY;
+    aiY += 125;
+  });
+  return {
+    nodes: graph.nodes.map(n=>{
+      const [x,y] = aiOrder.includes(n.id) ? [1080, aiPos[n.id]] : (FLOW_LAYOUT[n.id]||[0,0]);
+      return {...n, x, y, color:FLOW_CATS[n.cat].color};
+    }),
+    edges: graph.edges,
+  };
+}
+function buildFlowGraph(ctx){
+  return layoutFlowGraph(buildCanonicalArchitectureGraph(ctx));
 }
 
 function truncateFlowText(str, max){
@@ -4530,66 +4570,83 @@ function onExportAdrClick(){
   }
 }
 
+// Shared tier styling used by all three outbound serializers below, keyed by the
+// canonical graph's node.cat. Mirrors FLOW_CATS/the original per-exporter palettes
+// so Flow View, Mermaid, Draw.io, and SVG stay visually consistent.
+const TIER_STYLE = {
+  client: { fill: '#EAF0F6', stroke: '#1F3B57', text: '#1F3B57', mermaidClass: 'client' },
+  edge:   { fill: '#E1EAF2', stroke: '#2E5C8A', text: '#1F3B57', mermaidClass: 'edgeTier' },
+  compute:{ fill: '#E1EAF2', stroke: '#2E5C8A', text: '#1F3B57', mermaidClass: 'compute' },
+  data:   { fill: '#EAF6EE', stroke: '#2E7D4F', text: '#1F3B57', mermaidClass: 'data' },
+  ai:     { fill: '#FDF3E7', stroke: '#A85D00', text: '#A85D00', mermaidClass: 'ai' },
+  ops:    { fill: '#F3EBF9', stroke: '#7C5BEF', text: '#1F3B57', mermaidClass: 'ops' },
+};
+const TIER_ORDER = ['client', 'edge', 'compute', 'data', 'ai', 'ops'];
+const TIER_LABEL = { client: 'Client', edge: 'Edge', compute: 'Compute', data: 'Data', ai: 'AI', ops: 'Ops' };
+const EDGE_LABELS = {
+  'frontend->gateway': 'HTTPS / WSS', 'gateway->iam': 'AuthN / AuthZ', 'gateway->cloud': 'Routes to',
+  'cloud->arch': 'Hosts', 'arch->computemodel': 'Implements', 'computemodel->containers': 'Runs on',
+  'computemodel->lang': 'Written in', 'computemodel->db': 'Queries / Mutations',
+  'computemodel->cache': 'Read/Write Cache', 'computemodel->messaging': 'Async Tasks',
+  'computemodel->mesh': 'Service-to-service', 'computemodel->llm': 'Inference / RAG',
+  'llm->rag': 'Retrieval', 'rag->vectordb': 'Vector Search', 'llm->mcp': 'Tool calls',
+  'guardrails->llm': 'Policy checks', 'computemodel->observability': 'Metrics & Traces',
+  'computemodel->cicd': 'Deploys via',
+};
+
 function generateDrawioXml(rec, signals) {
-  const categories = [
-    { key: 'Frontend', name: 'Frontend Client', color: '#EAF0F6', stroke: '#1F3B57' },
-    { key: 'Gateway', name: 'API Gateway / Routing', color: '#E1EAF2', stroke: '#2E5C8A' },
-    { key: 'Compute', name: 'Compute / Application', color: '#E1EAF2', stroke: '#2E5C8A' },
-    { key: 'Database', name: 'Primary Database', color: '#EAF6EE', stroke: '#2E7D4F' },
-    { key: 'AI', name: 'AI / Model Serving', color: '#FDF3E7', stroke: '#A85D00' },
-    { key: 'Cache', name: 'Cache Layer', color: '#EAF6EE', stroke: '#2E7D4F' },
-    { key: 'Messaging', name: 'Message Queue / Events', color: '#E1EAF2', stroke: '#2E5C8A' },
-    { key: 'Observability', name: 'Observability & Monitoring', color: '#F3EBF9', stroke: '#7C5BEF' }
-  ];
+  const graph = buildCanonicalArchitectureGraph(rec);
+  const TIER_X = { client: 60, edge: 340, compute: 620, data: 900, ai: 1180, ops: 1460 };
 
   let cellsXml = `<mxCell id="0"/><mxCell id="1" parent="0"/>`;
-  let y = 70;
-  let prevId = null;
-
   cellsXml += `
     <mxCell id="title_node" value="&lt;b&gt;AI Stack Advisor — Architecture Blueprint&lt;/b&gt;&lt;br/&gt;&lt;small&gt;Generated: ${new Date().toLocaleDateString()}&lt;/small&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1F3B57;strokeColor=#1F3B57;fontFamily=Helvetica;fontSize=13;fontColor=#FFFFFF;" vertex="1" parent="1">
       <mxGeometry x="60" y="20" width="360" height="40" as="geometry"/>
     </mxCell>
   `;
 
-  let idx = 2;
-  for (const cat of categories) {
-    const val = getPickVal(rec, cat.key);
-    if (!val) continue;
-    const nodeId = `node_${idx++}`;
-    const escapedCat = escapeXml(cat.name);
-    const escapedVal = escapeXml(val);
+  const yByTier = {};
+  const nodeIds = new Set(graph.nodes.map(n => n.id));
+  for (const node of graph.nodes) {
+    const tier = TIER_STYLE[node.cat];
+    const x = TIER_X[node.cat];
+    const y = (yByTier[node.cat] = (yByTier[node.cat] || 70));
+    yByTier[node.cat] += 90;
+
+    const escapedTitle = escapeXml(node.title);
+    const escapedSub = escapeXml(node.sub || '');
     // Real bug found via live verification: a literal " inside this inline style attribute
     // breaks the OUTER value="..." XML attribute it's nested in — DOMParser confirmed
     // "attributes construct error" on the generated file, meaning draw.io would fail to open
     // it. escapeXml() correctly escapes the actual pick text; the fix here is using single
     // quotes for this hardcoded inner HTML attribute so it can never collide with the double-
     // quoted outer XML attribute, regardless of what's escaped elsewhere.
-    const label = `&lt;b&gt;${escapedCat}&lt;/b&gt;&lt;br/&gt;&lt;span style='font-size:11px;'&gt;${escapedVal}&lt;/span&gt;`;
+    const label = escapedSub
+      ? `&lt;b&gt;${escapedTitle}&lt;/b&gt;&lt;br/&gt;&lt;span style='font-size:11px;'&gt;${escapedSub}&lt;/span&gt;`
+      : `&lt;b&gt;${escapedTitle}&lt;/b&gt;`;
 
     cellsXml += `
-      <mxCell id="${nodeId}" value="${label}" style="rounded=1;whiteSpace=wrap;html=1;fillColor=${cat.color};strokeColor=${cat.stroke};fontFamily=Helvetica;fontSize=12;fontColor=#1F3B57;strokeWidth=1.5;" vertex="1" parent="1">
-        <mxGeometry x="100" y="${y}" width="280" height="55" as="geometry"/>
+      <mxCell id="n_${node.id}" value="${label}" style="rounded=1;whiteSpace=wrap;html=1;fillColor=${tier.fill};strokeColor=${tier.stroke};fontFamily=Helvetica;fontSize=12;fontColor=${tier.text};strokeWidth=1.5;" vertex="1" parent="1">
+        <mxGeometry x="${x}" y="${y}" width="260" height="55" as="geometry"/>
       </mxCell>
     `;
+  }
 
-    if (prevId) {
-      const edgeId = `edge_${idx++}`;
-      cellsXml += `
-        <mxCell id="${edgeId}" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#5B6B7C;strokeWidth=1.5;" edge="1" parent="1" source="${prevId}" target="${nodeId}">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
-      `;
-    }
-
-    prevId = nodeId;
-    y += 85;
+  let edgeIdx = 0;
+  for (const e of graph.edges) {
+    if (!nodeIds.has(e.from) || !nodeIds.has(e.to)) continue;
+    const label = escapeXml(EDGE_LABELS[`${e.from}->${e.to}`] || '');
+    cellsXml += `
+      <mxCell id="edge_${edgeIdx++}" value="${label}" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#5B6B7C;strokeWidth=1.5;fontSize=10;fontColor=#5B6B7C;" edge="1" parent="1" source="n_${e.from}" target="n_${e.to}">
+        <mxGeometry relative="1" as="geometry"/>
+      </mxCell>
+    `;
   }
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <mxfile host="app.diagrams.net" modified="${new Date().toISOString()}" agent="AI-Stack-Advisor" version="21.0.0">
   <diagram id="stack-architecture" name="AI Stack Architecture">
-    <mxGraphModel dx="1000" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100">
+    <mxGraphModel dx="1000" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1200">
       <root>${cellsXml}</root>
     </mxGraphModel>
   </diagram>
@@ -4603,43 +4660,40 @@ function onExportDrawioClick() {
 }
 
 function generateMermaidDiagram(rec, signals) {
-  let mmd = 'graph TD\n';
-  mmd += '  %% AI Stack Advisor Architecture Export\n';
-  mmd += '  classDef client fill:#EAF0F6,stroke:#1F3B57,stroke-width:1.5px,color:#1F3B57;\n';
-  mmd += '  classDef edgeTier fill:#E1EAF2,stroke:#2E5C8A,stroke-width:1.5px,color:#1F3B57;\n';
-  mmd += '  classDef compute fill:#E1EAF2,stroke:#2E5C8A,stroke-width:1.5px,color:#1F3B57;\n';
-  mmd += '  classDef data fill:#EAF6EE,stroke:#2E7D4F,stroke-width:1.5px,color:#1F3B57;\n';
-  mmd += '  classDef ai fill:#FDF3E7,stroke:#A85D00,stroke-width:1.5px,color:#A85D00;\n';
-  mmd += '  classDef ops fill:#F3EBF9,stroke:#7C5BEF,stroke-width:1.5px,color:#1F3B57;\n\n';
-
+  const graph = buildCanonicalArchitectureGraph(rec);
   const clean = (s) => (s || '').replace(/["[\](){}]/g, '').replace(/\s+/g, ' ').trim();
+  const nodeIds = new Set(graph.nodes.map(n => n.id));
 
-  const fe = clean(getPickVal(rec, 'Frontend')) || 'Web Client';
-  const gw = clean(getPickVal(rec, 'Gateway')) || 'API Gateway';
-  const comp = clean(getPickVal(rec, 'Compute')) || 'Application Backend';
-  const db = clean(getPickVal(rec, 'Database')) || 'PostgreSQL';
-  const ai = clean(getPickVal(rec, 'AI')) || 'LLM Engine';
-  const cache = clean(getPickVal(rec, 'Cache'));
-  const msg = clean(getPickVal(rec, 'Messaging'));
-  const obs = clean(getPickVal(rec, 'Observability'));
+  let mmd = 'graph TD\n';
+  mmd += '  %% AI Stack Advisor Architecture Export — full topology from the canonical graph\n';
+  for (const cat of TIER_ORDER) {
+    mmd += `  classDef ${TIER_STYLE[cat].mermaidClass} fill:${TIER_STYLE[cat].fill},stroke:${TIER_STYLE[cat].stroke},stroke-width:1.5px,color:${TIER_STYLE[cat].text};\n`;
+  }
+  mmd += '\n';
 
-  mmd += `  Client["Frontend Client<br/><b>${fe}</b>"]:::client\n`;
-  mmd += `  Gateway["API Gateway / Edge<br/><b>${gw}</b>"]:::edgeTier\n`;
-  mmd += `  Compute["Backend Compute<br/><b>${comp}</b>"]:::compute\n`;
-  mmd += `  DB[("Primary Database<br/><b>${db}</b>")]:::data\n`;
-  mmd += `  AI["AI / Model Serving<br/><b>${ai}</b>"]:::ai\n`;
+  const byTier = {};
+  for (const node of graph.nodes) (byTier[node.cat] = byTier[node.cat] || []).push(node);
 
-  if (cache) mmd += `  Cache[("Cache Layer<br/><b>${cache}</b>")]:::data\n`;
-  if (msg) mmd += `  Queue["Message Queue<br/><b>${msg}</b>"]:::compute\n`;
-  if (obs) mmd += `  Obs["Observability<br/><b>${obs}</b>"]:::ops\n`;
+  for (const tier of TIER_ORDER) {
+    const nodes = byTier[tier];
+    if (!nodes || !nodes.length) continue;
+    mmd += `  subgraph ${tier}Tier["${TIER_LABEL[tier]}"]\n`;
+    for (const node of nodes) {
+      const title = clean(node.title);
+      const sub = clean(node.sub);
+      const label = sub ? `${title}<br/><b>${sub}</b>` : `<b>${title}</b>`;
+      const shape = tier === 'data' ? `[("${label}")]` : `["${label}"]`;
+      mmd += `    ${node.id}${shape}:::${TIER_STYLE[tier].mermaidClass}\n`;
+    }
+    mmd += '  end\n';
+  }
 
-  mmd += '\n  Client -->|HTTPS / WSS| Gateway\n';
-  mmd += '  Gateway -->|Internal Routing| Compute\n';
-  mmd += '  Compute -->|Queries / Mutations| DB\n';
-  mmd += '  Compute -->|Inference / RAG| AI\n';
-  if (cache) mmd += '  Compute -->|Read/Write Cache| Cache\n';
-  if (msg) mmd += '  Compute -->|Async Tasks| Queue\n';
-  if (obs) mmd += '  Compute -.->|Metrics & Traces| Obs\n';
+  mmd += '\n';
+  for (const e of graph.edges) {
+    if (!nodeIds.has(e.from) || !nodeIds.has(e.to)) continue;
+    const label = EDGE_LABELS[`${e.from}->${e.to}`];
+    mmd += label ? `  ${e.from} -->|${label}| ${e.to}\n` : `  ${e.from} --> ${e.to}\n`;
+  }
 
   return mmd;
 }
@@ -4670,27 +4724,26 @@ function onOpenDiagramsNetClick() {
 }
 
 function generateSvgDiagram(rec, signals) {
-  const categories = [
-    { name: 'Frontend', val: getPickVal(rec, 'Frontend') || 'Web App', color: '#EAF0F6', stroke: '#1F3B57' },
-    { name: 'API Gateway', val: getPickVal(rec, 'Gateway') || 'API Gateway', color: '#E1EAF2', stroke: '#2E5C8A' },
-    { name: 'Compute', val: getPickVal(rec, 'Compute') || 'Backend Services', color: '#E1EAF2', stroke: '#2E5C8A' },
-    { name: 'Database', val: getPickVal(rec, 'Database') || 'PostgreSQL', color: '#EAF6EE', stroke: '#2E7D4F' },
-    { name: 'AI / LLM', val: getPickVal(rec, 'AI') || 'Claude Sonnet + RAG', color: '#FDF3E7', stroke: '#A85D00' }
-  ];
+  const graph = buildCanonicalArchitectureGraph(rec);
 
   let y = 60;
   let boxes = '';
-  categories.forEach((c, i) => {
-    boxes += `
-      <rect x="50" y="${y}" width="400" height="50" rx="8" fill="${c.color}" stroke="${c.stroke}" stroke-width="1.5"/>
-      <text x="65" y="${y + 22}" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="700" fill="#1F3B57">${escapeXml(c.name)}</text>
-      <text x="65" y="${y + 40}" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#5B6B7C">${escapeXml(c.val)}</text>
-    `;
-    if (i < categories.length - 1) {
-      boxes += `<line x1="250" y1="${y + 50}" x2="250" y2="${y + 70}" stroke="#5B6B7C" stroke-width="1.5" stroke-dasharray="3,3"/>`;
+  let lastTier = null;
+  for (const node of graph.nodes) {
+    const style = TIER_STYLE[node.cat];
+    if (lastTier !== null && lastTier !== node.cat) {
+      boxes += `<line x1="250" y1="${y + 4}" x2="250" y2="${y + 16}" stroke="#5B6B7C" stroke-width="1.5" stroke-dasharray="3,3"/>`;
+      y += 12;
     }
-    y += 70;
-  });
+    boxes += `
+      <rect x="50" y="${y}" width="400" height="50" rx="8" fill="${style.fill}" stroke="${style.stroke}" stroke-width="1.5"/>
+      <text x="65" y="${y + 20}" font-family="system-ui, -apple-system, sans-serif" font-size="9.5" font-weight="700" letter-spacing="0.5" fill="${style.stroke}">${escapeXml(TIER_LABEL[node.cat].toUpperCase())}</text>
+      <text x="65" y="${y + 34}" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="700" fill="#1F3B57">${escapeXml(node.title)}</text>
+      ${node.sub ? `<text x="65" y="${y + 47}" font-family="system-ui, -apple-system, sans-serif" font-size="10.5" fill="#5B6B7C">${escapeXml(node.sub)}</text>` : ''}
+    `;
+    y += 62;
+    lastTier = node.cat;
+  }
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 ${y + 20}" width="100%" height="100%">
     <rect width="100%" height="100%" fill="#0A0C11" rx="12"/>
