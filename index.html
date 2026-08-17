@@ -259,6 +259,7 @@
   .stack-card h3{margin:0 0 3px; font-size:var(--fs-xs); color:var(--muted); text-transform:uppercase; letter-spacing:0.03em; font-weight:600;}
   .stack-card .pick{font-size:var(--fs-md); font-weight:700; margin:3px 0 6px; color:var(--text); letter-spacing:-0.01em; font-family:var(--font-mono);}
   .stack-card .why{font-size:var(--fs-sm); color:var(--muted); line-height:1.48;}
+  .stack-card .ask-prompt{font-size:var(--fs-xs); color:var(--muted); line-height:1.45; margin-top:7px; padding:7px 9px; border:1px dashed var(--border); border-radius:var(--radius-sm); background:var(--chip);}
   .conf{
     flex-shrink:0; display:inline-flex; align-items:center; gap:5px;
     font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em;
@@ -2522,7 +2523,7 @@ function renderRecommendations(s, rec){
   const sec = (id, navLabel, titleHtml, bodyHtml) => { if (visibleSections.has(id)) sections.push({id, navLabel, titleHtml, bodyHtml}); };
 
   sec('stack', 'Stack', 'Core Technical Stack', `<div class="grid">${stackCards.map(([title, pick, why, conf, persona, altToggle, basis])=>
-    `<div class="stack-card card-conf-${conf||'low'}"><div class="head"><h3>${title}</h3><div style="display:flex; align-items:flex-start; gap:6px; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end;">${renderExitCostBadge(title)}<span class="conf conf-${conf||'low'}">${confLabel(conf)}</span>${renderBasisBadge(basis)}</div></div><div class="pick">${pick}</div><div class="why">${why}</div><div class="persona">${persona}</div>${altToggle||''}</div>`
+    `<div class="stack-card card-conf-${conf||'low'}"><div class="head"><h3>${title}</h3><div style="display:flex; align-items:flex-start; gap:6px; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end;">${renderExitCostBadge(title)}${renderBasisBadge(basis)}</div></div><div class="pick">${pick}</div><div class="why">${why}</div>${renderAskPrompt(STACK_CARD_CATEGORY[title], basis)}<div class="persona">${persona}</div>${altToggle||''}</div>`
   ).join('')}</div>`);
 
   sec('iamcompare', 'IAM Options', 'Identity Provider Options <span style="color:var(--muted); text-transform:none; letter-spacing:0; font-weight:400;">— Okta vs. Entra ID vs. Ping/ForgeRock vs. OneLogin vs. JumpCloud, plus PAM/IGA</span>',
@@ -3579,6 +3580,15 @@ function renderExitCostBadge(title){
   return `<span class="exit-cost-badge" title="Expensive to change later — worth the extra review time before committing">⚠️ Hard to reverse</span>`;
 }
 
+// Labels are the ui-craft brief's exact spec (Phase 4 table) — the badge must show human
+// prose, never the raw basis id. Showing an identifier like "heuristic-default" as literal UI
+// copy is exactly the "reads as machine-generated" pattern this whole pass exists to remove.
+const BASIS_LABELS = {
+  'stated': 'You told us',
+  'constraint-derived': 'Forced by a constraint',
+  'consensus': 'Industry consensus',
+  'heuristic-default': 'No signal — assumed',
+};
 const BASIS_DESCRIPTIONS = {
   'stated': 'User-stated: explicitly named in requirements or wizard choices',
   'constraint-derived': 'Constraint-derived: forced by detected technical or compliance constraints',
@@ -3588,8 +3598,35 @@ const BASIS_DESCRIPTIONS = {
 
 function renderBasisBadge(basis){
   if (!basis) return '';
+  const label = BASIS_LABELS[basis] || basis;
   const desc = BASIS_DESCRIPTIONS[basis] || basis;
-  return `<span class="conf-basis conf-basis-${basis}" title="${desc}">${basis}</span>`;
+  return `<span class="conf-basis conf-basis-${basis}" title="${desc}">${label}</span>`;
+}
+
+// Phase 4's second requirement: "when the basis is heuristic-default, the UI should ask for
+// the missing signal rather than assert a recommendation." Reuses STACK_CARD_SIGNALS'S own
+// category naming so the prompt names a real, specific thing to add — not a generic
+// "tell us more" — same discipline as renderWhySignals() below, which reads the same map for
+// the opposite case (explaining a signal that DID fire).
+const ASK_PROMPTS = {
+  cloud: 'your cloud provider (AWS/Azure/GCP) or an on-prem requirement',
+  gateway: 'your security/compliance needs or expected traffic scale',
+  iam: 'your identity provider (Okta/Entra/etc.), team size, or compliance scope',
+  languages: 'a backend language your team already uses',
+  architecture: 'your team size or compliance requirements',
+  compute: 'your team size, expected scale, or an on-prem requirement',
+  messaging: 'expected traffic scale and real-time requirements',
+  mesh: 'a service-mesh/mTLS requirement, if you have one',
+  database: 'a specific database your team already uses, or your data shape (structured vs. unstructured)',
+  containers: 'Docker/Kubernetes experience, team size, or an on-prem requirement',
+  observability: 'a monitoring tool your team already uses',
+  frontend: 'a frontend framework your team already uses, or whether this is mobile/web',
+  cicd: 'a CI/CD tool your team already uses',
+  dns: 'your cloud provider, if you have one',
+};
+function renderAskPrompt(cat, basis){
+  if (basis !== 'heuristic-default' || !ASK_PROMPTS[cat]) return '';
+  return `<div class="ask-prompt">No specific signal for this — mention ${ASK_PROMPTS[cat]} in your requirements for a grounded pick instead of this default.</div>`;
 }
 
 // "Why this pick" — maps each stack card to the exact signal keys its pickX() function actually
