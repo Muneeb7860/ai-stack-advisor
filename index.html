@@ -2663,9 +2663,63 @@ function renderRecommendations(s, rec){
   // above regardless — cheap, and keeps this function's shape simple.
   const sec = (id, navLabel, titleHtml, bodyHtml) => { if (visibleSections.has(id)) sections.push({id, navLabel, titleHtml, bodyHtml}); };
 
-  sec('stack', 'Stack', 'Core Technical Stack', `<div class="grid">${stackCards.map(([title, pick, why, conf, persona, altToggle, basis])=>
-    `<div class="stack-card card-conf-${conf||'low'}"><div class="head"><h3>${title}</h3><div style="display:flex; align-items:flex-start; gap:6px; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end;">${renderExitCostBadge(title)}${renderBasisBadge(basis)}</div></div><div class="pick">${pick}</div><div class="why">${why}</div>${renderAskPrompt(STACK_CARD_CATEGORY[title], basis)}<div class="persona">${persona}</div>${altToggle||''}</div>`
-  ).join('')}</div>`);
+  const STACK_CARD_NODE_MAP = {
+    'Cloud Provider': 'cloud',
+    'API Gateway / Edge': 'gateway',
+    'Identity & Access (IAM)': 'iam',
+    'Backend Language(s)': 'lang',
+    'Architecture Style': 'arch',
+    'Compute Model': 'computemodel',
+    'Messaging / Streaming': 'messaging',
+    'Service Mesh': 'mesh',
+    'Caching': 'cache',
+    'Primary Database(s)': 'db',
+    'Containers / Orchestration': 'containers',
+    'Observability': 'observability',
+    'Frontend': 'frontend',
+    'CI/CD & Deployment': 'cicd',
+    'DNS': 'dns'
+  };
+
+  const canonicalGraphForCards = buildCanonicalArchitectureGraph(rec, s);
+  const cardOppMap = new Map();
+  canonicalGraphForCards.nodes.forEach(n => {
+    if (n.opportunities && n.opportunities.length) cardOppMap.set(n.id, n.opportunities);
+  });
+
+  const renderCardAiOppDrawer = (nodeId) => {
+    const opps = cardOppMap.get(nodeId);
+    if (!opps || !opps.length) return '';
+    const isAllGap = opps.every(o => o.type === 'gap');
+    const badgeLabel = isAllGap ? `✨ AI Leverage (${opps.length})` : `⚡ AI Optimization (${opps.length})`;
+    return `
+      <details class="card-ai-opp-drawer" style="margin-top:10px; border-top:1px dashed var(--border); padding-top:8px;">
+        <summary style="cursor:pointer; font-size:11px; font-weight:700; color:#e0a23c; display:flex; align-items:center; justify-content:space-between; list-style:none;">
+          <span>${badgeLabel}</span>
+          <span style="font-size:10px; opacity:0.75;">Details ▾</span>
+        </summary>
+        <div style="margin-top:8px; display:flex; flex-direction:column; gap:6px;">
+          ${opps.map(o => `
+            <div style="background:rgba(224,162,60,0.06); border:1px solid rgba(224,162,60,0.25); border-radius:6px; padding:7px 9px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
+                <strong style="font-size:11.5px; color:var(--text);">${o.name}</strong>
+                <span class="conf conf-${o.complexity === 'Low' ? 'high' : o.complexity === 'Medium' ? 'medium' : 'low'}" style="font-size:9.5px; padding:1px 5px;">${o.complexity}</span>
+              </div>
+              <div style="font-size:11px; color:var(--muted); line-height:1.4;">${o.rationale}</div>
+              <div style="font-size:10.5px; color:var(--accent); margin-top:3px;"><b>Tech:</b> ${o.tech}</div>
+              ${o.prerequisites && o.prerequisites.length ? `<div style="font-size:10px; color:#e0a23c; margin-top:2px;">⚠️ <b>Prereqs:</b> ${o.prerequisites.join(' · ')}</div>` : ''}
+            </div>
+          `).join('')}
+        </div>
+      </details>
+    `;
+  };
+
+  sec('stack', 'Stack', 'Core Technical Stack', `<div class="grid">${stackCards.map(([title, pick, why, conf, persona, altToggle, basis])=> {
+    const nodeId = STACK_CARD_NODE_MAP[title];
+    const oppDrawer = nodeId ? renderCardAiOppDrawer(nodeId) : '';
+    return `<div class="stack-card card-conf-${conf||'low'}"><div class="head"><h3>${title}</h3><div style="display:flex; align-items:flex-start; gap:6px; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end;">${renderExitCostBadge(title)}${renderBasisBadge(basis)}</div></div><div class="pick">${pick}</div><div class="why">${why}</div>${renderAskPrompt(STACK_CARD_CATEGORY[title], basis)}${oppDrawer}<div class="persona">${persona}</div>${altToggle||''}</div>`;
+  }).join('')}</div>`);
 
   sec('iamcompare', 'IAM Options', 'Identity Provider Options <span style="color:var(--muted); text-transform:none; letter-spacing:0; font-weight:400;">— Okta vs. Entra ID vs. Ping/ForgeRock vs. OneLogin vs. JumpCloud, plus PAM/IGA</span>',
     `<div class="card">
@@ -2836,7 +2890,7 @@ function renderRecommendations(s, rec){
   if (s.brownfieldAiOnly) setView('cards');
   document.getElementById('resultsShell').scrollIntoView({behavior:'smooth', block:'start'});
 
-  const graph = buildFlowGraph({cloud,gw,iam,lang,arch,compute,msg,mesh,cache,db,containers,obs,fe,cicd,dns,llm,rag,mcp,guardrails,vectorDb});
+  const graph = buildFlowGraph({cloud,gw,iam,lang,arch,compute,msg,mesh,cache,db,containers,obs,fe,cicd,dns,llm,rag,mcp,guardrails,vectorDb}, s);
   renderFlow(graph);
   setView(currentView); // preserve whichever view (Cards/Flow) the user had open across re-analysis
 }
@@ -2887,17 +2941,194 @@ const FLOW_CATS = {
 };
 let flowState = { zoom:1, panX:40, panY:40, graph:null, dragNodeId:null, panning:false, moved:false };
 
+// Catalog of 12 architectural AI opportunity patterns across all 6 tiers.
+// Pure static catalog with pure trigger evaluators (ctx, signals).
+const CATALOG_AI_OPPORTUNITIES = [
+  // 1. Client Tier
+  {
+    id: 'client-copilot',
+    name: 'Intelligent Input Copilot & Autocomplete',
+    targetNodeId: 'frontend',
+    tier: 'client',
+    type: 'gap', // ✨ New AI Leverage Point
+    complexity: 'Low',
+    valueCategory: 'UX & Conversion',
+    tech: 'Client-side WebAssembly / WebGPU ONNX, or lightweight streaming endpoint',
+    prerequisites: ['Debounced event input', 'Streaming markdown/token response UI'],
+    trigger: (ctx, s) => !!(s.multiTenant || s.chatbot || s.ecommerce || s.mobile || s.web || s.startupMvp),
+    getRationale: (ctx, s) => 'Add inline AI assistive completion and field guidance on key user workflows to reduce input friction and increase task completion rates.'
+  },
+  {
+    id: 'client-wasm-preprocess',
+    name: 'Local Multimodal / Document Preprocessing',
+    targetNodeId: 'frontend',
+    tier: 'client',
+    type: 'gap',
+    complexity: 'Medium',
+    valueCategory: 'Latency & Bandwidth',
+    tech: 'WebAssembly (WASM), PDF.js, browser-side tokenizers / image resizing',
+    prerequisites: ['Client modern browser support', 'Fallback server upload pipeline'],
+    trigger: (ctx, s) => !!(s.unstructured || s.knowledgeBase || s.voice || s.ragNeed),
+    getRationale: (ctx, s) => 'Pre-process documents, extract text chunks, and resize images directly in the browser before sending to the backend, cutting network latency and LLM payload sizes.'
+  },
+
+  // 2. Edge Tier
+  {
+    id: 'edge-semantic-routing',
+    name: 'Semantic Intent Routing & Fast-Path Classifier',
+    targetNodeId: 'gateway',
+    tier: 'edge',
+    type: 'gap',
+    complexity: 'Medium',
+    valueCategory: 'Cost & Latency Reduction',
+    tech: 'Cloudflare Workers AI / Edge runtime with small embedding model or regex trie',
+    prerequisites: ['Edge gateway compute support', 'Defined intent taxonomy'],
+    trigger: (ctx, s) => !!(s.highScale || s.chatbot || s.enterprise || s.realtime),
+    getRationale: (ctx, s) => 'Classify incoming user query intent at the edge to route simple requests to static caches or cheap small models, and complex reasoning tasks to frontier models.'
+  },
+  {
+    id: 'edge-prompt-waf',
+    name: 'Prompt Injection & Jailbreak Edge Firewall',
+    targetNodeId: 'gateway',
+    tier: 'edge',
+    type: 'gap',
+    complexity: 'Medium',
+    valueCategory: 'Security & Compliance',
+    tech: 'Edge Guardrails (Llama-Guard / Lakera / NeMo Guardrails or rule patterns)',
+    prerequisites: ['Edge inspection proxy', 'Security incident logging'],
+    trigger: (ctx, s) => !!(s.compliance || s.enterprise || s.security || s.healthcare || s.chatbot),
+    getRationale: (ctx, s) => 'Screen incoming prompts at the API gateway perimeter for indirect prompt injection, jailbreaks, and sensitive data leakage before hitting downstream LLMs.'
+  },
+
+  // 3. Compute Tier
+  {
+    id: 'compute-agent-workers',
+    name: 'Async Background Agent Workers',
+    targetNodeId: 'computemodel',
+    tier: 'compute',
+    type: 'gap',
+    complexity: 'Medium',
+    valueCategory: 'Automation Depth',
+    tech: 'LangGraph / Temporal / BullMQ with decoupled background worker pods',
+    prerequisites: ['Durable task queue (Redis/SQS/Kafka)', 'Dead-letter handling & checkpointing'],
+    trigger: (ctx, s) => !!(s.agentic || s.sagaWorkflow || s.dataHeavy),
+    getRationale: (ctx, s) => 'Decouple multi-step agent reasoning, document synthesis, and external tool calls into durable background workers so the user-facing web tier stays fast and resilient.'
+  },
+  {
+    id: 'compute-structured-json',
+    name: 'Reliable Structured Output Validation',
+    targetNodeId: 'lang',
+    tier: 'compute',
+    type: 'gap',
+    complexity: 'Low',
+    valueCategory: 'API Reliability',
+    tech: 'Instructor / Outlines / Pydantic / Zod schema enforcement',
+    prerequisites: ['Typed API contract schemas', 'Retry/fallback schema parser'],
+    trigger: (ctx, s) => !!(ctx.llm && ctx.llm.length > 0),
+    getRationale: (ctx, s) => 'Enforce guaranteed JSON output schemas using constrained decoding (Instructor / Pydantic / Zod) to prevent hallucinated malformed responses from breaking microservice APIs.'
+  },
+
+  // 4. Data Tier
+  {
+    id: 'data-semantic-cache',
+    name: 'Semantic Embedding Similarity Cache',
+    targetNodeId: 'cache',
+    tier: 'data',
+    type: 'optimization', // ⚡ AI Optimization Point
+    complexity: 'Low',
+    valueCategory: 'Cost Optimization (30–60% API cut)',
+    tech: 'Redis with vector similarity index (HNSW / Cosine threshold 0.92+)',
+    prerequisites: ['Vector-capable Redis / KeyDB', 'Embedding generation latency budget'],
+    trigger: (ctx, s) => !!(ctx.cache && (s.highScale || s.chatbot || s.ragNeed || s.startupMvp || s.multiTenant)),
+    getRationale: (ctx, s) => 'Cache previous LLM responses indexed by semantic query embeddings in Redis. Frequent near-identical questions resolve instantly from cache, saving 30–60% of LLM token bills.'
+  },
+  {
+    id: 'data-text-to-sql',
+    name: 'Text-to-SQL Read Analytics',
+    targetNodeId: 'db',
+    tier: 'data',
+    type: 'gap',
+    complexity: (ctx, s) => (s.compliance || s.finance || s.healthcare || s.onPrem) ? 'High' : 'Medium',
+    valueCategory: 'Self-Service Analytics',
+    tech: 'Vanna.ai / LangChain SQL Chain with strict read-only replica connection',
+    prerequisites: (ctx, s) => (s.compliance || s.finance || s.healthcare || s.onPrem)
+      ? ['Mandatory read-only sanitized analytics replica', 'PII/PCI tokenization layer', 'Strict column allowlisting', 'Zero direct write permissions', 'Full query audit trail']
+      : ['Read-only database user credentials', 'Schema metadata catalog', 'Query timeout & row limit caps'],
+    trigger: (ctx, s) => !!(ctx.db && (s.dataHeavy || s.finance || s.ecommerce || s.enterprise)),
+    getRationale: (ctx, s) => (s.compliance || s.finance || s.healthcare || s.onPrem)
+      ? 'Enable natural-language querying strictly on an isolated, sanitized read-only analytics replica with mandatory PII masking and zero access to live regulated transactional tables.'
+      : 'Allow internal stakeholders and customers to query business data using plain language, backed by a read-only database connection with strict schema limits.'
+  },
+  {
+    id: 'data-stream-enrichment',
+    name: 'Real-Time LLM Stream Event Enrichment',
+    targetNodeId: 'messaging',
+    tier: 'data',
+    type: 'gap',
+    complexity: 'High',
+    valueCategory: 'Data Intelligence',
+    tech: 'Kafka / Flink consumer with batch LLM inference or local small-model workers',
+    prerequisites: ['Partitioned message queue', 'Dead-letter queue & backpressure handling'],
+    trigger: (ctx, s) => !!(ctx.msg && (s.realtime || s.sagaWorkflow || s.highScale || s.finance)),
+    getRationale: (ctx, s) => 'Enrich streaming events (e.g. customer tickets, transaction logs, telemetry) with AI classification and anomaly scores in real-time as events flow through the message broker.'
+  },
+
+  // 5. AI Tier
+  {
+    id: 'ai-crag-retrieval',
+    name: 'Corrective RAG (CRAG) & Retrieval Validation',
+    targetNodeId: 'rag',
+    tier: 'ai',
+    type: 'optimization',
+    complexity: 'Medium',
+    valueCategory: 'Hallucination Prevention',
+    tech: 'RAG Triad / Ragas evaluators, fast relevance grading step before synthesis',
+    prerequisites: ['Retrieval evaluation benchmark', 'Fallback search or query re-writer'],
+    trigger: (ctx, s) => !!(ctx.rag && ctx.rag.name && ctx.rag.name !== 'RAG likely not required'),
+    getRationale: (ctx, s) => 'Insert a lightweight relevance evaluation step between vector retrieval and generation. If retrieved chunks lack sufficient relevance, trigger query rewriting or fallback search before synthesis.'
+  },
+  {
+    id: 'ai-cost-cascade',
+    name: 'Multi-Model Cost Routing Cascade',
+    targetNodeId: 'llm',
+    tier: 'ai',
+    type: 'optimization',
+    complexity: 'Medium',
+    valueCategory: 'Cost Optimization (50–70% API cut)',
+    tech: 'RouteLLM / Martian / LiteLLM router with fallback rules',
+    prerequisites: ['Multiple LLM provider keys or self-hosted small models', 'Prompt complexity score threshold'],
+    trigger: (ctx, s) => !!(ctx.llm && (s.startupMvp || s.highScale || s.enterprise || s.multiTenant)),
+    getRationale: (ctx, s) => 'Route 70–80% of routine user queries to fast, cheap 4B–8B models, escalating only complex multi-step reasoning queries to premium frontier models.'
+  },
+
+  // 6. Ops Tier
+  {
+    id: 'ops-anomaly-rca',
+    name: 'Log Anomaly Detection & AI Root-Cause Analysis',
+    targetNodeId: 'observability',
+    tier: 'ops',
+    type: 'gap',
+    complexity: 'Medium',
+    valueCategory: 'MTTR Reduction',
+    tech: 'OpenTelemetry collector + LLM incident summarizer / Coroot / Datadog Bits AI',
+    prerequisites: ['Structured OpenTelemetry JSON logs and traces', 'Webhook alert integration'],
+    trigger: (ctx, s) => !!(ctx.obs && (s.highScale || s.enterprise || s.compliance || s.multiTenant)),
+    getRationale: (ctx, s) => 'Automatically cluster error trace spikes, correlate logs across microservices, and synthesize initial incident root-cause drafts for on-call engineers.'
+  }
+];
+
 // Core domain (hexagon center). Pure function of ctx: no document/window/fetch,
 // no file-format strings, no pixel coordinates. Every exporter (Mermaid, Draw.io,
 // SVG) and the Flow View canvas (via layoutFlowGraph below) derive from this same
 // graph instead of each re-deriving their own reduced topology. ctx has the same
 // shape as the destructured `rec` in renderRecommendations, so callers can pass
 // either that or lastRecommendations directly.
-function buildCanonicalArchitectureGraph(ctx){
+function buildCanonicalArchitectureGraph(ctx, signals = {}){
+  const s = signals || {};
   const {cloud,gw,iam,lang,arch,compute,msg,mesh,cache,db,containers,obs,fe,cicd,dns,llm,rag,mcp,guardrails,vectorDb} = ctx;
   const nodes = [], edges = [];
   const N = (id,cat,title,sub,conf,why,persona,detail) => {
-    nodes.push({id,cat,title,sub:sub||'',conf:conf||null,why:why||'',persona:persona||'',detail:detail||null});
+    nodes.push({id,cat,title,sub:sub||'',conf:conf||null,why:why||'',persona:persona||'',detail:detail||null,opportunities:[]});
     return id;
   };
 
@@ -2936,6 +3167,33 @@ function buildCanonicalArchitectureGraph(ctx){
   E('llm','mcp'); E('guardrails','llm');
   E('computemodel','observability'); E('computemodel','cicd');
 
+  // Attach AI opportunities safely to present nodes only
+  const nodeMap = new Map(nodes.map(n => [n.id, n]));
+  CATALOG_AI_OPPORTUNITIES.forEach(opp => {
+    const targetNode = nodeMap.get(opp.targetNodeId);
+    if (!targetNode) return; // Skip if target node (e.g. conditional rag/vectordb/msg) is not present
+    try {
+      if (typeof opp.trigger === 'function' && opp.trigger(ctx, s)) {
+        const complexity = typeof opp.complexity === 'function' ? opp.complexity(ctx, s) : opp.complexity;
+        const prerequisites = typeof opp.prerequisites === 'function' ? opp.prerequisites(ctx, s) : opp.prerequisites;
+        const rationale = typeof opp.getRationale === 'function' ? opp.getRationale(ctx, s) : opp.getRationale;
+        targetNode.opportunities.push({
+          id: opp.id,
+          name: opp.name,
+          tier: opp.tier,
+          type: opp.type,
+          complexity,
+          valueCategory: opp.valueCategory,
+          tech: opp.tech,
+          prerequisites,
+          rationale
+        });
+      }
+    } catch(e) {
+      // Safe fallback
+    }
+  });
+
   return {nodes, edges};
 }
 
@@ -2969,13 +3227,19 @@ function layoutFlowGraph(graph){
     edges: graph.edges,
   };
 }
-function buildFlowGraph(ctx){
-  return layoutFlowGraph(buildCanonicalArchitectureGraph(ctx));
+function buildFlowGraph(ctx, signals = {}){
+  return layoutFlowGraph(buildCanonicalArchitectureGraph(ctx, signals));
 }
 
 function truncateFlowText(str, max){
   if(!str || str.length<=max) return str;
   return str.slice(0, max-1).trim()+'…';
+}
+
+let flowAiLeverageActive = true;
+function toggleFlowAiLeverage(){
+  flowAiLeverageActive = !flowAiLeverageActive;
+  if(flowState.graph) renderFlow(flowState.graph);
 }
 
 function renderFlow(graph){
@@ -2985,13 +3249,22 @@ function renderFlow(graph){
   const nodeHtml = graph.nodes.map(n=>{
     const confColor = n.conf==='high' ? '#34c98a' : n.conf==='medium' ? '#e0a23c' : n.conf==='low' ? '#828a99' : null;
     const confDot = confColor ? `<div class="fn-conf" style="background:${confColor}"></div>` : '';
-    // Long pick strings are truncated here to bound node height (fixed 125px row spacing) —
-    // the untruncated value is always shown in full in the click popover (showFlowPopover).
-    return `<div class="flow-node" id="fn-${n.id}" data-id="${n.id}" style="left:${n.x}px; top:${n.y}px; --cat-color:${n.color};">
+    
+    // AI Leverage badge on node if active and opportunities are present
+    let oppBadge = '';
+    if (n.opportunities && n.opportunities.length && flowAiLeverageActive) {
+      const isAllGap = n.opportunities.every(o => o.type === 'gap');
+      const badgeIcon = isAllGap ? '✨' : '⚡';
+      const badgeText = isAllGap ? `${badgeIcon} ${n.opportunities.length} AI Point${n.opportunities.length > 1 ? 's' : ''}` : `${badgeIcon} ${n.opportunities.length} AI Opt${n.opportunities.length > 1 ? 's' : ''}`;
+      oppBadge = `<div class="fn-opp-badge" style="font-size:10px; font-weight:700; background:rgba(224, 162, 60, 0.15); border:1px solid #e0a23c; color:#e0a23c; border-radius:4px; padding:1px 5px; margin-top:4px; display:inline-block;">${badgeText}</div>`;
+    }
+
+    return `<div class="flow-node${(n.opportunities && n.opportunities.length && flowAiLeverageActive)?' ai-leverage-active':''}" id="fn-${n.id}" data-id="${n.id}" style="left:${n.x}px; top:${n.y}px; --cat-color:${n.color};">
       ${confDot}
       <div class="fn-cat">${FLOW_CATS[n.cat].label}</div>
       <div class="fn-title">${n.title}</div>
       ${n.sub?`<div class="fn-sub">${truncateFlowText(n.sub,80)}</div>`:''}
+      ${oppBadge}
     </div>`;
   }).join('');
   document.getElementById('flowNodes').innerHTML = nodeHtml;
@@ -3150,8 +3423,10 @@ function renderFlowMinimap(){
 }
 
 function renderFlowLegend(){
-  document.getElementById('flowLegend').innerHTML = Object.values(FLOW_CATS)
+  const catsHtml = Object.values(FLOW_CATS)
     .map(c=>`<div class="lg-row"><div class="lg-dot" style="background:${c.color}"></div>${c.label}</div>`).join('');
+  const toggleBtn = `<button type="button" class="ex-btn" style="font-size:11px; padding:3px 8px; margin-top:8px; width:100%; text-align:center;" onclick="toggleFlowAiLeverage()">${flowAiLeverageActive ? '✨ Hide AI Leverage' : '✨ Show AI Leverage'}</button>`;
+  document.getElementById('flowLegend').innerHTML = catsHtml + toggleBtn;
 }
 
 function showFlowPopover(id){
@@ -3164,10 +3439,34 @@ function showFlowPopover(id){
     ? `<div class="fp-why"><ul>${n.detail.map(d=>`<li style="margin-bottom:4px;">${d}</li>`).join('')}</ul></div>`
     : `${valueLine}<div class="fp-why">${n.why}</div>`;
   const confBadge = n.conf ? `<span class="conf conf-${n.conf}" style="margin-left:6px;">${n.conf}</span>` : '';
+  
+  let oppsHtml = '';
+  if (n.opportunities && n.opportunities.length) {
+    oppsHtml = `
+      <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--border);">
+        <div style="font-size:11px; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">
+          ✨ AI Leverage Opportunities (${n.opportunities.length})
+        </div>
+        ${n.opportunities.map(o => `
+          <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:6px; padding:8px; margin-bottom:6px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
+              <strong style="font-size:12px; color:var(--text);">${o.name}</strong>
+              <span class="conf conf-${o.complexity === 'Low' ? 'high' : o.complexity === 'Medium' ? 'medium' : 'low'}" style="font-size:10px; padding:1px 6px;">${o.complexity} Complexity</span>
+            </div>
+            <div style="font-size:11px; color:var(--muted); margin-bottom:4px;">${o.rationale}</div>
+            <div style="font-size:10.5px; color:var(--accent); font-weight:600;">🛠️ Tech: <span style="color:var(--text); font-weight:400;">${o.tech}</span></div>
+            ${o.prerequisites && o.prerequisites.length ? `<div style="font-size:10px; color:#e0a23c; margin-top:3px;">⚠️ <b>Prerequisites:</b> ${o.prerequisites.join(' · ')}</div>` : ''}
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
   pop.innerHTML = `<span class="fp-close" onclick="document.getElementById('flowPopover').style.display='none'">✕</span>
     <div class="fp-cat">${FLOW_CATS[n.cat].label}</div>
     <div class="fp-title">${n.title}${confBadge}</div>
     ${body}
+    ${oppsHtml}
     ${n.persona?`<div class="fp-persona">${n.persona}</div>`:''}`;
   pop.style.display = 'block';
   const el = document.getElementById('fn-'+id);
@@ -4595,7 +4894,7 @@ const EDGE_LABELS = {
 };
 
 function generateDrawioXml(rec, signals) {
-  const graph = buildCanonicalArchitectureGraph(rec);
+  const graph = buildCanonicalArchitectureGraph(rec, signals);
   const TIER_X = { client: 60, edge: 340, compute: 620, data: 900, ai: 1180, ops: 1460 };
 
   let cellsXml = `<mxCell id="0"/><mxCell id="1" parent="0"/>`;
@@ -4660,7 +4959,7 @@ function onExportDrawioClick() {
 }
 
 function generateMermaidDiagram(rec, signals) {
-  const graph = buildCanonicalArchitectureGraph(rec);
+  const graph = buildCanonicalArchitectureGraph(rec, signals);
   const clean = (s) => (s || '').replace(/["[\](){}]/g, '').replace(/\s+/g, ' ').trim();
   const nodeIds = new Set(graph.nodes.map(n => n.id));
 
@@ -4724,7 +5023,7 @@ function onOpenDiagramsNetClick() {
 }
 
 function generateSvgDiagram(rec, signals) {
-  const graph = buildCanonicalArchitectureGraph(rec);
+  const graph = buildCanonicalArchitectureGraph(rec, signals);
 
   let y = 60;
   let boxes = '';

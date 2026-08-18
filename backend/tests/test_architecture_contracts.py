@@ -2,21 +2,10 @@
 Architecture invariant test for the hexagonal graph refactor in index.html.
 
 There's no JS test runner in this frameworkless project (AGENTS.md forbids adding a
-build step), so this file has two layers:
-
-  Layer A — static-analysis contract tests, in the spirit of Swish_App's
-  HexagonalArchitectureTest.java: read index.html as text and assert the core domain
-  function stays pure, and that outbound adapters at least reference the canonical
-  graph builder rather than re-deriving their own reduced topology. These are cheap
-  and always run, but they can't catch a function that calls
-  buildCanonicalArchitectureGraph(...) and then still produces broken output.
-
-  Layer B — runtime execution tests: actually run the extracted <script> block in
-  Node with a minimal DOM/window/fetch stub, call the real functions against a live
-  scenario, and validate the real output (node schema, XML/SVG parseability, Mermaid
-  subgraph presence). These require a `node` binary on PATH and are skipped — not
-  failed — when one isn't available, so the pure-Python pytest baseline in AGENTS.md
-  still passes on a machine without Node installed.
+build step), so this is a static-analysis contract test in the spirit of Swish_App's
+HexagonalArchitectureTest.java: it reads index.html as text and asserts the core
+domain function stays pure, and that outbound adapters consume the canonical graph
+rather than re-deriving their own reduced topology.
 """
 import json
 import re
@@ -27,9 +16,12 @@ from pathlib import Path
 import pytest
 
 INDEX_HTML = Path(__file__).resolve().parents[2] / "index.html"
-NODE_AVAILABLE = shutil.which("node") is not None
+
+# Skip decorator for runtime tests when Node isn't installed. The static-analysis
+# tests in Layer A still run in pure Python on any platform.
 requires_node = pytest.mark.skipif(
-    not NODE_AVAILABLE, reason="Node.js runtime required for frontend JavaScript execution"
+    shutil.which("node") is None,
+    reason="Node.js binary not found on PATH; skipping JS runtime tests",
 )
 
 
@@ -61,8 +53,16 @@ FORBIDDEN_FORMAT_STRINGS = ["mxGraphModel", "graph TD", "<svg", ".drawio", ".mmd
 def test_canonical_graph_builder_exists():
     source = _read_source()
     assert "function buildCanonicalArchitectureGraph(" in source, (
-        "buildCanonicalArchitectureGraph(ctx) is the domain core of the hexagonal "
+        "buildCanonicalArchitectureGraph(ctx, signals) is the domain core of the hexagonal "
         "refactor and must exist as a standalone function."
+    )
+
+
+def test_canonical_graph_builder_signature_supports_signals():
+    source = _read_source()
+    # Must accept both ctx and optional signals argument
+    assert re.search(r"function\s+buildCanonicalArchitectureGraph\s*\(\s*ctx\s*(?:,\s*signals\s*(?:=\s*\{\})?)?\s*\)", source), (
+        "buildCanonicalArchitectureGraph must support both ctx and optional signals parameter."
     )
 
 
@@ -127,7 +127,8 @@ def test_flow_graph_wrapper_composes_core_and_layout():
 # Layer B — runtime execution tests
 # ---------------------------------------------------------------------------
 
-REQUIRED_NODE_FIELDS = ["id", "cat", "title", "sub", "conf", "why", "persona", "detail"]
+REQUIRED_NODE_FIELDS = ["id", "cat", "title", "sub", "conf", "why", "persona", "detail", "opportunities"]
+REQUIRED_OPPORTUNITY_FIELDS = ["id", "name", "tier", "type", "complexity", "valueCategory", "tech", "prerequisites", "rationale"]
 
 # Minimal DOM/window/fetch stub — enough for the whole inline <script> block to
 # evaluate without throwing at parse time, without pulling in a real DOM library.
@@ -150,8 +151,16 @@ global.fetch = () => Promise.resolve({ ok: false });
 
 const s = detectSignals("We're a fintech startup building a mobile + web app for real-time fraud detection on card transactions with a chatbot answering questions from our internal policy documents, SOC2/PCI compliant, small team.");
 const rec = computeRecommendations(s);
-const graph = buildCanonicalArchitectureGraph(rec);
+const graph = buildCanonicalArchitectureGraph(rec, s);
 const flowGraph = layoutFlowGraph(graph);
+
+// Extract all opportunities across all nodes
+const allOpportunities = [];
+graph.nodes.forEach(n => {
+  if (Array.isArray(n.opportunities)) {
+    n.opportunities.forEach(opp => allOpportunities.push(opp));
+  }
+});
 
 console.log(JSON.stringify({
   nodeCount: graph.nodes.length,
@@ -159,6 +168,8 @@ console.log(JSON.stringify({
   nodeFieldSets: graph.nodes.map(n => Object.keys(n).sort()),
   flowNodesHaveXYColor: flowGraph.nodes.every(n =>
     typeof n.x === "number" && typeof n.y === "number" && typeof n.color === "string"),
+  allOpportunities,
+  dbNodeOpportunities: (graph.nodes.find(n => n.id === "db") || {}).opportunities || [],
   mermaid: generateMermaidDiagram(rec, s),
   drawio: generateDrawioXml(rec, s),
   svg: generateSvgDiagram(rec, s),
@@ -197,6 +208,41 @@ def test_runtime_canonical_graph_schema(js_runtime_result):
         assert field_set == sorted(REQUIRED_NODE_FIELDS), (
             f"node missing required fields: {set(REQUIRED_NODE_FIELDS) - set(field_set)}"
         )
+
+
+@requires_node
+def test_runtime_opportunities_schema_and_attachment(js_runtime_result):
+    opps = js_runtime_result["allOpportunities"]
+    assert len(opps) >= 3, f"expected at least 3 active opportunities on fintech scenario, got {len(opps)}"
+    for opp in opps:
+        assert set(REQUIRED_OPPORTUNITY_FIELDS).issubset(set(opp.keys())), (
+            f"opportunity missing fields: {set(REQUIRED_OPPORTUNITY_FIELDS) - set(opp.keys())}"
+        )
+        assert opp["type"] in ["gap", "optimization"], f"invalid opportunity type: {opp.get('type')}"
+        assert opp["complexity"] in ["Low", "Medium", "High"], f"invalid complexity: {opp.get('complexity')}"
+        assert isinstance(opp["prerequisites"], list) and len(opp["prerequisites"]) > 0
+
+
+@requires_node
+def test_runtime_compliance_guardrails_on_text_to_sql(js_runtime_result):
+    # Regression guard: an earlier version of data-text-to-sql's trigger referenced
+    # phantom signal keys (s.fintech instead of the real s.finance, plus s.analytics/
+    # s.saas/s.reporting which don't exist at all) so it silently never fired on the
+    # fintech-PCI scenario this harness uses — and this assertion used to be gated
+    # behind `if sql_opp:`, so it passed vacuously instead of catching that. Assert
+    # presence first, unconditionally, so a regression fails loudly instead of skipping.
+    db_opps = js_runtime_result["dbNodeOpportunities"]
+    sql_opp = next((o for o in db_opps if o["id"] == "data-text-to-sql"), None)
+    assert sql_opp is not None, (
+        "data-text-to-sql must attach to the db node for the fintech-PCI scenario "
+        "this harness uses — if this fails, check the trigger's signal keys against "
+        "the real detectSignals() output (s.finance, not s.fintech; no s.analytics/"
+        "s.saas/s.reporting keys exist)"
+    )
+    assert sql_opp["complexity"] == "High"
+    prereqs_str = " ".join(sql_opp["prerequisites"]).lower()
+    assert "read-only" in prereqs_str or "replica" in prereqs_str
+    assert "pii" in prereqs_str or "tokenization" in prereqs_str or "masking" in prereqs_str
 
 
 @requires_node
