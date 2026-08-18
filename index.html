@@ -1024,6 +1024,11 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/></svg>
             <span><strong>Open in Diagrams.net ↗</strong><small>Launch web editor in new tab (zero login)</small></span>
           </button>
+          <div class="export-menu-header" role="presentation">Knowledge Base &amp; Custom Tech</div>
+          <button type="button" class="export-menu-item" role="menuitem" onclick="openCustomTechModal(); closeExportMenu();">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+            <span><strong>Custom Tech &amp; Knowledge Base</strong><small>Bring-your-own-tool (localStorage + GitHub)</small></span>
+          </button>
         </div>
       </div>
       <button class="share-btn icon-btn" id="shareBtn" onclick="onShareClick()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244"/></svg> Share this analysis</button>
@@ -1046,6 +1051,94 @@
       </div>
     </div>
     <div class="flow-popover" id="flowPopover"></div>
+  </div>
+</div>
+
+<!-- Custom Technology & Knowledge Base Modal -->
+<div id="customTechModal" class="custom-modal-backdrop" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); z-index:9999; align-items:center; justify-content:center;">
+  <div class="custom-modal-box" style="background:var(--panel); border:1px solid var(--border); border-radius:12px; width:90%; max-width:650px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 20px 40px rgba(0,0,0,0.5);">
+    <div style="padding:16px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <h3 style="margin:0; font-size:16px; color:var(--text);">Custom Technology &amp; Knowledge Base</h3>
+        <p style="margin:2px 0 0; font-size:12px; color:var(--muted);">Add custom or internal proprietary tools into the advisor session (stored in localStorage) or suggest upstream.</p>
+      </div>
+      <button type="button" onclick="closeCustomTechModal()" style="background:none; border:none; color:var(--muted); font-size:18px; cursor:pointer;">✕</button>
+    </div>
+
+    <div style="padding:20px; overflow-y:auto; flex:1;">
+      <!-- Active Custom Tech List -->
+      <div id="customTechListSection" style="margin-bottom:20px;">
+        <div style="font-size:12px; font-weight:700; color:var(--accent); text-transform:uppercase; margin-bottom:8px;">Active Custom Technologies in this Session</div>
+        <div id="customTechListEmpty" style="font-size:12px; color:var(--muted); font-style:italic;">No custom technologies saved yet. Add one below!</div>
+        <div id="customTechListItems" style="display:flex; flex-direction:column; gap:8px;"></div>
+      </div>
+
+      <!-- Add Tech Form -->
+      <form id="customTechForm" onsubmit="handleCustomTechSubmit(event)" style="border-top:1px solid var(--border); padding-top:16px;">
+        <div style="font-size:12px; font-weight:700; color:var(--text); margin-bottom:12px;">Add / Update a Technology</div>
+        
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+          <div>
+            <label style="display:block; font-size:11px; font-weight:600; color:var(--muted); margin-bottom:4px;">Tech ID (kebab-case) *</label>
+            <input type="text" id="ctId" required placeholder="e.g. internal-auth-gateway" style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
+          </div>
+          <div>
+            <label style="display:block; font-size:11px; font-weight:600; color:var(--muted); margin-bottom:4px;">Display Name *</label>
+            <input type="text" id="ctName" required placeholder="e.g. Enterprise Auth Gateway" style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+          <div>
+            <label style="display:block; font-size:11px; font-weight:600; color:var(--muted); margin-bottom:4px;">Category *</label>
+            <input type="text" id="ctCategory" required placeholder="e.g. identity-gateway" style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
+          </div>
+          <div>
+            <label style="display:block; font-size:11px; font-weight:600; color:var(--muted); margin-bottom:4px;">Domain *</label>
+            <select id="ctDomain" required style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
+              <option value="identity">Identity</option>
+              <option value="frontend">Frontend</option>
+              <option value="backend">Backend</option>
+              <option value="database">Database</option>
+              <option value="cloud">Cloud</option>
+              <option value="cicd">CI/CD</option>
+              <option value="observability">Observability</option>
+              <option value="integration">Integration</option>
+              <option value="architecture">Architecture</option>
+              <option value="mobile">Mobile</option>
+              <option value="ai">AI</option>
+              <option value="quality">Quality</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+          <div>
+            <label style="display:block; font-size:11px; font-weight:600; color:var(--muted); margin-bottom:4px;">Signal Keywords (comma-separated) *</label>
+            <input type="text" id="ctKeywords" required placeholder="e.g. auth gateway, internal auth, sso proxy" style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
+          </div>
+          <div>
+            <label style="display:block; font-size:11px; font-weight:600; color:var(--muted); margin-bottom:4px;">License *</label>
+            <input type="text" id="ctLicense" required placeholder="e.g. Proprietary / Internal / Apache-2.0" value="Proprietary / Internal" style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
+          </div>
+        </div>
+
+        <div style="margin-bottom:12px;">
+          <label style="display:block; font-size:11px; font-weight:600; color:var(--muted); margin-bottom:4px;">Best When (comma-separated) *</label>
+          <input type="text" id="ctBestWhen" required placeholder="e.g. internal corporate zero-trust network, high compliance" style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
+        </div>
+
+        <div style="margin-bottom:16px;">
+          <label style="display:block; font-size:11px; font-weight:600; color:var(--muted); margin-bottom:4px;">Avoid When (comma-separated) *</label>
+          <input type="text" id="ctAvoidWhen" required placeholder="e.g. public b2c registration without VPN" style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:8px;">
+          <button type="button" class="ex-btn" onclick="exportCustomTechsJson()">📥 Export JSON</button>
+          <button type="submit" class="share-btn" style="padding:6px 14px;">💾 Save to Local Catalog</button>
+        </div>
+      </form>
+    </div>
   </div>
 </div>
 
@@ -1193,10 +1286,14 @@ function detectSignals(text){
     azureDevopsMentioned: has(['azure devops','azure pipelines']),
     datadogMentioned: has(['datadog']),
     prometheusMentioned: has(['prometheus']) || (has(['grafana']) && !has(['datadog'])),
+    grafanaMentioned: has(['grafana']),
     splunkMentioned: has(['splunk']),
     dynatraceMentioned: has(['dynatrace']),
     newrelicMentioned: has(['new relic','newrelic']),
     elkMentioned: has(['elk stack','elasticsearch','opensearch']),
+    sonarqubeMentioned: has(['sonarqube','sonar','sonarcloud']),
+    jprofilerMentioned: has(['jprofiler']),
+    visualvmMentioned: has(['visualvm']),
     // Brownfield/AI-only scope (playbook gap: "existing app, only want AI added" is a
     // structurally different request from a from-scratch build, per pattern #1 — chatbot-only
     // for now). The wizard sets this via an explicit, deliberate step-1 choice (see wizFinish's
@@ -4443,12 +4540,180 @@ function confToBasis(conf, explicit){
   return 'heuristic-default';
 }
 
+function getCustomKbTechs(){
+  try {
+    const raw = localStorage.getItem('custom_stack_kb');
+    return raw ? JSON.parse(raw) : [];
+  } catch(e) {
+    return [];
+  }
+}
+
+function saveCustomKbTech(tech){
+  try {
+    const list = getCustomKbTechs();
+    const existingIdx = list.findIndex(t => t.id === tech.id);
+    if (existingIdx >= 0) {
+      list[existingIdx] = tech;
+    } else {
+      list.push(tech);
+    }
+    localStorage.setItem('custom_stack_kb', JSON.stringify(list));
+    window.__stackKbCache = null;
+    return true;
+  } catch(e) {
+    console.error('Failed to save custom tech to localStorage', e);
+    return false;
+  }
+}
+
+function deleteCustomKbTech(techId){
+  try {
+    const list = getCustomKbTechs().filter(t => t.id !== techId);
+    localStorage.setItem('custom_stack_kb', JSON.stringify(list));
+    window.__stackKbCache = null;
+    return true;
+  } catch(e) {
+    return false;
+  }
+}
+
 function getKbData(){
   if (window.__stackKbCache) return window.__stackKbCache;
   const el = document.getElementById('stackKbData');
   if (!el) throw new Error('Knowledge-base data block (#stackKbData) is missing from the page.');
-  window.__stackKbCache = JSON.parse(el.textContent);
+  const baseData = JSON.parse(el.textContent);
+  const customTechs = getCustomKbTechs();
+  if (customTechs.length) {
+    const merged = { ...baseData, technologies: [...baseData.technologies] };
+    const baseIds = new Set(baseData.technologies.map(t => t.id));
+    customTechs.forEach(ct => {
+      if (!baseIds.has(ct.id)) {
+        merged.technologies.push(ct);
+        baseIds.add(ct.id);
+      }
+    });
+    window.__stackKbCache = merged;
+    return window.__stackKbCache;
+  }
+  window.__stackKbCache = baseData;
   return window.__stackKbCache;
+}
+
+function openCustomTechModal(){
+  const m = document.getElementById('customTechModal');
+  if (m) {
+    m.style.display = 'flex';
+    renderCustomTechList();
+  }
+}
+
+function closeCustomTechModal(){
+  const m = document.getElementById('customTechModal');
+  if (m) m.style.display = 'none';
+}
+
+function renderCustomTechList(){
+  const techs = getCustomKbTechs();
+  const empty = document.getElementById('customTechListEmpty');
+  const container = document.getElementById('customTechListItems');
+  if (!container) return;
+
+  if (!techs.length) {
+    if (empty) empty.style.display = 'block';
+    container.innerHTML = '';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  container.innerHTML = techs.map(t => `
+    <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:10px 12px; display:flex; justify-content:space-between; align-items:flex-start;">
+      <div>
+        <div style="font-weight:700; font-size:13px; color:var(--text);">${t.name} <code style="font-size:11px; opacity:0.7;">(${t.id})</code></div>
+        <div style="font-size:11.5px; color:var(--muted); margin-top:2px;"><b>Domain:</b> ${t.domain} · <b>Category:</b> ${t.category} · <b>License:</b> ${t.license}</div>
+        <div style="font-size:11px; color:var(--accent); margin-top:3px;"><b>Keywords:</b> ${t.signal_keywords.join(', ')}</div>
+      </div>
+      <div style="display:flex; gap:6px;">
+        <button type="button" class="ex-btn" style="font-size:10.5px; padding:2px 7px;" onclick="suggestTechViaGitHub('${t.id}')">📋 Suggest</button>
+        <button type="button" class="ex-btn" style="font-size:10.5px; padding:2px 7px; color:#ef5b8d;" onclick="removeCustomTech('${t.id}')">🗑️</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function handleCustomTechSubmit(e){
+  e.preventDefault();
+  const id = document.getElementById('ctId').value.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+  const name = document.getElementById('ctName').value.trim();
+  const category = document.getElementById('ctCategory').value.trim();
+  const domain = document.getElementById('ctDomain').value;
+  const keywords = document.getElementById('ctKeywords').value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  const license = document.getElementById('ctLicense').value.trim();
+  const bestWhen = document.getElementById('ctBestWhen').value.split(',').map(s => s.trim()).filter(Boolean);
+  const avoidWhen = document.getElementById('ctAvoidWhen').value.split(',').map(s => s.trim()).filter(Boolean);
+
+  const entry = {
+    id,
+    name,
+    category,
+    domain,
+    surfaces: ['backend', 'ops'],
+    maturity: { ring: 'adopt', source_id: 'custom' },
+    hiring_pool: 'medium',
+    hiring_source_id: 'custom',
+    license,
+    hosting: ['self', 'cloud'],
+    exit_cost: 'medium',
+    tco_shape: 'mixed',
+    best_when: bestWhen.length ? bestWhen : ['custom engineering requirement'],
+    avoid_when: avoidWhen.length ? avoidWhen : ['unsupported edge cases'],
+    alternatives: [],
+    innovation_token_cost: 0,
+    signal_keywords: keywords.length ? keywords : [id]
+  };
+
+  saveCustomKbTech(entry);
+  renderCustomTechList();
+  document.getElementById('customTechForm').reset();
+  alert(`✓ Custom technology "${name}" saved to your local catalog!`);
+}
+
+function removeCustomTech(id){
+  if (confirm(`Remove custom tech "${id}" from this browser?`)) {
+    deleteCustomKbTech(id);
+    renderCustomTechList();
+  }
+}
+
+function exportCustomTechsJson(){
+  const techs = getCustomKbTechs();
+  if (!techs.length) { alert('No custom technologies to export.'); return; }
+  downloadGenericFile(`custom-technologies-${new Date().toISOString().slice(0,10)}.json`, JSON.stringify(techs, null, 2), 'application/json;charset=utf-8');
+}
+
+function suggestTechViaGitHub(id){
+  const tech = getCustomKbTechs().find(t => t.id === id);
+  if (!tech) return;
+  const md = `### Technology Addition Proposal: \`${tech.name}\`
+
+\`\`\`json
+${JSON.stringify(tech, null, 2)}
+\`\`\`
+
+**Why this technology should be in AI Stack Advisor:**
+- Domain: ${tech.domain}
+- Primary Best-When: ${tech.best_when.join('; ')}
+- Keywords: ${tech.signal_keywords.join(', ')}
+`;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(md).then(() => {
+      alert('✓ GitHub Issue proposal Markdown copied to clipboard! You can paste this directly into GitHub Issues.');
+    }).catch(() => {
+      prompt('Copy GitHub Issue Markdown below:', md);
+    });
+  } else {
+    prompt('Copy GitHub Issue Markdown below:', md);
+  }
 }
 
 // Category -> techId mapping layer (Gap B.2). The KB is now 204 technologies across 10 domains
@@ -5973,7 +6238,13 @@ async function loadSharedAnalysis(slug){
         "htmx-hotwire"
       ],
       "innovation_token_cost": 0,
-      "domain": "frontend"
+      "domain": "frontend",
+      "signal_keywords": [
+        "react",
+        "react.js",
+        "reactjs",
+        "react+ts"
+      ]
     },
     {
       "id": "nextjs",
@@ -6012,7 +6283,12 @@ async function loadSharedAnalysis(slug){
         "vite-spa"
       ],
       "innovation_token_cost": 0,
-      "domain": "frontend"
+      "domain": "frontend",
+      "signal_keywords": [
+        "next.js",
+        "nextjs",
+        "next js"
+      ]
     },
     {
       "id": "astro",
@@ -6044,7 +6320,11 @@ async function loadSharedAnalysis(slug){
         "hugo"
       ],
       "innovation_token_cost": 0.5,
-      "domain": "frontend"
+      "domain": "frontend",
+      "signal_keywords": [
+        "astro",
+        "astro.build"
+      ]
     },
     {
       "id": "htmx-hotwire",
@@ -6082,7 +6362,12 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0.5,
       "note": "Genuinely underrated for internal-facing products. Removes a second language and an entire toolchain.",
-      "domain": "frontend"
+      "domain": "frontend",
+      "signal_keywords": [
+        "htmx",
+        "hotwire",
+        "turbo"
+      ]
     },
     {
       "id": "vaadin-jhipster",
@@ -6118,7 +6403,11 @@ async function loadSharedAnalysis(slug){
         "htmx-hotwire"
       ],
       "innovation_token_cost": 0.5,
-      "domain": "frontend"
+      "domain": "frontend",
+      "signal_keywords": [
+        "vaadin",
+        "jhipster"
+      ]
     },
     {
       "id": "react-native",
@@ -6153,7 +6442,11 @@ async function loadSharedAnalysis(slug){
         "native"
       ],
       "innovation_token_cost": 0,
-      "domain": "mobile"
+      "domain": "mobile",
+      "signal_keywords": [
+        "react native",
+        "react-native"
+      ]
     },
     {
       "id": "flutter",
@@ -6188,7 +6481,10 @@ async function loadSharedAnalysis(slug){
         "native"
       ],
       "innovation_token_cost": 0.5,
-      "domain": "mobile"
+      "domain": "mobile",
+      "signal_keywords": [
+        "flutter"
+      ]
     },
     {
       "id": "kmp",
@@ -6222,7 +6518,11 @@ async function loadSharedAnalysis(slug){
         "react-native"
       ],
       "innovation_token_cost": 1,
-      "domain": "mobile"
+      "domain": "mobile",
+      "signal_keywords": [
+        "kmp",
+        "kotlin multiplatform"
+      ]
     },
     {
       "id": "native-mobile",
@@ -6259,7 +6559,13 @@ async function loadSharedAnalysis(slug){
         "kmp"
       ],
       "innovation_token_cost": 0,
-      "domain": "mobile"
+      "domain": "mobile",
+      "signal_keywords": [
+        "swift",
+        "swiftui",
+        "kotlin android",
+        "jetpack compose"
+      ]
     },
     {
       "id": "pwa",
@@ -6294,7 +6600,11 @@ async function loadSharedAnalysis(slug){
         "flutter"
       ],
       "innovation_token_cost": 0,
-      "domain": "mobile"
+      "domain": "mobile",
+      "signal_keywords": [
+        "pwa",
+        "progressive web app"
+      ]
     },
     {
       "id": "refine",
@@ -6329,7 +6639,11 @@ async function loadSharedAnalysis(slug){
         "appsmith"
       ],
       "innovation_token_cost": 0.5,
-      "domain": "frontend"
+      "domain": "frontend",
+      "signal_keywords": [
+        "refine.dev",
+        "refine framework"
+      ]
     },
     {
       "id": "react-admin",
@@ -6362,7 +6676,11 @@ async function loadSharedAnalysis(slug){
         "appsmith"
       ],
       "innovation_token_cost": 0.5,
-      "domain": "frontend"
+      "domain": "frontend",
+      "signal_keywords": [
+        "react-admin",
+        "react admin"
+      ]
     },
     {
       "id": "retool",
@@ -6404,7 +6722,10 @@ async function loadSharedAnalysis(slug){
         "refine"
       ],
       "innovation_token_cost": 0,
-      "domain": "frontend"
+      "domain": "frontend",
+      "signal_keywords": [
+        "retool"
+      ]
     },
     {
       "id": "appsmith",
@@ -6443,7 +6764,10 @@ async function loadSharedAnalysis(slug){
         "retool"
       ],
       "innovation_token_cost": 0.5,
-      "domain": "frontend"
+      "domain": "frontend",
+      "signal_keywords": [
+        "appsmith"
+      ]
     },
     {
       "id": "tooljet",
@@ -6480,7 +6804,10 @@ async function loadSharedAnalysis(slug){
         "budibase"
       ],
       "innovation_token_cost": 1,
-      "domain": "frontend"
+      "domain": "frontend",
+      "signal_keywords": [
+        "tooljet"
+      ]
     },
     {
       "id": "metabase",
@@ -6513,7 +6840,10 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "note": "Roughly half of admin-panel requests are actually reporting requests. Probe for this before recommending an app framework.",
-      "domain": "frontend"
+      "domain": "frontend",
+      "signal_keywords": [
+        "metabase"
+      ]
     },
     {
       "id": "spring-boot",
@@ -6554,7 +6884,13 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "enterprise_backend_rank": 1,
-      "domain": "backend"
+      "domain": "backend",
+      "signal_keywords": [
+        "spring boot",
+        "springboot",
+        "java spring",
+        "spring framework"
+      ]
     },
     {
       "id": "dotnet",
@@ -6590,7 +6926,14 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "enterprise_backend_rank": 2,
-      "domain": "backend"
+      "domain": "backend",
+      "signal_keywords": [
+        ".net",
+        "dotnet",
+        "asp.net",
+        "c#",
+        "csharp"
+      ]
     },
     {
       "id": "python-fastapi",
@@ -6626,7 +6969,11 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "enterprise_backend_rank": 3,
-      "domain": "backend"
+      "domain": "backend",
+      "signal_keywords": [
+        "fastapi",
+        "fast api"
+      ]
     },
     {
       "id": "camunda-temporal",
@@ -6661,7 +7008,12 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 1,
       "note": "The most common avoidable rebuild in enterprise work is reimplementing state machines, retries, timers and audit trails in application code.",
-      "domain": "integration"
+      "domain": "integration",
+      "signal_keywords": [
+        "camunda",
+        "temporal",
+        "temporal.io"
+      ]
     },
     {
       "id": "rules-engine",
@@ -6694,7 +7046,11 @@ async function loadSharedAnalysis(slug){
         "code"
       ],
       "innovation_token_cost": 1,
-      "domain": "integration"
+      "domain": "integration",
+      "signal_keywords": [
+        "rules engine",
+        "drools"
+      ]
     },
     {
       "id": "buy-cots",
@@ -6722,7 +7078,13 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "note": "When this fires, the architecture effort moves entirely to the integration layer. Recommend an integration pattern alongside it.",
-      "domain": "integration"
+      "domain": "integration",
+      "signal_keywords": [
+        "cots",
+        "off the shelf",
+        "commercial off the shelf"
+      ],
+      "license": "N/A (Architectural Pattern / Commercial)"
     },
     {
       "id": "postgres",
@@ -6758,7 +7120,11 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "note": "pgvector often removes the need for a separate vector DB below ~10M embeddings. Probe scale before recommending a dedicated one.",
-      "domain": "database"
+      "domain": "database",
+      "signal_keywords": [
+        "postgres",
+        "postgresql"
+      ]
     },
     {
       "id": "dedicated-vector-db",
@@ -6791,7 +7157,11 @@ async function loadSharedAnalysis(slug){
         "postgres"
       ],
       "innovation_token_cost": 1,
-      "domain": "database"
+      "domain": "database",
+      "signal_keywords": [
+        "vector db",
+        "vector database"
+      ]
     },
     {
       "id": "kafka",
@@ -6828,7 +7198,11 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 1,
       "note": "Frequently over-recommended. Gate this behind an explicit integration-count or replay-requirement signal.",
-      "domain": "integration"
+      "domain": "integration",
+      "signal_keywords": [
+        "kafka",
+        "apache kafka"
+      ]
     },
     {
       "id": "outbox-pattern",
@@ -6860,7 +7234,11 @@ async function loadSharedAnalysis(slug){
         "kafka"
       ],
       "innovation_token_cost": 0,
-      "domain": "integration"
+      "domain": "integration",
+      "signal_keywords": [
+        "outbox pattern",
+        "transactional outbox"
+      ]
     },
     {
       "id": "keycloak",
@@ -6898,7 +7276,10 @@ async function loadSharedAnalysis(slug){
         "cognito"
       ],
       "innovation_token_cost": 0.5,
-      "domain": "identity"
+      "domain": "identity",
+      "signal_keywords": [
+        "keycloak"
+      ]
     },
     {
       "id": "managed-idp",
@@ -6932,7 +7313,11 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "note": "Highest exit cost of any decision in the platform layer. Flag it as such in the UI.",
-      "domain": "identity"
+      "domain": "identity",
+      "signal_keywords": [
+        "managed idp",
+        "auth as a service"
+      ]
     },
     {
       "id": "otel",
@@ -6955,11 +7340,17 @@ async function loadSharedAnalysis(slug){
       "best_when": [
         "always — this is the non-negotiable"
       ],
-      "avoid_when": [],
+      "avoid_when": [
+        "teams with simple static architectures not needing this pattern"
+      ],
       "alternatives": [],
       "innovation_token_cost": 0,
       "note": "Recommend unconditionally. Instrumenting with OTel keeps the backend choice reversible, which is the actual architectural value.",
-      "domain": "observability"
+      "domain": "observability",
+      "signal_keywords": [
+        "opentelemetry",
+        "otel"
+      ]
     },
     {
       "id": "modular-monolith",
@@ -6987,7 +7378,11 @@ async function loadSharedAnalysis(slug){
         "microservices"
       ],
       "innovation_token_cost": 0,
-      "domain": "architecture"
+      "domain": "architecture",
+      "signal_keywords": [
+        "modular monolith"
+      ],
+      "license": "N/A (Architectural Pattern / Commercial)"
     },
     {
       "id": "microservices",
@@ -7018,7 +7413,12 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 2,
       "note": "Gate hard on team size AND platform maturity. Recommending this to a 6-person team is the fastest way to lose an architect's trust in the tool.",
-      "domain": "architecture"
+      "domain": "architecture",
+      "signal_keywords": [
+        "microservices",
+        "microservice"
+      ],
+      "license": "N/A (Architectural Pattern / Commercial)"
     },
     {
       "id": "python-django",
@@ -7059,7 +7459,10 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "note": "Django Admin is the single strongest argument for Django in business applications — it deletes the admin-panel decision entirely. Check this before recommending a separate admin framework.",
-      "domain": "backend"
+      "domain": "backend",
+      "signal_keywords": [
+        "django"
+      ]
     },
     {
       "id": "nodejs-nest",
@@ -7100,7 +7503,14 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "note": "The strongest case is the shared-language argument, not raw performance. NestJS matters because it supplies the structure Express does not — without it, Node backends drift toward the unmaintainable at scale.",
-      "domain": "backend"
+      "domain": "backend",
+      "signal_keywords": [
+        "nest.js",
+        "nestjs",
+        "node.js",
+        "nodejs",
+        "node js"
+      ]
     },
     {
       "id": "go",
@@ -7141,7 +7551,12 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0.5,
       "note": "Dominant in cloud-native infrastructure — Kubernetes, Docker and most of the CNCF landscape are written in it. That is a signal about the domain it fits, not a general recommendation for business applications.",
-      "domain": "backend"
+      "domain": "backend",
+      "signal_keywords": [
+        "golang",
+        "go lang",
+        "go language"
+      ]
     },
     {
       "id": "php-laravel",
@@ -7180,7 +7595,12 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "note": "Carries more real-world backend traffic than its reputation in architecture circles suggests. The honest objection is organisational perception, not technical capability — name that explicitly rather than pretending it is a performance argument.",
-      "domain": "backend"
+      "domain": "backend",
+      "signal_keywords": [
+        "laravel",
+        "php",
+        "symfony framework"
+      ]
     },
     {
       "id": "ruby-rails",
@@ -7219,7 +7639,13 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0.5,
       "note": "Still one of the fastest paths from zero to a working product. The constraint is hiring depth in most markets, not the framework.",
-      "domain": "backend"
+      "domain": "backend",
+      "signal_keywords": [
+        "ruby on rails",
+        "ruby/rails",
+        "rails app",
+        "ruby"
+      ]
     },
     {
       "id": "kotlin-backend",
@@ -7259,7 +7685,11 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0.5,
       "note": "Runs on the JVM, so the existing operational knowledge, libraries and hiring pool mostly transfer. That makes it a far cheaper move than the language change suggests.",
-      "domain": "backend"
+      "domain": "backend",
+      "signal_keywords": [
+        "kotlin",
+        "ktor"
+      ]
     },
     {
       "id": "rust",
@@ -7298,7 +7728,12 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 1,
       "note": "Almost always the right answer for a narrow component and the wrong answer for a whole backend. Recommend it for a proven hot path, not as a default.",
-      "domain": "backend"
+      "domain": "backend",
+      "signal_keywords": [
+        "rust",
+        "actix",
+        "axum"
+      ]
     },
     {
       "id": "elixir-phoenix",
@@ -7338,7 +7773,11 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 1,
       "note": "Genuinely excellent at the concurrency problem it targets. The cost is a very thin hiring pool — this is a spend-a-token decision, so tie it to a stated concurrency requirement.",
-      "domain": "backend"
+      "domain": "backend",
+      "signal_keywords": [
+        "elixir",
+        "phoenix framework"
+      ]
     },
     {
       "id": "scala",
@@ -7377,7 +7816,12 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 1,
       "note": "Usage has been declining for new backend work. Maintain existing Scala; think hard before starting new services in it. Kotlin covers most of the \"JVM but nicer\" motivation at a fraction of the hiring cost.",
-      "domain": "backend"
+      "domain": "backend",
+      "signal_keywords": [
+        "scala",
+        "akka",
+        "play framework"
+      ]
     },
     {
       "id": "cpp",
@@ -7415,7 +7859,11 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 2,
       "note": "A legitimate choice for a measured microsecond-latency requirement and almost nothing else in a business context. Memory-safety burden alone rules it out for typical backend work; where the constraint is real, Rust is now the more defensible option for new code.",
-      "domain": "backend"
+      "domain": "backend",
+      "signal_keywords": [
+        "c++",
+        "cpp"
+      ]
     },
     {
       "id": "c-lang",
@@ -7454,7 +7902,11 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 2,
       "note": "Ranks near the top of general language popularity indexes because of embedded and systems work — that is a different domain from enterprise backend services. Recommending it for a business API is a category error: no memory safety, no standard package management, and every HTTP, TLS and serialisation concern becomes your problem.",
-      "domain": "backend"
+      "domain": "backend",
+      "signal_keywords": [
+        "c language",
+        "c lang"
+      ]
     },
     {
       "id": "mysql",
@@ -7490,7 +7942,10 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "domain_rank": 2,
-      "note": "Losing relative share to Postgres every year. Choose it for an existing estate, not for a new one."
+      "note": "Losing relative share to Postgres every year. Choose it for an existing estate, not for a new one.",
+      "signal_keywords": [
+        "mysql"
+      ]
     },
     {
       "id": "mariadb",
@@ -7524,7 +7979,10 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "domain_rank": 9,
-      "note": "Taken private by K1 Investment in 2024."
+      "note": "Taken private by K1 Investment in 2024.",
+      "signal_keywords": [
+        "mariadb"
+      ]
     },
     {
       "id": "oracle-db",
@@ -7559,7 +8017,12 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "domain_rank": 3,
-      "note": "Still #1 by installed base and last by momentum. The licensing model is the architecture decision, not the engine."
+      "note": "Still #1 by installed base and last by momentum. The licensing model is the architecture decision, not the engine.",
+      "signal_keywords": [
+        "oracle database",
+        "oracle db",
+        "oracle sql"
+      ]
     },
     {
       "id": "sql-server",
@@ -7594,7 +8057,12 @@ async function loadSharedAnalysis(slug){
         "oracle-db"
       ],
       "innovation_token_cost": 0,
-      "domain_rank": 4
+      "domain_rank": 4,
+      "signal_keywords": [
+        "sql server",
+        "mssql",
+        "microsoft sql server"
+      ]
     },
     {
       "id": "db2",
@@ -7627,7 +8095,11 @@ async function loadSharedAnalysis(slug){
         "oracle-db"
       ],
       "innovation_token_cost": 0,
-      "domain_rank": 12
+      "domain_rank": 12,
+      "signal_keywords": [
+        "ibm db2",
+        "db2"
+      ]
     },
     {
       "id": "cockroachdb",
@@ -7663,7 +8135,11 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 1,
       "domain_rank": 7,
-      "note": "Self-hosted Core edition was discontinued in 2024. Check the revenue threshold before designing around it."
+      "note": "Self-hosted Core edition was discontinued in 2024. Check the revenue threshold before designing around it.",
+      "signal_keywords": [
+        "cockroachdb",
+        "cockroach"
+      ]
     },
     {
       "id": "yugabytedb",
@@ -7697,7 +8173,11 @@ async function loadSharedAnalysis(slug){
         "postgres"
       ],
       "innovation_token_cost": 1,
-      "domain_rank": 10
+      "domain_rank": 10,
+      "signal_keywords": [
+        "yugabyte",
+        "yugabytedb"
+      ]
     },
     {
       "id": "aurora",
@@ -7730,7 +8210,12 @@ async function loadSharedAnalysis(slug){
         "spanner"
       ],
       "innovation_token_cost": 0,
-      "domain_rank": 5
+      "domain_rank": 5,
+      "signal_keywords": [
+        "aurora",
+        "amazon aurora",
+        "aws aurora"
+      ]
     },
     {
       "id": "spanner",
@@ -7763,7 +8248,12 @@ async function loadSharedAnalysis(slug){
         "postgres"
       ],
       "innovation_token_cost": 1,
-      "domain_rank": 11
+      "domain_rank": 11,
+      "signal_keywords": [
+        "google spanner",
+        "cloud spanner",
+        "spanner"
+      ]
     },
     {
       "id": "sqlite",
@@ -7795,7 +8285,10 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "domain_rank": 6,
-      "note": "The most deployed database on earth. Routinely dismissed in architecture reviews that then reinvent it badly."
+      "note": "The most deployed database on earth. Routinely dismissed in architecture reviews that then reinvent it badly.",
+      "signal_keywords": [
+        "sqlite"
+      ]
     },
     {
       "id": "mongodb",
@@ -7831,7 +8324,11 @@ async function loadSharedAnalysis(slug){
         "dynamodb"
       ],
       "innovation_token_cost": 0,
-      "note": "Sued FerretDB in 2025 over Postgres-backed wire-protocol compatibility — a live risk signal for any compatibility layer."
+      "note": "Sued FerretDB in 2025 over Postgres-backed wire-protocol compatibility — a live risk signal for any compatibility layer.",
+      "signal_keywords": [
+        "mongo",
+        "mongodb"
+      ]
     },
     {
       "id": "cassandra",
@@ -7866,7 +8363,11 @@ async function loadSharedAnalysis(slug){
         "postgres"
       ],
       "innovation_token_cost": 1,
-      "note": "DataStax was acquired by IBM (~$3B) in 2025."
+      "note": "DataStax was acquired by IBM (~$3B) in 2025.",
+      "signal_keywords": [
+        "cassandra",
+        "apache cassandra"
+      ]
     },
     {
       "id": "scylladb",
@@ -7898,7 +8399,11 @@ async function loadSharedAnalysis(slug){
         "cassandra",
         "dynamodb"
       ],
-      "innovation_token_cost": 1
+      "innovation_token_cost": 1,
+      "signal_keywords": [
+        "scylladb",
+        "scylla"
+      ]
     },
     {
       "id": "dynamodb",
@@ -7931,7 +8436,11 @@ async function loadSharedAnalysis(slug){
         "mongodb"
       ],
       "innovation_token_cost": 0,
-      "note": "The access pattern must be designed before the table. Getting it wrong is not a tuning problem, it is a migration."
+      "note": "The access pattern must be designed before the table. Getting it wrong is not a tuning problem, it is a migration.",
+      "signal_keywords": [
+        "dynamodb",
+        "dynamo"
+      ]
     },
     {
       "id": "redis",
@@ -7965,7 +8474,10 @@ async function loadSharedAnalysis(slug){
         "postgres"
       ],
       "innovation_token_cost": 0,
-      "note": "Relicensed to SSPL in 2024, then added AGPLv3 in Redis 8 (2025) restoring OSI status — but cloud providers had already standardised on Valkey."
+      "note": "Relicensed to SSPL in 2024, then added AGPLv3 in Redis 8 (2025) restoring OSI status — but cloud providers had already standardised on Valkey.",
+      "signal_keywords": [
+        "redis"
+      ]
     },
     {
       "id": "valkey",
@@ -7997,7 +8509,10 @@ async function loadSharedAnalysis(slug){
         "redis"
       ],
       "innovation_token_cost": 0,
-      "note": "The fork stuck. AWS, Google and Oracle standardised on it even after Redis returned to an OSI licence — a useful lesson about how licence changes are not reversible in practice."
+      "note": "The fork stuck. AWS, Google and Oracle standardised on it even after Redis returned to an OSI licence — a useful lesson about how licence changes are not reversible in practice.",
+      "signal_keywords": [
+        "valkey"
+      ]
     },
     {
       "id": "couchbase",
@@ -8031,7 +8546,10 @@ async function loadSharedAnalysis(slug){
         "postgres"
       ],
       "innovation_token_cost": 1,
-      "note": "Taken private by Haveli Investments ($1.5B) in 2025."
+      "note": "Taken private by Haveli Investments ($1.5B) in 2025.",
+      "signal_keywords": [
+        "couchbase"
+      ]
     },
     {
       "id": "neo4j",
@@ -8064,7 +8582,10 @@ async function loadSharedAnalysis(slug){
         "postgres"
       ],
       "innovation_token_cost": 1,
-      "note": "Before recommending a graph database, check whether the query is genuinely multi-hop. Most \"graph problems\" are two joins."
+      "note": "Before recommending a graph database, check whether the query is genuinely multi-hop. Most \"graph problems\" are two joins.",
+      "signal_keywords": [
+        "neo4j"
+      ]
     },
     {
       "id": "etcd",
@@ -8095,7 +8616,10 @@ async function loadSharedAnalysis(slug){
       "alternatives": [
         "postgres"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "etcd"
+      ]
     },
     {
       "id": "snowflake",
@@ -8129,7 +8653,10 @@ async function loadSharedAnalysis(slug){
         "clickhouse"
       ],
       "innovation_token_cost": 0,
-      "domain_rank": 2
+      "domain_rank": 2,
+      "signal_keywords": [
+        "snowflake"
+      ]
     },
     {
       "id": "databricks",
@@ -8161,7 +8688,10 @@ async function loadSharedAnalysis(slug){
         "bigquery"
       ],
       "innovation_token_cost": 0,
-      "domain_rank": 1
+      "domain_rank": 1,
+      "signal_keywords": [
+        "databricks"
+      ]
     },
     {
       "id": "bigquery",
@@ -8195,7 +8725,11 @@ async function loadSharedAnalysis(slug){
         "clickhouse"
       ],
       "innovation_token_cost": 0,
-      "domain_rank": 4
+      "domain_rank": 4,
+      "signal_keywords": [
+        "bigquery",
+        "google bigquery"
+      ]
     },
     {
       "id": "redshift",
@@ -8228,7 +8762,11 @@ async function loadSharedAnalysis(slug){
         "databricks"
       ],
       "innovation_token_cost": 0,
-      "domain_rank": 6
+      "domain_rank": 6,
+      "signal_keywords": [
+        "redshift",
+        "amazon redshift"
+      ]
     },
     {
       "id": "clickhouse",
@@ -8264,7 +8802,10 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0.5,
       "domain_rank": 3,
-      "note": "The breakout analytics engine of this cycle. Radar Adopt in Vol 33."
+      "note": "The breakout analytics engine of this cycle. Radar Adopt in Vol 33.",
+      "signal_keywords": [
+        "clickhouse"
+      ]
     },
     {
       "id": "druid",
@@ -8296,7 +8837,11 @@ async function loadSharedAnalysis(slug){
         "clickhouse",
         "pinot"
       ],
-      "innovation_token_cost": 1
+      "innovation_token_cost": 1,
+      "signal_keywords": [
+        "apache druid",
+        "druid"
+      ]
     },
     {
       "id": "pinot",
@@ -8329,7 +8874,11 @@ async function loadSharedAnalysis(slug){
         "clickhouse",
         "druid"
       ],
-      "innovation_token_cost": 1
+      "innovation_token_cost": 1,
+      "signal_keywords": [
+        "apache pinot",
+        "pinot"
+      ]
     },
     {
       "id": "duckdb",
@@ -8362,7 +8911,10 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "domain_rank": 5,
-      "note": "Removes the need for a warehouse entirely at small and medium data sizes. Check data volume before recommending one."
+      "note": "Removes the need for a warehouse entirely at small and medium data sizes. Check data volume before recommending one.",
+      "signal_keywords": [
+        "duckdb"
+      ]
     },
     {
       "id": "fabric",
@@ -8395,7 +8947,11 @@ async function loadSharedAnalysis(slug){
         "databricks"
       ],
       "innovation_token_cost": 0,
-      "note": "Synapse is the predecessor; Microsoft is steering all new work to Fabric. Treat Synapse as legacy."
+      "note": "Synapse is the predecessor; Microsoft is steering all new work to Fabric. Treat Synapse as legacy.",
+      "signal_keywords": [
+        "microsoft fabric",
+        "ms fabric"
+      ]
     },
     {
       "id": "iceberg",
@@ -8428,7 +8984,11 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "domain_rank": 1,
-      "note": "Radar Adopt in Vol 34 and the clear winner of the format war. The live 2026 argument has moved to catalogues, not formats."
+      "note": "Radar Adopt in Vol 34 and the clear winner of the format war. The live 2026 argument has moved to catalogues, not formats.",
+      "signal_keywords": [
+        "apache iceberg",
+        "iceberg"
+      ]
     },
     {
       "id": "delta-lake",
@@ -8459,7 +9019,11 @@ async function loadSharedAnalysis(slug){
         "iceberg"
       ],
       "innovation_token_cost": 0,
-      "domain_rank": 2
+      "domain_rank": 2,
+      "signal_keywords": [
+        "delta lake",
+        "deltalake"
+      ]
     },
     {
       "id": "hudi",
@@ -8491,7 +9055,11 @@ async function loadSharedAnalysis(slug){
         "delta-lake"
       ],
       "innovation_token_cost": 1,
-      "domain_rank": 3
+      "domain_rank": 3,
+      "signal_keywords": [
+        "apache hudi",
+        "hudi"
+      ]
     },
     {
       "id": "pgvector",
@@ -8526,7 +9094,10 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "domain_rank": 1,
-      "note": "Won the sub-50M-vector segment decisively, with reported 40-60% TCO reduction versus dedicated services. Check corpus size before recommending anything else."
+      "note": "Won the sub-50M-vector segment decisively, with reported 40-60% TCO reduction versus dedicated services. Check corpus size before recommending anything else.",
+      "signal_keywords": [
+        "pgvector"
+      ]
     },
     {
       "id": "qdrant",
@@ -8560,7 +9131,10 @@ async function loadSharedAnalysis(slug){
         "weaviate"
       ],
       "innovation_token_cost": 1,
-      "domain_rank": 2
+      "domain_rank": 2,
+      "signal_keywords": [
+        "qdrant"
+      ]
     },
     {
       "id": "milvus",
@@ -8593,7 +9167,10 @@ async function loadSharedAnalysis(slug){
         "qdrant"
       ],
       "innovation_token_cost": 1,
-      "domain_rank": 3
+      "domain_rank": 3,
+      "signal_keywords": [
+        "milvus"
+      ]
     },
     {
       "id": "weaviate",
@@ -8626,7 +9203,10 @@ async function loadSharedAnalysis(slug){
         "pgvector"
       ],
       "innovation_token_cost": 1,
-      "domain_rank": 4
+      "domain_rank": 4,
+      "signal_keywords": [
+        "weaviate"
+      ]
     },
     {
       "id": "pinecone",
@@ -8659,7 +9239,10 @@ async function loadSharedAnalysis(slug){
         "qdrant"
       ],
       "innovation_token_cost": 1,
-      "domain_rank": 5
+      "domain_rank": 5,
+      "signal_keywords": [
+        "pinecone"
+      ]
     },
     {
       "id": "chroma",
@@ -8692,7 +9275,11 @@ async function loadSharedAnalysis(slug){
         "qdrant"
       ],
       "innovation_token_cost": 0,
-      "domain_rank": 6
+      "domain_rank": 6,
+      "signal_keywords": [
+        "chromadb",
+        "chroma"
+      ]
     },
     {
       "id": "timescaledb",
@@ -8727,7 +9314,11 @@ async function loadSharedAnalysis(slug){
         "clickhouse"
       ],
       "innovation_token_cost": 0.5,
-      "note": "Company renamed to TigerData in 2025. Not offered by AWS or GCP because the licence blocks it."
+      "note": "Company renamed to TigerData in 2025. Not offered by AWS or GCP because the licence blocks it.",
+      "signal_keywords": [
+        "timescaledb",
+        "timescale"
+      ]
     },
     {
       "id": "influxdb",
@@ -8762,7 +9353,10 @@ async function loadSharedAnalysis(slug){
         "clickhouse"
       ],
       "innovation_token_cost": 1,
-      "note": "Three incompatible generations (v1, v2, v3) cost it substantial trust. Weigh migration churn heavily."
+      "note": "Three incompatible generations (v1, v2, v3) cost it substantial trust. Weigh migration churn heavily.",
+      "signal_keywords": [
+        "influxdb"
+      ]
     },
     {
       "id": "prometheus",
@@ -8794,7 +9388,10 @@ async function loadSharedAnalysis(slug){
         "otel",
         "clickhouse"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "prometheus"
+      ]
     },
     {
       "id": "vue",
@@ -8829,7 +9426,12 @@ async function loadSharedAnalysis(slug){
         "angular"
       ],
       "innovation_token_cost": 0,
-      "domain_rank": 3
+      "domain_rank": 3,
+      "signal_keywords": [
+        "vue",
+        "vue.js",
+        "vuejs"
+      ]
     },
     {
       "id": "angular",
@@ -8865,7 +9467,10 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "domain_rank": 4,
-      "note": "Substantially reinvented: v21 removed Zone.js and made signals the default reactivity model. Advice based on pre-2024 Angular is stale."
+      "note": "Substantially reinvented: v21 removed Zone.js and made signals the default reactivity model. Advice based on pre-2024 Angular is stale.",
+      "signal_keywords": [
+        "angular"
+      ]
     },
     {
       "id": "svelte",
@@ -8900,7 +9505,11 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0.5,
       "domain_rank": 5,
-      "note": "Moved to Radar Adopt in Vol 34. Note the gap: 53.7% admired but only 7.2% used — enthusiasm has not converted to hiring pool."
+      "note": "Moved to Radar Adopt in Vol 34. Note the gap: 53.7% admired but only 7.2% used — enthusiasm has not converted to hiring pool.",
+      "signal_keywords": [
+        "svelte",
+        "sveltekit"
+      ]
     },
     {
       "id": "solid",
@@ -8933,7 +9542,11 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 1,
       "domain_rank": 6,
-      "note": "Highest satisfaction in State of JS five years running, and the design other frameworks copied. Still ~10% usage."
+      "note": "Highest satisfaction in State of JS five years running, and the design other frameworks copied. Still ~10% usage.",
+      "signal_keywords": [
+        "solidjs",
+        "solid.js"
+      ]
     },
     {
       "id": "qwik",
@@ -8966,7 +9579,10 @@ async function loadSharedAnalysis(slug){
         "nextjs"
       ],
       "innovation_token_cost": 2,
-      "domain_rank": 7
+      "domain_rank": 7,
+      "signal_keywords": [
+        "qwik"
+      ]
     },
     {
       "id": "alpinejs",
@@ -8999,7 +9615,11 @@ async function loadSharedAnalysis(slug){
         "react-ts"
       ],
       "innovation_token_cost": 0,
-      "domain_rank": 8
+      "domain_rank": 8,
+      "signal_keywords": [
+        "alpine.js",
+        "alpinejs"
+      ]
     },
     {
       "id": "react-router",
@@ -9031,7 +9651,10 @@ async function loadSharedAnalysis(slug){
         "tanstack-start"
       ],
       "innovation_token_cost": 0,
-      "note": "Remix v2 ideas live on here. Remix 3 dropped React entirely for a Preact fork and is research-stage — a common source of stale advice."
+      "note": "Remix v2 ideas live on here. Remix 3 dropped React entirely for a Preact fork and is research-stage — a common source of stale advice.",
+      "signal_keywords": [
+        "react router"
+      ]
     },
     {
       "id": "nuxt",
@@ -9062,7 +9685,12 @@ async function loadSharedAnalysis(slug){
         "nextjs",
         "astro"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "nuxt",
+        "nuxtjs",
+        "nuxt.js"
+      ]
     },
     {
       "id": "tanstack-start",
@@ -9093,7 +9721,11 @@ async function loadSharedAnalysis(slug){
         "nextjs",
         "react-router"
       ],
-      "innovation_token_cost": 1
+      "innovation_token_cost": 1,
+      "signal_keywords": [
+        "tanstack start",
+        "tanstack"
+      ]
     },
     {
       "id": "livewire",
@@ -9126,7 +9758,11 @@ async function loadSharedAnalysis(slug){
         "htmx-hotwire",
         "react-ts"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "livewire",
+        "laravel livewire"
+      ]
     },
     {
       "id": "liveview",
@@ -9158,7 +9794,11 @@ async function loadSharedAnalysis(slug){
         "react-ts"
       ],
       "innovation_token_cost": 1,
-      "note": "Technically the strongest of the hypermedia group because the BEAM makes a stateful socket per user cheap."
+      "note": "Technically the strongest of the hypermedia group because the BEAM makes a stateful socket per user cheap.",
+      "signal_keywords": [
+        "liveview",
+        "phoenix liveview"
+      ]
     },
     {
       "id": "blazor",
@@ -9192,7 +9832,10 @@ async function loadSharedAnalysis(slug){
         "react-ts",
         "htmx-hotwire"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "blazor"
+      ]
     },
     {
       "id": "vite",
@@ -9227,7 +9870,11 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "domain_rank": 1,
-      "note": "84% usage, 98% satisfaction. Vite 8 unified on the Rust Rolldown bundler. VoidZero was acquired by Cloudflare in June 2026 with the MIT licence and vendor neutrality retained."
+      "note": "84% usage, 98% satisfaction. Vite 8 unified on the Rust Rolldown bundler. VoidZero was acquired by Cloudflare in June 2026 with the MIT licence and vendor neutrality retained.",
+      "signal_keywords": [
+        "vite",
+        "vite.js"
+      ]
     },
     {
       "id": "turbopack",
@@ -9258,7 +9905,10 @@ async function loadSharedAnalysis(slug){
         "vite",
         "rspack"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "turbopack"
+      ]
     },
     {
       "id": "rspack",
@@ -9289,7 +9939,10 @@ async function loadSharedAnalysis(slug){
         "vite",
         "webpack"
       ],
-      "innovation_token_cost": 0.5
+      "innovation_token_cost": 0.5,
+      "signal_keywords": [
+        "rspack"
+      ]
     },
     {
       "id": "webpack",
@@ -9321,7 +9974,10 @@ async function loadSharedAnalysis(slug){
         "rspack"
       ],
       "innovation_token_cost": 0,
-      "note": "87% usage on install-base inertia but satisfaction collapsed to 26%. Legacy."
+      "note": "87% usage on install-base inertia but satisfaction collapsed to 26%. Legacy.",
+      "signal_keywords": [
+        "webpack"
+      ]
     },
     {
       "id": "esbuild",
@@ -9351,7 +10007,10 @@ async function loadSharedAnalysis(slug){
       "alternatives": [
         "vite"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "esbuild"
+      ]
     },
     {
       "id": "tailwind",
@@ -9384,7 +10043,12 @@ async function loadSharedAnalysis(slug){
         "vanilla-extract"
       ],
       "innovation_token_cost": 0,
-      "domain_rank": 1
+      "domain_rank": 1,
+      "signal_keywords": [
+        "tailwind",
+        "tailwindcss",
+        "tailwind css"
+      ]
     },
     {
       "id": "css-modules",
@@ -9415,7 +10079,10 @@ async function loadSharedAnalysis(slug){
         "tailwind",
         "vanilla-extract"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "css modules"
+      ]
     },
     {
       "id": "styled-components",
@@ -9448,7 +10115,11 @@ async function loadSharedAnalysis(slug){
         "vanilla-extract"
       ],
       "innovation_token_cost": 0,
-      "note": "Entered maintenance mode in 2025 and has known RSC limitations. The clearest single signal that runtime CSS-in-JS is declining."
+      "note": "Entered maintenance mode in 2025 and has known RSC limitations. The clearest single signal that runtime CSS-in-JS is declining.",
+      "signal_keywords": [
+        "styled-components",
+        "styled components"
+      ]
     },
     {
       "id": "vanilla-extract",
@@ -9479,7 +10150,10 @@ async function loadSharedAnalysis(slug){
         "tailwind",
         "css-modules"
       ],
-      "innovation_token_cost": 0.5
+      "innovation_token_cost": 0.5,
+      "signal_keywords": [
+        "vanilla-extract"
+      ]
     },
     {
       "id": "tanstack-query",
@@ -9510,7 +10184,11 @@ async function loadSharedAnalysis(slug){
         "redux-toolkit",
         "zustand"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "react query",
+        "tanstack query"
+      ]
     },
     {
       "id": "zustand",
@@ -9541,7 +10219,10 @@ async function loadSharedAnalysis(slug){
         "redux-toolkit",
         "tanstack-query"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "zustand"
+      ]
     },
     {
       "id": "redux-toolkit",
@@ -9572,7 +10253,12 @@ async function loadSharedAnalysis(slug){
         "zustand",
         "tanstack-query"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "redux",
+        "redux toolkit",
+        "rtk"
+      ]
     },
     {
       "id": "shadcn",
@@ -9605,7 +10291,12 @@ async function loadSharedAnalysis(slug){
         "antd"
       ],
       "innovation_token_cost": 0,
-      "note": "Switched default primitives from Radix to Base UI in July 2026. Radix is not deprecated and remains selectable."
+      "note": "Switched default primitives from Radix to Base UI in July 2026. Radix is not deprecated and remains selectable.",
+      "signal_keywords": [
+        "shadcn",
+        "shadcn/ui",
+        "shadcn ui"
+      ]
     },
     {
       "id": "mui",
@@ -9638,7 +10329,11 @@ async function loadSharedAnalysis(slug){
         "radix"
       ],
       "innovation_token_cost": 0,
-      "note": "The licensing trap in this category: the data grid and date pickers people actually need are in the paid X tiers."
+      "note": "The licensing trap in this category: the data grid and date pickers people actually need are in the paid X tiers.",
+      "signal_keywords": [
+        "material ui",
+        "mui"
+      ]
     },
     {
       "id": "antd",
@@ -9670,7 +10365,11 @@ async function loadSharedAnalysis(slug){
         "mui",
         "shadcn"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "ant design",
+        "antd"
+      ]
     },
     {
       "id": "radix",
@@ -9701,7 +10400,11 @@ async function loadSharedAnalysis(slug){
         "shadcn",
         "mui"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "radix ui",
+        "radix"
+      ]
     },
     {
       "id": "aws",
@@ -9736,7 +10439,11 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "domain_rank": 1,
-      "note": "28% market share, #1. Leads on large estates. The Oct 2025 us-east-1 DNS failure showed that AZ redundancy does not protect against control-plane failures."
+      "note": "28% market share, #1. Leads on large estates. The Oct 2025 us-east-1 DNS failure showed that AZ redundancy does not protect against control-plane failures.",
+      "signal_keywords": [
+        "aws",
+        "amazon web services"
+      ]
     },
     {
       "id": "azure",
@@ -9770,7 +10477,11 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "domain_rank": 2,
-      "note": "21% share. Near-parity with AWS in enterprise presence. Existing licence position decides more migrations than technical merit."
+      "note": "21% share. Near-parity with AWS in enterprise presence. Existing licence position decides more migrations than technical merit.",
+      "signal_keywords": [
+        "azure",
+        "microsoft azure"
+      ]
     },
     {
       "id": "gcp",
@@ -9804,7 +10515,12 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "domain_rank": 3,
-      "note": "14% share, firmly third. Sustained-use discounts apply automatically, which flatters unmanaged estates."
+      "note": "14% share, firmly third. Sustained-use discounts apply automatically, which flatters unmanaged estates.",
+      "signal_keywords": [
+        "gcp",
+        "google cloud",
+        "google cloud platform"
+      ]
     },
     {
       "id": "oci",
@@ -9839,7 +10555,11 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 1,
       "domain_rank": 4,
-      "note": "OCI revenue +93% YoY on AI contracts, but FY26 free cash flow was -$23.7B. Weigh counterparty concentration risk explicitly in a long contract."
+      "note": "OCI revenue +93% YoY on AI contracts, but FY26 free cash flow was -$23.7B. Weigh counterparty concentration risk explicitly in a long contract.",
+      "signal_keywords": [
+        "oci",
+        "oracle cloud"
+      ]
     },
     {
       "id": "ibm-cloud",
@@ -9870,7 +10590,10 @@ async function loadSharedAnalysis(slug){
         "aws",
         "azure"
       ],
-      "innovation_token_cost": 1
+      "innovation_token_cost": 1,
+      "signal_keywords": [
+        "ibm cloud"
+      ]
     },
     {
       "id": "alibaba-cloud",
@@ -9901,7 +10624,11 @@ async function loadSharedAnalysis(slug){
         "aws",
         "azure"
       ],
-      "innovation_token_cost": 1
+      "innovation_token_cost": 1,
+      "signal_keywords": [
+        "alibaba cloud",
+        "aliyun"
+      ]
     },
     {
       "id": "cloudflare",
@@ -9935,7 +10662,11 @@ async function loadSharedAnalysis(slug){
         "vercel"
       ],
       "innovation_token_cost": 0,
-      "note": "The Nov 2025 6-hour outage was a config-propagation failure, not capacity — same class as the AWS and Azure incidents that month."
+      "note": "The Nov 2025 6-hour outage was a config-propagation failure, not capacity — same class as the AWS and Azure incidents that month.",
+      "signal_keywords": [
+        "cloudflare",
+        "cloudflare workers"
+      ]
     },
     {
       "id": "hetzner",
@@ -9972,7 +10703,10 @@ async function loadSharedAnalysis(slug){
         "data_residency": "eu-owned",
         "air_gapped": false
       },
-      "note": "Raised CPX/CCX prices 2.1x-3.1x in June 2026 — the third increase that year. Most cheap-EU-compute business cases predate this and are now wrong."
+      "note": "Raised CPX/CCX prices 2.1x-3.1x in June 2026 — the third increase that year. Most cheap-EU-compute business cases predate this and are now wrong.",
+      "signal_keywords": [
+        "hetzner"
+      ]
     },
     {
       "id": "digitalocean",
@@ -10004,7 +10738,11 @@ async function loadSharedAnalysis(slug){
         "aws",
         "render"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "digitalocean",
+        "digital ocean"
+      ]
     },
     {
       "id": "fly-io",
@@ -10037,7 +10775,11 @@ async function loadSharedAnalysis(slug){
         "render",
         "cloudflare"
       ],
-      "innovation_token_cost": 0.5
+      "innovation_token_cost": 0.5,
+      "signal_keywords": [
+        "fly.io",
+        "flyio"
+      ]
     },
     {
       "id": "railway",
@@ -10068,7 +10810,11 @@ async function loadSharedAnalysis(slug){
         "render",
         "fly-io"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "railway.app",
+        "railway"
+      ]
     },
     {
       "id": "render",
@@ -10100,7 +10846,10 @@ async function loadSharedAnalysis(slug){
         "fly-io",
         "digitalocean"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "render.com"
+      ]
     },
     {
       "id": "vms",
@@ -10132,7 +10881,13 @@ async function loadSharedAnalysis(slug){
         "serverless-containers"
       ],
       "innovation_token_cost": 0,
-      "note": "Arm in the cloud is Radar Adopt: 30-40% price/performance improvement for near-zero migration effort. The single highest-yield cost lever after commitment coverage."
+      "note": "Arm in the cloud is Radar Adopt: 30-40% price/performance improvement for near-zero migration effort. The single highest-yield cost lever after commitment coverage.",
+      "signal_keywords": [
+        "virtual machines",
+        "ec2",
+        "compute engine",
+        "azure vm"
+      ]
     },
     {
       "id": "kubernetes",
@@ -10167,7 +10922,14 @@ async function loadSharedAnalysis(slug){
         "vms"
       ],
       "innovation_token_cost": 1,
-      "note": "82% of container users run it in production; 66% of GenAI orgs use it for inference. Always take the managed control plane — the fee is noise against staffing cost."
+      "note": "82% of container users run it in production; 66% of GenAI orgs use it for inference. Always take the managed control plane — the fee is noise against staffing cost.",
+      "signal_keywords": [
+        "kubernetes",
+        "k8s",
+        "eks",
+        "gke",
+        "aks"
+      ]
     },
     {
       "id": "serverless-containers",
@@ -10200,7 +10962,13 @@ async function loadSharedAnalysis(slug){
         "vms"
       ],
       "innovation_token_cost": 0,
-      "note": "Cloud Run and Container Apps scale to zero; Fargate does not. That difference decides the cost model."
+      "note": "Cloud Run and Container Apps scale to zero; Fargate does not. That difference decides the cost model.",
+      "signal_keywords": [
+        "cloud run",
+        "fargate",
+        "container apps",
+        "serverless containers"
+      ]
     },
     {
       "id": "faas",
@@ -10232,7 +11000,13 @@ async function loadSharedAnalysis(slug){
         "serverless-containers",
         "kubernetes"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "lambda",
+        "cloud functions",
+        "azure functions",
+        "serverless functions"
+      ]
     },
     {
       "id": "paas",
@@ -10263,7 +11037,12 @@ async function loadSharedAnalysis(slug){
         "serverless-containers",
         "render"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "heroku",
+        "app engine",
+        "elastic beanstalk"
+      ]
     },
     {
       "id": "edge-compute",
@@ -10295,7 +11074,12 @@ async function loadSharedAnalysis(slug){
         "cloudflare"
       ],
       "innovation_token_cost": 0.5,
-      "note": "Vercel folded Edge Functions into Vercel Functions in 2025; Deno Deploy Classic shut down July 2026. The category consolidated."
+      "note": "Vercel folded Edge Functions into Vercel Functions in 2025; Deno Deploy Classic shut down July 2026. The category consolidated.",
+      "signal_keywords": [
+        "edge workers",
+        "edge functions",
+        "lambda@edge"
+      ]
     },
     {
       "id": "gateway-api",
@@ -10326,7 +11110,11 @@ async function loadSharedAnalysis(slug){
         "ingress-nginx"
       ],
       "innovation_token_cost": 0,
-      "note": "ingress-nginx retires in March 2026 with no further security patches, and it fronts roughly half of cloud-native environments. This is a forced migration, not an optional upgrade."
+      "note": "ingress-nginx retires in March 2026 with no further security patches, and it fronts roughly half of cloud-native environments. This is a forced migration, not an optional upgrade.",
+      "signal_keywords": [
+        "gateway api",
+        "k8s gateway"
+      ]
     },
     {
       "id": "ingress-nginx",
@@ -10357,7 +11145,11 @@ async function loadSharedAnalysis(slug){
         "gateway-api"
       ],
       "innovation_token_cost": 2,
-      "note": "Retirement announced by the Kubernetes Steering and Security Response Committees. If a client still runs this, it is the most urgent item in their estate."
+      "note": "Retirement announced by the Kubernetes Steering and Security Response Committees. If a client still runs this, it is the most urgent item in their estate.",
+      "signal_keywords": [
+        "ingress nginx",
+        "nginx ingress"
+      ]
     },
     {
       "id": "istio",
@@ -10388,7 +11180,10 @@ async function loadSharedAnalysis(slug){
         "linkerd",
         "cilium"
       ],
-      "innovation_token_cost": 1
+      "innovation_token_cost": 1,
+      "signal_keywords": [
+        "istio"
+      ]
     },
     {
       "id": "linkerd",
@@ -10419,7 +11214,10 @@ async function loadSharedAnalysis(slug){
         "istio",
         "cilium"
       ],
-      "innovation_token_cost": 1
+      "innovation_token_cost": 1,
+      "signal_keywords": [
+        "linkerd"
+      ]
     },
     {
       "id": "cilium",
@@ -10450,7 +11248,11 @@ async function loadSharedAnalysis(slug){
         "istio",
         "linkerd"
       ],
-      "innovation_token_cost": 1
+      "innovation_token_cost": 1,
+      "signal_keywords": [
+        "cilium",
+        "ebpf"
+      ]
     },
     {
       "id": "keda",
@@ -10480,7 +11282,10 @@ async function loadSharedAnalysis(slug){
       "alternatives": [
         "karpenter"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "keda"
+      ]
     },
     {
       "id": "karpenter",
@@ -10510,7 +11315,10 @@ async function loadSharedAnalysis(slug){
       "alternatives": [
         "keda"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "karpenter"
+      ]
     },
     {
       "id": "sovereign-cloud",
@@ -10546,7 +11354,11 @@ async function loadSharedAnalysis(slug){
         "data_residency": "eu-resident",
         "air_gapped": "partial"
       },
-      "note": "AWS European Sovereign Cloud went GA Jan 2026 in Brandenburg with EU-citizen-led governance. The CLOUD Act objection remains unanswered. For genuine non-US jurisdiction, look at Hetzner, Scaleway or Infomaniak."
+      "note": "AWS European Sovereign Cloud went GA Jan 2026 in Brandenburg with EU-citizen-led governance. The CLOUD Act objection remains unanswered. For genuine non-US jurisdiction, look at Hetzner, Scaleway or Infomaniak.",
+      "signal_keywords": [
+        "sovereign cloud",
+        "eu sovereign cloud"
+      ]
     },
     {
       "id": "github-actions",
@@ -10580,7 +11392,10 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "domain_rank": 1,
-      "note": "33% org adoption, the leader. After the tj-actions compromise (CVE-2025-30066), SHA-pinning third-party actions and least-privilege permissions are non-negotiable."
+      "note": "33% org adoption, the leader. After the tj-actions compromise (CVE-2025-30066), SHA-pinning third-party actions and least-privilege permissions are non-negotiable.",
+      "signal_keywords": [
+        "github actions"
+      ]
     },
     {
       "id": "jenkins",
@@ -10613,7 +11428,10 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "domain_rank": 2,
-      "note": "28% org adoption — the largest absolute footprint and almost no new adoption. Install base, not a choice."
+      "note": "28% org adoption — the largest absolute footprint and almost no new adoption. Install base, not a choice.",
+      "signal_keywords": [
+        "jenkins"
+      ]
     },
     {
       "id": "gitlab-ci",
@@ -10645,7 +11463,12 @@ async function loadSharedAnalysis(slug){
         "jenkins"
       ],
       "innovation_token_cost": 0,
-      "domain_rank": 3
+      "domain_rank": 3,
+      "signal_keywords": [
+        "gitlab ci",
+        "gitlab-ci",
+        "gitlab pipelines"
+      ]
     },
     {
       "id": "azure-pipelines",
@@ -10675,7 +11498,11 @@ async function loadSharedAnalysis(slug){
       "alternatives": [
         "github-actions"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "azure devops",
+        "azure pipelines"
+      ]
     },
     {
       "id": "circleci",
@@ -10705,7 +11532,11 @@ async function loadSharedAnalysis(slug){
       "alternatives": [
         "github-actions"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "circleci",
+        "circle ci"
+      ]
     },
     {
       "id": "buildkite",
@@ -10736,7 +11567,10 @@ async function loadSharedAnalysis(slug){
         "github-actions",
         "argo-workflows"
       ],
-      "innovation_token_cost": 0.5
+      "innovation_token_cost": 0.5,
+      "signal_keywords": [
+        "buildkite"
+      ]
     },
     {
       "id": "argo-workflows",
@@ -10767,7 +11601,10 @@ async function loadSharedAnalysis(slug){
         "tekton",
         "github-actions"
       ],
-      "innovation_token_cost": 1
+      "innovation_token_cost": 1,
+      "signal_keywords": [
+        "argo workflows"
+      ]
     },
     {
       "id": "tekton",
@@ -10798,7 +11635,10 @@ async function loadSharedAnalysis(slug){
         "argo-workflows",
         "github-actions"
       ],
-      "innovation_token_cost": 2
+      "innovation_token_cost": 2,
+      "signal_keywords": [
+        "tekton"
+      ]
     },
     {
       "id": "dagger",
@@ -10828,7 +11668,11 @@ async function loadSharedAnalysis(slug){
       "alternatives": [
         "github-actions"
       ],
-      "innovation_token_cost": 1
+      "innovation_token_cost": 1,
+      "signal_keywords": [
+        "dagger.io",
+        "dagger"
+      ]
     },
     {
       "id": "argocd",
@@ -10861,7 +11705,11 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "domain_rank": 1,
-      "note": "~60% of respondents Kubernetes clusters, 97% run it in production, NPS 79. The clear winner."
+      "note": "~60% of respondents Kubernetes clusters, 97% run it in production, NPS 79. The clear winner.",
+      "signal_keywords": [
+        "argocd",
+        "argo cd"
+      ]
     },
     {
       "id": "flux",
@@ -10892,7 +11740,11 @@ async function loadSharedAnalysis(slug){
         "argocd"
       ],
       "innovation_token_cost": 0,
-      "domain_rank": 2
+      "domain_rank": 2,
+      "signal_keywords": [
+        "fluxcd",
+        "flux"
+      ]
     },
     {
       "id": "spinnaker",
@@ -10923,7 +11775,10 @@ async function loadSharedAnalysis(slug){
         "argocd",
         "harness"
       ],
-      "innovation_token_cost": 2
+      "innovation_token_cost": 2,
+      "signal_keywords": [
+        "spinnaker"
+      ]
     },
     {
       "id": "harness",
@@ -10954,7 +11809,10 @@ async function loadSharedAnalysis(slug){
         "argocd",
         "github-actions"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "harness"
+      ]
     },
     {
       "id": "terraform",
@@ -10989,7 +11847,10 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "domain_rank": 1,
-      "note": "IBM completed the $6.4B HashiCorp acquisition Feb 2025. The licence did not revert. Community PRs fell from 21% to ~9% of contributions."
+      "note": "IBM completed the $6.4B HashiCorp acquisition Feb 2025. The licence did not revert. Community PRs fell from 21% to ~9% of contributions.",
+      "signal_keywords": [
+        "terraform"
+      ]
     },
     {
       "id": "opentofu",
@@ -11022,7 +11883,11 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "domain_rank": 2,
-      "note": "A genuine viable fork, not a protest: 140+ corporate backers, roughly half of Spacelift deployments, and features Terraform lacks."
+      "note": "A genuine viable fork, not a protest: 140+ corporate backers, roughly half of Spacelift deployments, and features Terraform lacks.",
+      "signal_keywords": [
+        "opentofu",
+        "tofu"
+      ]
     },
     {
       "id": "pulumi",
@@ -11053,7 +11918,10 @@ async function loadSharedAnalysis(slug){
         "terraform",
         "opentofu"
       ],
-      "innovation_token_cost": 0.5
+      "innovation_token_cost": 0.5,
+      "signal_keywords": [
+        "pulumi"
+      ]
     },
     {
       "id": "aws-cdk",
@@ -11085,7 +11953,11 @@ async function loadSharedAnalysis(slug){
         "opentofu",
         "pulumi"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "aws cdk",
+        "cdk"
+      ]
     },
     {
       "id": "crossplane",
@@ -11117,7 +11989,10 @@ async function loadSharedAnalysis(slug){
         "opentofu"
       ],
       "innovation_token_cost": 1,
-      "note": "CNCF Graduated Oct 2025."
+      "note": "CNCF Graduated Oct 2025.",
+      "signal_keywords": [
+        "crossplane"
+      ]
     },
     {
       "id": "ansible",
@@ -11149,7 +12024,10 @@ async function loadSharedAnalysis(slug){
         "opentofu"
       ],
       "innovation_token_cost": 0,
-      "note": "A configuration-management tool, not a provisioning competitor. Teams conflate the two and then wonder why drift is unmanaged."
+      "note": "A configuration-management tool, not a provisioning competitor. Teams conflate the two and then wonder why drift is unmanaged.",
+      "signal_keywords": [
+        "ansible"
+      ]
     },
     {
       "id": "sigstore",
@@ -11180,7 +12058,11 @@ async function loadSharedAnalysis(slug){
         "slsa"
       ],
       "innovation_token_cost": 0,
-      "note": "Now the substrate under npm provenance, GitHub Artifact Attestations and Homebrew provenance."
+      "note": "Now the substrate under npm provenance, GitHub Artifact Attestations and Homebrew provenance.",
+      "signal_keywords": [
+        "sigstore",
+        "cosign"
+      ]
     },
     {
       "id": "slsa",
@@ -11210,7 +12092,10 @@ async function loadSharedAnalysis(slug){
       "alternatives": [
         "sigstore"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "slsa"
+      ]
     },
     {
       "id": "cyclonedx",
@@ -11242,7 +12127,10 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "domain_rank": 1,
-      "note": "44% adoption versus SPDX 29% (ENISA 2026). CRA reporting obligations bite 11 Sept 2026 — this is a near-term deadline, not a future concern."
+      "note": "44% adoption versus SPDX 29% (ENISA 2026). CRA reporting obligations bite 11 Sept 2026 — this is a near-term deadline, not a future concern.",
+      "signal_keywords": [
+        "cyclonedx"
+      ]
     },
     {
       "id": "spdx",
@@ -11273,7 +12161,10 @@ async function loadSharedAnalysis(slug){
         "cyclonedx"
       ],
       "innovation_token_cost": 0,
-      "domain_rank": 2
+      "domain_rank": 2,
+      "signal_keywords": [
+        "spdx"
+      ]
     },
     {
       "id": "renovate",
@@ -11303,7 +12194,11 @@ async function loadSharedAnalysis(slug){
       "alternatives": [
         "dependabot"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "renovate",
+        "renovatebot"
+      ]
     },
     {
       "id": "dependabot",
@@ -11333,7 +12228,10 @@ async function loadSharedAnalysis(slug){
       "alternatives": [
         "renovate"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "dependabot"
+      ]
     },
     {
       "id": "backstage",
@@ -11366,7 +12264,11 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 1,
       "domain_rank": 1,
-      "note": "CNCF Incubating, not graduated. The New Frontend System migration is a 6-9 month project for orgs with 50+ custom plugins, and Spotify moved Portal features to a commercial package in 2025."
+      "note": "CNCF Incubating, not graduated. The New Frontend System migration is a 6-9 month project for orgs with 50+ custom plugins, and Spotify moved Portal features to a commercial package in 2025.",
+      "signal_keywords": [
+        "spotify backstage",
+        "backstage"
+      ]
     },
     {
       "id": "port",
@@ -11399,7 +12301,11 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "domain_rank": 2,
-      "note": "The only internal developer portal blipped in Radar Vol 34."
+      "note": "The only internal developer portal blipped in Radar Vol 34.",
+      "signal_keywords": [
+        "getport.io",
+        "port idp"
+      ]
     },
     {
       "id": "humanitec",
@@ -11430,7 +12336,10 @@ async function loadSharedAnalysis(slug){
         "backstage",
         "port"
       ],
-      "innovation_token_cost": 1
+      "innovation_token_cost": 1,
+      "signal_keywords": [
+        "humanitec"
+      ]
     },
     {
       "id": "okta-workforce",
@@ -11464,7 +12373,10 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "domain_rank": 1,
-      "note": "Module stacking (SSO, MFA, Lifecycle, Governance, PAM priced separately) is the main cost surprise. Acquired Axiom Security in 2025 for privileged access."
+      "note": "Module stacking (SSO, MFA, Lifecycle, Governance, PAM priced separately) is the main cost surprise. Acquired Axiom Security in 2025 for privileged access.",
+      "signal_keywords": [
+        "okta"
+      ]
     },
     {
       "id": "entra-id",
@@ -11500,7 +12412,13 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "domain_rank": 2,
-      "note": "Renamed from Azure AD in 2023; naming is stable. CVE-2025-55241 allowed cross-tenant impersonation to Global Admin — tenant isolation in a shared IdP is a trust assumption, not a guarantee."
+      "note": "Renamed from Azure AD in 2023; naming is stable. CVE-2025-55241 allowed cross-tenant impersonation to Global Admin — tenant isolation in a shared IdP is a trust assumption, not a guarantee.",
+      "signal_keywords": [
+        "entra id",
+        "entra",
+        "azure ad",
+        "azure active directory"
+      ]
     },
     {
       "id": "ping-identity",
@@ -11539,7 +12457,12 @@ async function loadSharedAnalysis(slug){
         "data_residency": "self-host-ok",
         "air_gapped": true
       },
-      "note": "ForgeRock is NOT a separate company: Thoma Bravo merged it into Ping in Aug 2023. Products live on as PingOne Advanced Identity Cloud and PingAM/IDM/DS/Gateway. Saying \"ForgeRock is gone\" is wrong in front of an existing customer."
+      "note": "ForgeRock is NOT a separate company: Thoma Bravo merged it into Ping in Aug 2023. Products live on as PingOne Advanced Identity Cloud and PingAM/IDM/DS/Gateway. Saying \"ForgeRock is gone\" is wrong in front of an existing customer.",
+      "signal_keywords": [
+        "ping identity",
+        "pingone",
+        "ping federate"
+      ]
     },
     {
       "id": "sailpoint",
@@ -11572,7 +12495,10 @@ async function loadSharedAnalysis(slug){
         "entra-id"
       ],
       "innovation_token_cost": 1,
-      "note": "Re-IPO on Nasdaq Feb 2025; Thoma Bravo retains majority control. IGA and IdP are different products — teams routinely conflate them."
+      "note": "Re-IPO on Nasdaq Feb 2025; Thoma Bravo retains majority control. IGA and IdP are different products — teams routinely conflate them.",
+      "signal_keywords": [
+        "sailpoint"
+      ]
     },
     {
       "id": "cyberark",
@@ -11606,7 +12532,10 @@ async function loadSharedAnalysis(slug){
         "teleport"
       ],
       "innovation_token_cost": 1,
-      "note": "Palo Alto Networks completed a ~$25B acquisition on 11 Feb 2026. Solutions remain available standalone while being integrated."
+      "note": "Palo Alto Networks completed a ~$25B acquisition on 11 Feb 2026. Solutions remain available standalone while being integrated.",
+      "signal_keywords": [
+        "cyberark"
+      ]
     },
     {
       "id": "jumpcloud",
@@ -11637,7 +12566,10 @@ async function loadSharedAnalysis(slug){
         "entra-id",
         "okta-workforce"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "jumpcloud"
+      ]
     },
     {
       "id": "auth0",
@@ -11672,7 +12604,10 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "domain_rank": 1,
-      "note": "A widely-discussed repricing made high-MAU B2C expensive. Model the MAU curve before committing, not after."
+      "note": "A widely-discussed repricing made high-MAU B2C expensive. Model the MAU curve before committing, not after.",
+      "signal_keywords": [
+        "auth0"
+      ]
     },
     {
       "id": "cognito",
@@ -11705,7 +12640,11 @@ async function loadSharedAnalysis(slug){
         "keycloak",
         "entra-external-id"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "aws cognito",
+        "cognito"
+      ]
     },
     {
       "id": "entra-external-id",
@@ -11738,7 +12677,11 @@ async function loadSharedAnalysis(slug){
         "keycloak"
       ],
       "innovation_token_cost": 0,
-      "note": "Azure AD B2C closed to new customers May 2025 and loses its P2 tier Mar 2026, but is supported to at least May 2030. Migration is urgent-ish, not an emergency."
+      "note": "Azure AD B2C closed to new customers May 2025 and loses its P2 tier Mar 2026, but is supported to at least May 2030. Migration is urgent-ish, not an emergency.",
+      "signal_keywords": [
+        "entra external id",
+        "azure ad b2c"
+      ]
     },
     {
       "id": "ory",
@@ -11771,7 +12714,11 @@ async function loadSharedAnalysis(slug){
         "supertokens",
         "fusionauth"
       ],
-      "innovation_token_cost": 1
+      "innovation_token_cost": 1,
+      "signal_keywords": [
+        "ory",
+        "ory kratos"
+      ]
     },
     {
       "id": "supertokens",
@@ -11804,7 +12751,10 @@ async function loadSharedAnalysis(slug){
         "fusionauth",
         "clerk"
       ],
-      "innovation_token_cost": 1
+      "innovation_token_cost": 1,
+      "signal_keywords": [
+        "supertokens"
+      ]
     },
     {
       "id": "clerk",
@@ -11836,7 +12786,12 @@ async function loadSharedAnalysis(slug){
         "workos",
         "supertokens"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "clerk.dev",
+        "clerk auth",
+        "clerk"
+      ]
     },
     {
       "id": "workos",
@@ -11869,7 +12824,10 @@ async function loadSharedAnalysis(slug){
         "frontegg"
       ],
       "innovation_token_cost": 0,
-      "note": "Priced per enterprise connection rather than per MAU — a genuinely different cost shape that suits B2B and breaks for B2C."
+      "note": "Priced per enterprise connection rather than per MAU — a genuinely different cost shape that suits B2B and breaks for B2C.",
+      "signal_keywords": [
+        "workos"
+      ]
     },
     {
       "id": "fusionauth",
@@ -11902,7 +12860,10 @@ async function loadSharedAnalysis(slug){
         "ory",
         "supertokens"
       ],
-      "innovation_token_cost": 0.5
+      "innovation_token_cost": 0.5,
+      "signal_keywords": [
+        "fusionauth"
+      ]
     },
     {
       "id": "descope",
@@ -11934,7 +12895,10 @@ async function loadSharedAnalysis(slug){
         "clerk",
         "frontegg"
       ],
-      "innovation_token_cost": 0.5
+      "innovation_token_cost": 0.5,
+      "signal_keywords": [
+        "descope"
+      ]
     },
     {
       "id": "frontegg",
@@ -11966,7 +12930,10 @@ async function loadSharedAnalysis(slug){
         "auth0",
         "clerk"
       ],
-      "innovation_token_cost": 0.5
+      "innovation_token_cost": 0.5,
+      "signal_keywords": [
+        "frontegg"
+      ]
     },
     {
       "id": "stytch",
@@ -11999,7 +12966,10 @@ async function loadSharedAnalysis(slug){
         "descope"
       ],
       "innovation_token_cost": 0.5,
-      "note": "Acquired by Twilio, announced Oct 2025 and closed Nov 2025, positioned as Twilio intelligent identity layer for AI-agent authentication."
+      "note": "Acquired by Twilio, announced Oct 2025 and closed Nov 2025, positioned as Twilio intelligent identity layer for AI-agent authentication.",
+      "signal_keywords": [
+        "stytch"
+      ]
     },
     {
       "id": "spiffe-spire",
@@ -12031,7 +13001,11 @@ async function loadSharedAnalysis(slug){
         "iam-roles-anywhere"
       ],
       "innovation_token_cost": 1,
-      "note": "Radar Vol 34 puts Zero Trust Architecture in Adopt and extends it to AI agents via SPIFFE. This is the emerging answer to agent identity."
+      "note": "Radar Vol 34 puts Zero Trust Architecture in Adopt and extends it to AI agents via SPIFFE. This is the emerging answer to agent identity.",
+      "signal_keywords": [
+        "spiffe",
+        "spire"
+      ]
     },
     {
       "id": "vault",
@@ -12065,7 +13039,11 @@ async function loadSharedAnalysis(slug){
         "cyberark"
       ],
       "innovation_token_cost": 1,
-      "note": "IBM completed the $6.4B HashiCorp acquisition Feb 2025; the BUSL licence was retained, not reverted."
+      "note": "IBM completed the $6.4B HashiCorp acquisition Feb 2025; the BUSL licence was retained, not reverted.",
+      "signal_keywords": [
+        "hashicorp vault",
+        "vault"
+      ]
     },
     {
       "id": "openbao",
@@ -12096,7 +13074,10 @@ async function loadSharedAnalysis(slug){
         "vault"
       ],
       "innovation_token_cost": 1,
-      "note": "NVIDIA has adopted it; commercial support is emerging. The credible open fork after the BUSL change."
+      "note": "NVIDIA has adopted it; commercial support is emerging. The credible open fork after the BUSL change.",
+      "signal_keywords": [
+        "openbao"
+      ]
     },
     {
       "id": "cert-manager",
@@ -12126,7 +13107,10 @@ async function loadSharedAnalysis(slug){
       "alternatives": [
         "vault"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "cert-manager"
+      ]
     },
     {
       "id": "iam-roles-anywhere",
@@ -12156,7 +13140,10 @@ async function loadSharedAnalysis(slug){
       "alternatives": [
         "spiffe-spire"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "iam roles anywhere"
+      ]
     },
     {
       "id": "teleport",
@@ -12188,7 +13175,10 @@ async function loadSharedAnalysis(slug){
         "cyberark",
         "vault"
       ],
-      "innovation_token_cost": 1
+      "innovation_token_cost": 1,
+      "signal_keywords": [
+        "teleport"
+      ]
     },
     {
       "id": "oidc",
@@ -12219,7 +13209,11 @@ async function loadSharedAnalysis(slug){
         "saml"
       ],
       "innovation_token_cost": 0,
-      "domain_rank": 1
+      "domain_rank": 1,
+      "signal_keywords": [
+        "oidc",
+        "openid connect"
+      ]
     },
     {
       "id": "saml",
@@ -12250,7 +13244,11 @@ async function loadSharedAnalysis(slug){
         "oidc"
       ],
       "innovation_token_cost": 0,
-      "note": "Declining but not dying. The practical rule: build OIDC, support SAML for inbound enterprise connections."
+      "note": "Declining but not dying. The practical rule: build OIDC, support SAML for inbound enterprise connections.",
+      "signal_keywords": [
+        "saml",
+        "saml 2.0"
+      ]
     },
     {
       "id": "scim",
@@ -12274,10 +13272,15 @@ async function loadSharedAnalysis(slug){
       "best_when": [
         "automated user provisioning and deprovisioning — now table stakes for B2B SaaS procurement"
       ],
-      "avoid_when": [],
+      "avoid_when": [
+        "teams with simple static architectures not needing this pattern"
+      ],
       "alternatives": [],
       "innovation_token_cost": 0,
-      "note": "If you sell B2B SaaS upmarket, the absence of SCIM will lose deals before anyone evaluates your product."
+      "note": "If you sell B2B SaaS upmarket, the absence of SCIM will lose deals before anyone evaluates your product.",
+      "signal_keywords": [
+        "scim"
+      ]
     },
     {
       "id": "fapi2",
@@ -12311,7 +13314,11 @@ async function loadSharedAnalysis(slug){
       "compliance": {
         "bfsi": true
       },
-      "note": "Reached Final status at the OpenID Foundation in 2025 with conformance tests published. This is the BFSI baseline, not an aspiration."
+      "note": "Reached Final status at the OpenID Foundation in 2025 with conformance tests published. This is the BFSI baseline, not an aspiration.",
+      "signal_keywords": [
+        "fapi",
+        "fapi2"
+      ]
     },
     {
       "id": "dpop",
@@ -12343,7 +13350,10 @@ async function loadSharedAnalysis(slug){
         "oidc"
       ],
       "innovation_token_cost": 0.5,
-      "note": "Mainstreamed directly in response to the 2025 Salesloft Drift OAuth refresh-token breach. Token Binding is dead; DPoP is the live answer."
+      "note": "Mainstreamed directly in response to the 2025 Salesloft Drift OAuth refresh-token breach. Token Binding is dead; DPoP is the live answer.",
+      "signal_keywords": [
+        "dpop"
+      ]
     },
     {
       "id": "mtls",
@@ -12373,7 +13383,11 @@ async function loadSharedAnalysis(slug){
       "alternatives": [
         "dpop"
       ],
-      "innovation_token_cost": 0
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "mtls",
+        "mutual tls"
+      ]
     },
     {
       "id": "verifiable-credentials",
@@ -12407,7 +13421,11 @@ async function loadSharedAnalysis(slug){
       "compliance": {
         "eu": true
       },
-      "note": "W3C VC 2.0 became a Recommendation in May 2025, removing the standards-maturity blocker. eIDAS 2.0 is the forcing function — build acceptance now if you are an EU regulated relying party."
+      "note": "W3C VC 2.0 became a Recommendation in May 2025, removing the standards-maturity blocker. eIDAS 2.0 is the forcing function — build acceptance now if you are an EU regulated relying party.",
+      "signal_keywords": [
+        "verifiable credentials",
+        "did"
+      ]
     },
     {
       "id": "passkeys",
@@ -12440,7 +13458,12 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "domain_rank": 1,
-      "note": "Radar Adopt in Vol 34. ~5 billion passkeys in use; 68% of orgs have deployed or are deploying for employees. A lookalike site receives nothing — unlike TOTP or SMS OTP."
+      "note": "Radar Adopt in Vol 34. ~5 billion passkeys in use; 68% of orgs have deployed or are deploying for employees. A lookalike site receives nothing — unlike TOTP or SMS OTP.",
+      "signal_keywords": [
+        "passkeys",
+        "webauthn",
+        "fido2"
+      ]
     },
     {
       "id": "totp",
@@ -12472,7 +13495,11 @@ async function loadSharedAnalysis(slug){
         "push-mfa"
       ],
       "innovation_token_cost": 0,
-      "domain_rank": 2
+      "domain_rank": 2,
+      "signal_keywords": [
+        "totp",
+        "authenticator app"
+      ]
     },
     {
       "id": "push-mfa",
@@ -12504,7 +13531,11 @@ async function loadSharedAnalysis(slug){
         "totp"
       ],
       "innovation_token_cost": 0,
-      "domain_rank": 3
+      "domain_rank": 3,
+      "signal_keywords": [
+        "push mfa",
+        "push notification mfa"
+      ]
     },
     {
       "id": "sms-otp",
@@ -12537,7 +13568,11 @@ async function loadSharedAnalysis(slug){
       ],
       "innovation_token_cost": 0,
       "domain_rank": 4,
-      "note": "Restricted, not prohibited. Describing it as \"deprecated\" is wrong; describing it as a default is worse. India RBI directions effective Apr 2026 require a dynamically generated transaction-linked factor, which also pushes past SMS OTP."
+      "note": "Restricted, not prohibited. Describing it as \"deprecated\" is wrong; describing it as a default is worse. India RBI directions effective Apr 2026 require a dynamically generated transaction-linked factor, which also pushes past SMS OTP.",
+      "signal_keywords": [
+        "sms otp",
+        "sms mfa"
+      ]
     },
     {
       "id": "adaptive-auth",
@@ -12567,7 +13602,11 @@ async function loadSharedAnalysis(slug){
       "alternatives": [
         "passkeys"
       ],
-      "innovation_token_cost": 0.5
+      "innovation_token_cost": 0.5,
+      "signal_keywords": [
+        "adaptive auth",
+        "risk-based auth"
+      ]
     },
     {
       "id": "opa",
@@ -12600,7 +13639,11 @@ async function loadSharedAnalysis(slug){
         "spicedb"
       ],
       "innovation_token_cost": 1,
-      "domain_rank": 1
+      "domain_rank": 1,
+      "signal_keywords": [
+        "open policy agent",
+        "opa"
+      ]
     },
     {
       "id": "cedar",
@@ -12633,7 +13676,11 @@ async function loadSharedAnalysis(slug){
         "opa",
         "openfga"
       ],
-      "innovation_token_cost": 1
+      "innovation_token_cost": 1,
+      "signal_keywords": [
+        "cedar policy",
+        "aws verified permissions"
+      ]
     },
     {
       "id": "openfga",
@@ -12667,7 +13714,10 @@ async function loadSharedAnalysis(slug){
         "cedar"
       ],
       "innovation_token_cost": 1,
-      "note": "Became a CNCF Incubating project Nov 2025. Donated by Okta/Auth0."
+      "note": "Became a CNCF Incubating project Nov 2025. Donated by Okta/Auth0.",
+      "signal_keywords": [
+        "openfga"
+      ]
     },
     {
       "id": "spicedb",
@@ -12699,7 +13749,11 @@ async function loadSharedAnalysis(slug){
         "openfga",
         "opa"
       ],
-      "innovation_token_cost": 1
+      "innovation_token_cost": 1,
+      "signal_keywords": [
+        "spicedb",
+        "authzed"
+      ]
     },
     {
       "id": "rbac",
@@ -12732,7 +13786,11 @@ async function loadSharedAnalysis(slug){
         "cedar"
       ],
       "innovation_token_cost": 0,
-      "note": "The live 2026 pattern is RBAC for coarse roles plus ReBAC/ABAC for fine-grained object and context decisions, externalised from application code."
+      "note": "The live 2026 pattern is RBAC for coarse roles plus ReBAC/ABAC for fine-grained object and context decisions, externalised from application code.",
+      "signal_keywords": [
+        "rbac",
+        "role-based access control"
+      ]
     },
     {
       "id": "ollama-self-hosted",
@@ -12773,7 +13831,12 @@ async function loadSharedAnalysis(slug){
         "openrouter"
       ],
       "innovation_token_cost": 1,
-      "note": "Break-even against frontier API pricing typically needs tens of millions of tokens/month of sustained, predictable traffic — see r-llm-self-host-gate. Below that, self-hosting is an ops cost with no offsetting savings."
+      "note": "Break-even against frontier API pricing typically needs tens of millions of tokens/month of sustained, predictable traffic — see r-llm-self-host-gate. Below that, self-hosting is an ops cost with no offsetting savings.",
+      "signal_keywords": [
+        "ollama",
+        "self-hosted llm",
+        "local llm"
+      ]
     },
     {
       "id": "cloud-api-anthropic",
@@ -12815,7 +13878,11 @@ async function loadSharedAnalysis(slug){
         "openrouter"
       ],
       "innovation_token_cost": 0,
-      "note": "Enterprise procurement commonly routes through AWS Bedrock, Google Cloud Vertex AI, or Microsoft Foundry rather than the direct API — same models, different billing/compliance wrapper."
+      "note": "Enterprise procurement commonly routes through AWS Bedrock, Google Cloud Vertex AI, or Microsoft Foundry rather than the direct API — same models, different billing/compliance wrapper.",
+      "signal_keywords": [
+        "anthropic",
+        "claude"
+      ]
     },
     {
       "id": "cloud-api-openai",
@@ -12857,7 +13924,11 @@ async function loadSharedAnalysis(slug){
         "openrouter"
       ],
       "innovation_token_cost": 0,
-      "note": "Frontier-tier pricing moves fast and by model generation — verify current per-token pricing against the live docs before budgeting; do not treat any single number here as durable."
+      "note": "Frontier-tier pricing moves fast and by model generation — verify current per-token pricing against the live docs before budgeting; do not treat any single number here as durable.",
+      "signal_keywords": [
+        "openai",
+        "chatgpt"
+      ]
     },
     {
       "id": "cloud-api-google",
@@ -12899,7 +13970,11 @@ async function loadSharedAnalysis(slug){
         "openrouter"
       ],
       "innovation_token_cost": 0,
-      "note": "Gemini Flash/Flash-Lite variants exist specifically to undercut frontier per-token pricing for high-volume, lower-complexity calls — check the current model list before assuming \"Gemini\" means the Pro tier."
+      "note": "Gemini Flash/Flash-Lite variants exist specifically to undercut frontier per-token pricing for high-volume, lower-complexity calls — check the current model list before assuming \"Gemini\" means the Pro tier.",
+      "signal_keywords": [
+        "google ai",
+        "gemini"
+      ]
     },
     {
       "id": "openrouter",
@@ -12938,7 +14013,10 @@ async function loadSharedAnalysis(slug){
         "cloud-api-openai"
       ],
       "innovation_token_cost": 1,
-      "note": "Adds a per-request routing fee (commonly cited around 5.5%) on top of each underlying provider's own per-token pricing — verify current terms before committing to it as the default access path."
+      "note": "Adds a per-request routing fee (commonly cited around 5.5%) on top of each underlying provider's own per-token pricing — verify current terms before committing to it as the default access path.",
+      "signal_keywords": [
+        "openrouter"
+      ]
     },
     {
       "id": "claude-sonnet",
@@ -12976,7 +14054,12 @@ async function loadSharedAnalysis(slug){
         "ollama-self-hosted"
       ],
       "innovation_token_cost": 0,
-      "note": "1M-token context window, 128K max output, $2/input MTok and $10/output MTok as of the current generation per Anthropic's own pricing table (Aug 2026) — re-verify before budgeting, pricing and context limits change by model generation."
+      "note": "1M-token context window, 128K max output, $2/input MTok and $10/output MTok as of the current generation per Anthropic's own pricing table (Aug 2026) — re-verify before budgeting, pricing and context limits change by model generation.",
+      "signal_keywords": [
+        "claude sonnet",
+        "claude 3.5 sonnet",
+        "sonnet"
+      ]
     },
     {
       "id": "openai-gpt-frontier",
@@ -13014,7 +14097,13 @@ async function loadSharedAnalysis(slug){
         "ollama-self-hosted"
       ],
       "innovation_token_cost": 0,
-      "note": "Current frontier tier (per OpenAI's own API model docs, Aug 2026) runs a ~1.05M-token context window and 128K max output; per-token pricing is tiered by sub-variant and by a long-context request threshold — verify against the live pricing page, this is the fastest-moving number in the whole KB."
+      "note": "Current frontier tier (per OpenAI's own API model docs, Aug 2026) runs a ~1.05M-token context window and 128K max output; per-token pricing is tiered by sub-variant and by a long-context request threshold — verify against the live pricing page, this is the fastest-moving number in the whole KB.",
+      "signal_keywords": [
+        "gpt-4o",
+        "gpt-4",
+        "o1",
+        "o3-mini"
+      ]
     },
     {
       "id": "gemini-pro",
@@ -13052,7 +14141,12 @@ async function loadSharedAnalysis(slug){
         "ollama-self-hosted"
       ],
       "innovation_token_cost": 0,
-      "note": "Widely documented at a 1M-token input context window (2M-token tiers reported rolling out on enterprise/Vertex AI paths) with output capped around 64K tokens — treat the exact current figures as needing re-verification against ai.google.dev before citing in a proposal."
+      "note": "Widely documented at a 1M-token input context window (2M-token tiers reported rolling out on enterprise/Vertex AI paths) with output capped around 64K tokens — treat the exact current figures as needing re-verification against ai.google.dev before citing in a proposal.",
+      "signal_keywords": [
+        "gemini pro",
+        "gemini 1.5 pro",
+        "gemini 2.0"
+      ]
     },
     {
       "id": "qwen25-family",
@@ -13090,7 +14184,12 @@ async function loadSharedAnalysis(slug){
         "claude-sonnet"
       ],
       "innovation_token_cost": 0.5,
-      "note": "Ollama library lists 0.5B/1.5B/3B/7B/14B/32B/72B variants; the Ollama-packaged versions run a 32K context window (upstream Qwen2.5 documents up to 128K input capability) and 8K generation cap. Verified locally installed at 0.5B, 3B, and 7B on this deployment via `ollama list`."
+      "note": "Ollama library lists 0.5B/1.5B/3B/7B/14B/32B/72B variants; the Ollama-packaged versions run a 32K context window (upstream Qwen2.5 documents up to 128K input capability) and 8K generation cap. Verified locally installed at 0.5B, 3B, and 7B on this deployment via `ollama list`.",
+      "signal_keywords": [
+        "qwen",
+        "qwen 2.5",
+        "qwen2.5"
+      ]
     },
     {
       "id": "gemma3-family",
@@ -13129,7 +14228,12 @@ async function loadSharedAnalysis(slug){
         "claude-sonnet"
       ],
       "innovation_token_cost": 0.5,
-      "note": "270M/1B variants run a 32K context window; 4B/12B/27B (multimodal) variants run 128K. Verified locally installed at the 4B size on this deployment via `ollama list`."
+      "note": "270M/1B variants run a 32K context window; 4B/12B/27B (multimodal) variants run 128K. Verified locally installed at the 4B size on this deployment via `ollama list`.",
+      "signal_keywords": [
+        "gemma",
+        "gemma 2",
+        "gemma 3"
+      ]
     },
     {
       "id": "mistral-7b",
@@ -13167,7 +14271,12 @@ async function loadSharedAnalysis(slug){
         "claude-sonnet"
       ],
       "innovation_token_cost": 0.5,
-      "note": "7B parameters, 32K context window, Apache 2.0 license per Ollama's library page. Verified locally installed on this deployment via `ollama list`."
+      "note": "7B parameters, 32K context window, Apache 2.0 license per Ollama's library page. Verified locally installed on this deployment via `ollama list`.",
+      "signal_keywords": [
+        "mistral",
+        "mixtral",
+        "mistral 7b"
+      ]
     },
     {
       "id": "deepseek-coder-distilled",
@@ -13204,7 +14313,373 @@ async function loadSharedAnalysis(slug){
         "claude-sonnet"
       ],
       "innovation_token_cost": 0.5,
-      "note": "1.3B/6.7B/33B parameter variants, 16K context window per Ollama's library page; license not stated there. Verified locally installed at the 1.3B size on this deployment via `ollama list` — light-duty use only, not a substitute for a real code-reasoning model at that size."
+      "note": "1.3B/6.7B/33B parameter variants, 16K context window per Ollama's library page; license not stated there. Verified locally installed at the 1.3B size on this deployment via `ollama list` — light-duty use only, not a substitute for a real code-reasoning model at that size.",
+      "signal_keywords": [
+        "deepseek",
+        "deepseek coder",
+        "deepseek-r1"
+      ]
+    },
+    {
+      "id": "dynatrace",
+      "name": "Dynatrace",
+      "category": "observability-apm",
+      "domain": "observability",
+      "surfaces": [
+        "backend",
+        "ops"
+      ],
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "twr34"
+      },
+      "hiring_pool": "medium",
+      "hiring_source_id": "so2025",
+      "license": "Proprietary SaaS / Managed",
+      "hosting": [
+        "saas",
+        "managed"
+      ],
+      "exit_cost": "high",
+      "tco_shape": "vendor-heavy",
+      "best_when": [
+        "large enterprise requiring automated full-stack AI root-cause analysis (Davis AI)",
+        "hybrid on-prem and multi-cloud legacy enterprise environments"
+      ],
+      "avoid_when": [
+        "early-stage startups with tight opex budgets",
+        "cloud-native serverless-only microservices where OpenTelemetry + Grafana suffices"
+      ],
+      "alternatives": [
+        "datadog",
+        "newrelic",
+        "otel",
+        "prometheus"
+      ],
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "dynatrace"
+      ]
+    },
+    {
+      "id": "datadog",
+      "name": "Datadog",
+      "category": "observability-saas",
+      "domain": "observability",
+      "surfaces": [
+        "backend",
+        "frontend",
+        "ops"
+      ],
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "twr34"
+      },
+      "hiring_pool": "high",
+      "hiring_source_id": "so2025",
+      "license": "Proprietary SaaS",
+      "hosting": [
+        "saas"
+      ],
+      "exit_cost": "high",
+      "tco_shape": "vendor-heavy",
+      "best_when": [
+        "fast-moving teams wanting unified turnkey APM, logs, metrics, synthetic testing, and security in one pane",
+        "teams without dedicated SRE headcount to self-host observability stacks"
+      ],
+      "avoid_when": [
+        "extreme log/trace volume where unmetered custom metric bills become prohibitive",
+        "strict air-gapped on-premise constraints where SaaS egress is forbidden"
+      ],
+      "alternatives": [
+        "dynatrace",
+        "newrelic",
+        "otel",
+        "prometheus"
+      ],
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "datadog"
+      ]
+    },
+    {
+      "id": "splunk",
+      "name": "Splunk",
+      "category": "log-analytics",
+      "domain": "observability",
+      "surfaces": [
+        "backend",
+        "ops"
+      ],
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "twr33"
+      },
+      "hiring_pool": "high",
+      "hiring_source_id": "so2025",
+      "license": "Proprietary / Cisco",
+      "hosting": [
+        "saas",
+        "self",
+        "hybrid"
+      ],
+      "exit_cost": "high",
+      "tco_shape": "vendor-heavy",
+      "best_when": [
+        "enterprise SIEM security compliance and high-volume structured log search",
+        "established enterprise SOC security operations"
+      ],
+      "avoid_when": [
+        "lightweight app development seeking cheap distributed tracing"
+      ],
+      "alternatives": [
+        "elasticsearch",
+        "datadog",
+        "otel"
+      ],
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "splunk"
+      ]
+    },
+    {
+      "id": "newrelic",
+      "name": "New Relic",
+      "category": "observability-apm",
+      "domain": "observability",
+      "surfaces": [
+        "backend",
+        "frontend",
+        "ops"
+      ],
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "twr33"
+      },
+      "hiring_pool": "medium-high",
+      "hiring_source_id": "so2025",
+      "license": "Proprietary SaaS",
+      "hosting": [
+        "saas"
+      ],
+      "exit_cost": "medium",
+      "tco_shape": "vendor-heavy",
+      "best_when": [
+        "per-user pricing model fits engineering org structure better than Datadog host-based metering",
+        "turnkey full-stack observability with generous free tier"
+      ],
+      "avoid_when": [
+        "teams requiring deep eBPF infrastructure automation"
+      ],
+      "alternatives": [
+        "datadog",
+        "dynatrace",
+        "otel"
+      ],
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "new relic",
+        "newrelic"
+      ]
+    },
+    {
+      "id": "elasticsearch",
+      "name": "Elasticsearch / ELK Stack",
+      "category": "log-analytics",
+      "domain": "observability",
+      "surfaces": [
+        "backend",
+        "ops"
+      ],
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "twr34"
+      },
+      "hiring_pool": "very-high",
+      "hiring_source_id": "so2025",
+      "license": "ELv2 / SSPL / OpenSearch (Apache-2.0)",
+      "hosting": [
+        "self",
+        "cloud",
+        "managed"
+      ],
+      "exit_cost": "medium",
+      "tco_shape": "eng-heavy",
+      "best_when": [
+        "self-hosted log aggregation and full-text search at high volume",
+        "avoiding SaaS per-gigabyte log retention costs"
+      ],
+      "avoid_when": [
+        "small teams with zero ops capacity to manage cluster sharding and storage heap"
+      ],
+      "alternatives": [
+        "splunk",
+        "clickhouse",
+        "otel"
+      ],
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "elk stack",
+        "elasticsearch",
+        "opensearch",
+        "elk"
+      ]
+    },
+    {
+      "id": "grafana",
+      "name": "Grafana",
+      "category": "observability-visualization",
+      "domain": "observability",
+      "surfaces": [
+        "ops",
+        "admin"
+      ],
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "twr34"
+      },
+      "hiring_pool": "very-high",
+      "hiring_source_id": "so2025",
+      "license": "AGPL-3.0 / Grafana Cloud",
+      "hosting": [
+        "self",
+        "saas",
+        "cloud"
+      ],
+      "exit_cost": "low",
+      "tco_shape": "mixed",
+      "best_when": [
+        "de-facto industry standard for metric dashboards paired with Prometheus, Loki, and Tempo",
+        "plugging multiple heterogenous data sources into one unified dashboard"
+      ],
+      "avoid_when": [
+        "teams wanting zero dashboard configuration"
+      ],
+      "alternatives": [
+        "datadog",
+        "metabase"
+      ],
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "grafana",
+        "grafana dashboards"
+      ]
+    },
+    {
+      "id": "sonarqube",
+      "name": "SonarQube",
+      "category": "code-quality-security",
+      "domain": "quality",
+      "surfaces": [
+        "cicd",
+        "ops"
+      ],
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "twr34"
+      },
+      "hiring_pool": "high",
+      "hiring_source_id": "so2025",
+      "license": "LGPL-3.0 / Commercial Enterprise",
+      "hosting": [
+        "self",
+        "saas"
+      ],
+      "exit_cost": "low",
+      "tco_shape": "mixed",
+      "best_when": [
+        "automated static analysis (SAST), code smell detection, and security quality gates in CI/CD pipelines",
+        "enforcing test coverage and maintainability standards across multiple languages"
+      ],
+      "avoid_when": [
+        "lightweight repos that rely purely on fast native linters (e.g. Ruff/Biome/Clippy)"
+      ],
+      "alternatives": [
+        "github-actions",
+        "renovate"
+      ],
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "sonarqube",
+        "sonar",
+        "sonarcloud"
+      ]
+    },
+    {
+      "id": "jprofiler",
+      "name": "JProfiler",
+      "category": "profiling-tools",
+      "domain": "observability",
+      "surfaces": [
+        "backend",
+        "ops"
+      ],
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "twr33"
+      },
+      "hiring_pool": "medium",
+      "hiring_source_id": "so2025",
+      "license": "Commercial Proprietary",
+      "hosting": [
+        "local",
+        "self"
+      ],
+      "exit_cost": "low",
+      "tco_shape": "vendor-heavy",
+      "best_when": [
+        "deep JVM memory leak, CPU bottleneck, thread deadlock, and GC overhead diagnostics",
+        "profiling production-grade Java and Kotlin enterprise microservices"
+      ],
+      "avoid_when": [
+        "non-JVM languages (Node, Python, Go, Rust)",
+        "continuous production tracing where lightweight APM sampling is preferred"
+      ],
+      "alternatives": [
+        "visualvm",
+        "otel"
+      ],
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "jprofiler"
+      ]
+    },
+    {
+      "id": "visualvm",
+      "name": "VisualVM",
+      "category": "profiling-tools",
+      "domain": "observability",
+      "surfaces": [
+        "backend",
+        "ops"
+      ],
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "twr33"
+      },
+      "hiring_pool": "high",
+      "hiring_source_id": "so2025",
+      "license": "GPL-2.0-with-classpath-exception",
+      "hosting": [
+        "local"
+      ],
+      "exit_cost": "low",
+      "tco_shape": "eng-heavy",
+      "best_when": [
+        "free, open-source visual JVM monitoring and heap dump inspection bundled with standard JDK",
+        "fast local profiling and live thread sampling during development"
+      ],
+      "avoid_when": [
+        "teams needing advanced multi-JVM telemetry correlation or automated memory leak alerts"
+      ],
+      "alternatives": [
+        "jprofiler",
+        "otel"
+      ],
+      "innovation_token_cost": 0,
+      "signal_keywords": [
+        "visualvm"
+      ]
     }
   ],
   "rules": [
