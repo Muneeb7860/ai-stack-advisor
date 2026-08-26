@@ -52,8 +52,8 @@ absent, so the counts differ by machine:
 
 | Environment | Result |
 |---|---|
-| Ollama running (`ollama serve` + `ollama pull nomic-embed-text`) | 157 passed, 1 xfailed |
-| No Ollama (and what CI runs) | 132 passed, 26 skipped |
+| Ollama running (`ollama serve` + `ollama pull nomic-embed-text`) | 158 passed, 1 xfailed |
+| No Ollama (and what CI runs) | 133 passed, 26 skipped |
 
 The 26 are the retrieval eval plus two grounding-context tests — they embed against the local
 Ollama daemon, so without it they would fail on missing infrastructure rather than on retrieval

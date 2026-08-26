@@ -13,12 +13,12 @@ is a materially larger task than seeding a signal, and nothing in this repo
 currently exercises rule_engine.py's picks from a live request path the way
 index.html's picks are exercised by the browser UI.
 """
-import json
 import shutil
-import subprocess
 from pathlib import Path
 
 import pytest
+
+from tests.node_harness import run_node_json
 
 INDEX_HTML = Path(__file__).resolve().parents[2] / "index.html"
 NODE_AVAILABLE = shutil.which("node") is not None
@@ -69,9 +69,7 @@ def huawei_scenario_result():
     source = INDEX_HTML.read_text(encoding="utf-8")
     script = _extract_main_script(source)
     node_script = _HARNESS % {"script": script}
-    proc = subprocess.run(["node", "-e", node_script], capture_output=True, text=True, timeout=30)
-    assert proc.returncode == 0, f"Node execution failed:\n{proc.stderr}"
-    return json.loads(proc.stdout)
+    return run_node_json(node_script)
 
 
 @requires_node
