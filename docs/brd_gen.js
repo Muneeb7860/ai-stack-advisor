@@ -14,7 +14,7 @@ children.push(...coverTitle(
   'Business Requirements Document',
   'Rule-based multi-role architecture advisor',
   [
-    ['Document Version', '1.2'],
+    ['Document Version', '1.3'],
     ['Status', 'Draft — for internal review (v2 backend + frontend wiring both shipped; see Section 8.2 and Section 12)'],
     ['Prepared by', 'Muneeb, with Claude (Cowork)'],
     ['Date', new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })],
@@ -34,6 +34,7 @@ children.push(reqTable(
     ['1.0', 'Same session', 'Muneeb / Claude', 'This BRD formalizes the business case for the product built and validated to date'],
     ['1.1', 'Later session', 'Muneeb / Claude', 'v2 backend built and tested (share links, /api/refine, /api/ask, MCP tool wrapper). Updated BR-9 and the roadmap (Section 12) to reflect shipped status; BR-7/BR-8 remain not met — no functional requirement content changed otherwise.'],
     ['1.2', 'Later session (audit)', 'Muneeb / Claude', 'Found via a documentation-vs-code validation pass: Section 8.2 previously listed only the backend API as shipped, without stating whether the frontend actually called it (it didn\'t, for a stretch of this project). Rewrote Section 8.2 to separate backend-shipped from frontend-wired, and added four features that existed in code but nowhere in this document: guided input mode, per-card "why this pick" signal inspection, refinement-pass history, and real (not just estimated) LLM cost display. Also corrected the signal-dimension count (was "30+", actual is 65+).'],
+    ['1.3', 'Later session', 'Muneeb / Claude', 'Documented four features shipped since 1.2 in Section 8.2: an AI Opportunity & Leverage Layer surfacing where AI could plausibly be added to a recommended stack; a unified, maintainer-extensible technology catalog; Huawei Cloud vendor support, broadening the product\'s addressable market to teams already committed to (or evaluating) Huawei Cloud, particularly APAC/China-market deployments; and a new Hybrid Connectivity core category. Corrected the signal-dimension count again (65+ -> 100+, PRD Section 2). No BR status changes — all four are client-side capability additions within the existing BR-5 (zero marginal cost) constraint.'],
   ]
 ));
 children.push(h2('1.2 Related Documents'));
@@ -146,6 +147,10 @@ children.push(bulletBold('Guided input mode — ', 'an equal-weight mode picker 
 children.push(bulletBold('"Why this pick," made inspectable — ', 'every stack card shows exactly which detected signals drove that specific recommendation, not just a confidence badge.'));
 children.push(bulletBold('Refinement history, not just the latest pass — ', 'every "Refine with AI" pass is kept, not overwritten, so a user can compare how the reasoning changed across repeated passes (this is also what makes the BRD Section 7 "disagreement rate" metric measurable later).'));
 children.push(bulletBold('Real cost, not just estimated cost — ', 'real Anthropic token usage from the refine/ask response is shown next to the existing directional cost estimate, not just guessed.'));
+children.push(bulletBold('AI Opportunity & Leverage Layer — ', 'a 12-pattern catalog surfacing where AI could plausibly be added to (or upgraded within) a recommended stack, with compliance-aware guardrails (e.g. Text-to-SQL is never suggested unguarded against regulated data). Client-side only, no marginal cost.'));
+children.push(bulletBold('Unified, extensible technology catalog — ', '243 technologies in one source of truth, with a maintainer CLI (scripts/add_tech.py) and a client-side custom-overlay so the catalog can grow without a code release for every addition.'));
+children.push(bulletBold('Huawei Cloud vendor support — ', 'recommendations now branch on Huawei Cloud the same way they already do for AWS/Azure/GCP, extending the product\'s relevance to teams already on (or evaluating) Huawei Cloud, particularly APAC/China-market deployments — a market segment the product previously had zero coverage for.'));
+children.push(bulletBold('Hybrid Connectivity — ', 'a new core recommendation category for teams bridging on-prem and cloud infrastructure via a dedicated link, matched to whichever cloud vendor was recommended.'));
 children.push(h2('8.3 Out of Scope'));
 children.push(bullet('Provisioning or executing infrastructure changes — this is an advisory tool only, never a "terraform apply" tool'));
 children.push(bullet('Multi-user accounts, team collaboration, or role-based access control'));
@@ -197,6 +202,7 @@ children.push(reqTable(
     ['v1', 'Client-side rule engine, full stack + AI-serving + governance recommendation surface', 'Shipped'],
     ['v1.1', 'QA/validation pass — negation handling, on-prem support, data-warehouse detection', 'Shipped'],
     ['v2', 'LLM refinement layer, persistence (share links), grounded follow-up Q&A, MCP tool wrapper', 'Shipped'],
+    ['v2.2', 'AI Opportunity & Leverage Layer, unified/extensible technology catalog, Huawei Cloud vendor support, Hybrid Connectivity category — see PRD Section 11 for the technical detail', 'Shipped'],
     ['v3', 'Informed by real user feedback per BR-7 — scope not yet defined', 'Not started'],
   ]
 ));

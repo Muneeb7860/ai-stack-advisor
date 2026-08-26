@@ -14,8 +14,8 @@ children.push(...coverTitle(
   'Product Requirements Document',
   'Functional & technical specification',
   [
-    ['Document Version', '1.3'],
-    ['Status', 'v1 and v2 shipped, frontend actually wired to the backend — see Section 7.7, Section 9.2, and Release Plan (Section 11)'],
+    ['Document Version', '1.5'],
+    ['Status', 'v1 and v2 shipped, frontend actually wired to the backend — see Section 7.7, Section 9.2, and Release Plan (Section 11). Hexagonal diagram-export architecture, AI Opportunity Layer, technology-catalog unification, Huawei Cloud vendor support, and Hybrid Connectivity added in a later session — see Section 7.2, 7.7, 9.4, and Release Plan.'],
     ['Prepared by', 'Muneeb, with Claude (Cowork)'],
     ['Date', new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })],
     ['Companion document', 'Business Requirements Document (BRD)'],
@@ -33,12 +33,13 @@ children.push(reqTable(
     ['1.2', 'v2 backend built and tested in a later session (FastAPI + Postgres + Alembic; share links, /api/refine, /api/ask, and the MCP tool wrapper — FR-27/28/29 all shipped, /api/refine and /api/ask grounded in the 1.1 RAG corpus). Updated Section 7.7, 9.2, and the Release Plan (Section 11) to reflect that; no functional requirement content changed, only status.'],
     ['1.3', 'Found via a documentation-vs-code validation pass: FR-27–29 marked "Shipped" based on the backend alone, without ever stating whether index.html actually called those endpoints — for a real stretch of this project it didn\'t (confirmed by grep: zero fetch() calls). Rewrote Section 7.7 to state both layers explicitly, added FR-27a (independent ask), FR-30 (why-this-pick signal inspection), and FR-31 (real cost display) — all shipped but previously undocumented. Corrected the Release Plan\'s stale "44 passing tests" to the actual 93 (verified via a live pytest run, not the prior static count).'],
     ['1.4', 'Resolved Open Questions in Section 13 (target segment hypothesis, telemetry privacy policy, low-overhead feedback mechanism) and formalized Flow View as FR-31a with cross-reference to v1.5 Release Plan.'],
+    ['1.5', 'Later session: refactored diagram export (Flow View, Mermaid, Draw.io, SVG) onto a single hexagonal-architecture domain core (Section 9.4) — fixed a real inconsistency where exporters showed 5-8 nodes against Flow View\'s 18-20. Added the AI Opportunity & Leverage Layer (FR-32), unified the technology catalog into one source of truth with a maintainer CLI and client-side custom overlay (FR-33), added Huawei Cloud vendor support (FR-34) and a new Hybrid Connectivity core category (FR-6a, 16th category). Corrected stale counts: signal dimensions 65+ -> 100+, pickX() functions 45 -> 47, KB technologies now 243. Two real bugs found and fixed during this work, not just features added — see Section 12.'],
   ]
 ));
 
 // ---------- Overview ----------
 children.push(h1('2. Product Overview'));
-children.push(p('AI Stack Advisor is a single-page web application. A user pastes a free-text description of their product or business requirement; the application detects signals in that text across 65+ dimensions (industry, scale, compliance, latency, data type, team size, existing vendor commitments, and more) and renders a full architecture recommendation organized into 16 navigable sections, covering both traditional infrastructure decisions and AI-native decisions.'));
+children.push(p('AI Stack Advisor is a single-page web application. A user pastes a free-text description of their product or business requirement; the application detects signals in that text across 100+ dimensions (industry, scale, compliance, latency, data type, team size, existing vendor commitments, and more) and renders a full architecture recommendation organized into 16 navigable sections, covering both traditional infrastructure decisions and AI-native decisions.'));
 children.push(p('v1 runs entirely client-side: a JavaScript rule engine embedded in a single HTML file, with no server, no API calls, and no data leaving the browser. v2 adds an optional backend for LLM-assisted refinement of ambiguous cases (grounded in a RAG knowledge-base corpus), persistence via share links, and an MCP tool wrapper for use from Claude Desktop/Code — all shipped.'));
 
 // ---------- Problem statement ----------
@@ -99,11 +100,12 @@ children.push(reqTable(['ID', 'Requirement'], [1000, 7400], [
   ['FR-5', 'Detect on-premises/air-gapped/no-public-cloud requirements from raw (non-negation-stripped) text, since these are phrased using negation words that are themselves the requirement.'],
 ]));
 
-children.push(h2('7.2 Core Technical Stack (15 categories)'));
-children.push(p('Cloud provider, API gateway/edge, IAM, backend language(s), architecture style, compute model, messaging/streaming, service mesh, caching, primary database(s), containers/orchestration, observability, frontend, CI/CD & deployment, DNS.'));
+children.push(h2('7.2 Core Technical Stack (16 categories)'));
+children.push(p('Cloud provider, API gateway/edge, IAM, backend language(s), architecture style, compute model, messaging/streaming, service mesh, caching, primary database(s), containers/orchestration, observability, frontend, CI/CD & deployment, DNS, hybrid connectivity.'));
 children.push(reqTable(['ID', 'Requirement'], [1000, 7400], [
-  ['FR-6', 'Each of the 15 stack categories must return a recommendation, a plain-language rationale, a confidence rating (High/Medium/Low), and the architect role that typically owns that decision.'],
-  ['FR-7', 'On-premises/air-gapped detection (FR-5) must override the default recommendation in every category where a public-cloud service would otherwise be suggested (cloud, gateway, compute, containers, observability, CI/CD, DNS).'],
+  ['FR-6', 'Each of the 16 stack categories must return a recommendation, a plain-language rationale, a confidence rating (High/Medium/Low), and the architect role that typically owns that decision.'],
+  ['FR-6a', 'Hybrid Connectivity category (added later session): recommend a dedicated-link + transit-hub pairing matched to the chosen cloud vendor (AWS Direct Connect+Transit Gateway, Azure ExpressRoute+Virtual WAN, GCP Cloud Interconnect+Network Connectivity Center, Huawei Direct Connect+Enterprise Router) plus VPN-failover and MACsec guidance, when a dedicated on-prem-to-cloud link is detected. Always rendered as the 16th card; content states "not required" or "not applicable" (air-gapped) rather than the card being hidden, matching every other always-shown category.'],
+  ['FR-7', 'On-premises/air-gapped detection (FR-5) must override the default recommendation in every category where a public-cloud service would otherwise be suggested (cloud, gateway, compute, containers, observability, CI/CD, DNS, hybrid connectivity).'],
   ['FR-8', 'Analytics/ETL-heavy workloads without a transactional, chat, or RAG signal must be routed to a data-warehouse recommendation (BigQuery/Snowflake/Redshift) rather than a general-purpose OLTP database.'],
   ['FR-9', 'Conflicting signals (e.g. a small team combined with high-scale/enterprise requirements) must resolve to a stated middle-ground recommendation with the conflict acknowledged in the rationale, not a recommendation whose own justification contradicts part of the input.'],
 ]));
@@ -151,6 +153,9 @@ children.push(reqTable(['ID', 'Requirement', 'Status'], [1000, 5600, 1800], [
   ['FR-30', 'Show which specific detected signals drove each stack card\'s recommendation, not just a confidence badge, so the "why" is inspectable per pick rather than only stated as prose.', 'Shipped — client-side only, no backend dependency'],
   ['FR-31', 'Show real LLM token cost (from the Anthropic response) alongside the existing directional cost estimate once a refine/ask call has been made.', 'Shipped — backend returns real usage from message.usage; not persisted to any table'],
   ['FR-31a', 'Flow View: interactive node-canvas visualization of the architecture recommendation (pan/zoom canvas, minimap, tier-colored nodes) as an alternate to the 16-section card view. Cross-references Release Plan v1.5.', 'Shipped — client-side only, no backend dependency'],
+  ['FR-32', 'AI Opportunity & Leverage Layer: a 12-pattern catalog across all 6 architecture tiers (client/edge/compute/data/ai/ops), attached to Flow View nodes as "New AI Leverage Point" (gap — no AI touchpoint yet) or "AI Optimization Point" (an existing AI touchpoint could be upgraded). Text-to-SQL specifically enforces High complexity and mandatory read-only-replica/PII-tokenization/audit-trail prerequisites when finance/healthcare/compliance/onPrem signals are present, so regulated environments are never advised to expose transactional tables to unconstrained LLMs.', 'Shipped — client-side only, no backend dependency'],
+  ['FR-33', 'Technology catalog unified into a single source of truth (#stackKbData.technologies, 243 entries) powering citations/ADR export, with a maintainer CLI (scripts/add_tech.py) that validates schema/domain/maturity-ring/duplicates before any entry is added, and a client-side localStorage overlay letting a user add a custom technology without editing the shipped catalog.', 'Shipped — client-side + a Python authoring script, no backend dependency for the app itself'],
+  ['FR-34', 'Huawei Cloud vendor support: signal detection plus vendor-specific recommendations across cloud provider, API gateway (APIG + ROMA Connect), containers (CCE), DNS, observability (Cloud Eye + LTS), and CI/CD (CodeArts) — the same 6 categories AWS/Azure/GCP already branch on.', 'Shipped — client-side (index.html); backend rule_engine.py has the detection signal only, not the pick-logic branches — see Section 12 for why'],
 ]));
 
 // ---------- Non-functional ----------
@@ -175,6 +180,8 @@ children.push(numbered('detectSignals(text) returns a signals object (65+ boolea
 children.push(numbered('Each pickX(signals) function returns a recommendation, rationale, and confidence rating for its category.'));
 children.push(numbered('The results are assembled into 16 sections, rendered into the DOM inside a sticky-nav/collapsible-section shell.'));
 children.push(numbered('Nothing is persisted unless the user explicitly saves/shares it via v2\'s share-link feature; a page refresh otherwise clears all state.'));
+children.push(h2('9.4 Diagram Export Architecture (Hexagonal / Ports & Adapters)'));
+children.push(p('Added in a later session, documented in full in docs/walkthrough-hexagonal-refactor.md. Prior to this, buildFlowGraph() (Flow View) and the three exporters (Mermaid, Draw.io, SVG) each independently re-derived their own view of the architecture from the raw recommendation object — Flow View showed 18-20 nodes, the exporters showed a hardcoded 5-8. buildCanonicalArchitectureGraph(ctx, signals) is now the single pure domain core (no browser globals, no file-format strings, no pixel coordinates) that every consumer builds from: layoutFlowGraph(graph) is the presentation adapter that adds x/y/color for Flow View only, and the three exporters serialize the same canonical {nodes, edges} instead of a reduced subset. Mirrors the ports-and-adapters separation already enforced in a sibling project\'s (Swish_App) HexagonalArchitectureTest.java, adapted to this repo\'s single-file frameworkless constraint (no Java package tree, no build step) as a static-analysis contract test (backend/tests/test_architecture_contracts.py) plus Node-executed runtime checks instead.'));
 
 // ---------- Success metrics ----------
 children.push(h1('10. Success Metrics'));
@@ -191,6 +198,7 @@ children.push(reqTable(['Release', 'Contents', 'Status'], [1600, 6000, 1800], [
   ['v1.5', 'Flow View: node-canvas visualization of the recommendation (n8n/Voiceflow/VectorShift-style pan/zoom/drag graph, alternate to the card view); recursive logic audit — fixed several false-positive signal matches and a same-report contradiction between the Compute Model card and the Kubernetes-vs-Serverless trade-off card', 'Shipped'],
   ['v2.0', 'Share links, LLM refinement endpoint (/api/refine), grounded follow-up Q&A (/api/ask), MCP tool wrapper (recommend_stack) — FastAPI + Postgres + Alembic backend, 93 passing/xfailed tests', 'Shipped'],
   ['v2.1', 'Frontend wiring: guided-input wizard, per-card Refine/Ask buttons actually calling the v2.0 backend, share button, ?shared=SLUG read-only view, why-this-pick signal inspection, refinement-pass history, real LLM cost display', 'Shipped'],
+  ['v2.2', 'Hexagonal diagram-export refactor (Section 9.4) — fixed Flow View/exporter node-count inconsistency; AI Opportunity & Leverage Layer (FR-32) — fixed a phantom-signal-key bug that had silently disabled the compliance guardrail it shipped with; technology catalog unified to one source of truth with maintainer CLI + custom overlay (FR-33); Huawei Cloud vendor support (FR-34); Hybrid Connectivity category (FR-6a) — fixed a pre-existing onPrem false-positive this work surfaced (see Section 12)', 'Shipped'],
 ]));
 
 // ---------- Known limitations ----------
@@ -201,6 +209,8 @@ children.push(bullet('No benchmark exists against real expert-architect judgment
 children.push(bullet('The rule engine encodes a snapshot of current technology/model landscape knowledge and will drift out of date as new models, tools, and best practices emerge, with no automated update mechanism.'));
 children.push(bullet('Confidence ratings reflect how much matching signal was detected, not an externally validated probability of correctness — a "High confidence" pick is high-confidence in the sense that strong signal supports it, not that it has been checked against ground truth.'));
 children.push(bullet('The docs/use-case-knowledge-base/ corpus is written for RAG retrieval but has only been tested against a local TF-IDF prototype (lexical similarity), not the real embedding-based retrieval /api/refine/ask now use in production — 18/21 eval cases passed against that prototype, with one concrete finding (keyword-dense "Signals/triggers" chunks out-ranking substantive content chunks) already fed back into the ingestion guide. See docs/use-case-knowledge-base/RETRIEVAL-EVAL-SET.md.'));
+children.push(bullet('backend/app/rule_engine.py (Python) has the detection *signals* for Huawei Cloud and Hybrid Connectivity, kept in parity with index.html\'s detectSignals() by design, but does NOT replicate the vendor-specific pick-logic branches those signals feed into on the frontend — this is a deliberate, documented scope boundary (see FR-34 and each feature\'s test-file docstring), not an oversight, because nothing currently exercises rule_engine.py\'s picks from a live request path the way index.html\'s picks are exercised by the browser UI. If that changes, this gap becomes worth closing.'));
+children.push(bullet('Python\'s strong_on_prem keyword list (rule_engine.py) is missing "own server(s)"/"in-house server(s)", which index.html\'s detectSignals() already has (added there after a documented live-test finding). Found while building Hybrid Connectivity, not fixed — out of scope for that change, flagged here so it is not lost.'));
 
 // ---------- Open questions ----------
 children.push(h1('13. Open Questions'));
