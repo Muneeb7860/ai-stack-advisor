@@ -5697,18 +5697,41 @@ async function loadSharedAnalysis(slug){
     "expansion_backlog": {
       "note": "Technology ids referenced in alternatives[] that do not yet have their own entry. These are the next entries to author — each one that stays unresolved is a 'why not X?' the UI cannot answer.",
       "ids": [
+        "aws-kms",
+        "aws-security-hub",
+        "azure-blob",
+        "azure-key-vault",
+        "azure-lb",
+        "azure-log-analytics",
+        "azure-monitor",
+        "azure-sql",
+        "azure-vm",
         "budibase",
+        "chronicle",
+        "cloud-kms",
+        "cloud-logging",
+        "cloud-monitoring",
+        "cloud-sql",
+        "cloudwatch",
+        "cloudwatch-logs",
         "code",
         "config-tables",
         "custom-state-machine",
+        "ec2",
+        "elb-aws",
+        "gce",
+        "gcp-lb",
+        "gcs",
         "gemma-larger-cloud",
         "glm-5",
         "hugo",
         "looker",
+        "microsoft-sentinel",
         "minimax-m3",
         "native",
         "rabbitmq",
         "remix",
+        "s3",
         "sqs-servicebus",
         "vaadin",
         "vercel",
@@ -6087,6 +6110,14 @@ async function loadSharedAnalysis(slug){
       "published": "2026-01",
       "type": "docs",
       "trust": "high"
+    },
+    {
+      "id": "huawei-wa",
+      "name": "Huawei Cloud Well-Architected Framework",
+      "url": "https://www.huaweicloud.com/intl/en-us/best-practice/waf.html",
+      "type": "reference-architecture",
+      "trust": "medium",
+      "bias": "vendor"
     }
   ],
   "quality_attributes": [
@@ -14680,6 +14711,671 @@ async function loadSharedAnalysis(slug){
       "signal_keywords": [
         "visualvm"
       ]
+    },
+    {
+      "id": "huawei-ecs",
+      "name": "Huawei Cloud ECS (Elastic Cloud Server)",
+      "category": "iaas-compute",
+      "domain": "cloud",
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "huawei-wa"
+      },
+      "license": "proprietary",
+      "hosting": [
+        "huawei-cloud"
+      ],
+      "best_when": [
+        "team is already committed to Huawei Cloud",
+        "workload targets APAC/China market with local compliance needs"
+      ],
+      "avoid_when": [
+        "team has no Huawei Cloud experience and a hyperscaler (AWS/Azure/GCP) already fits the region"
+      ],
+      "alternatives": [
+        "ec2",
+        "azure-vm",
+        "gce"
+      ],
+      "innovation_token_cost": 1,
+      "signal_keywords": [
+        "huawei cloud",
+        "huawei ecs",
+        "elastic cloud server"
+      ],
+      "hiring_pool": "niche",
+      "surfaces": [
+        "platform"
+      ],
+      "exit_cost": "high",
+      "tco_shape": "ops-light"
+    },
+    {
+      "id": "huawei-cce",
+      "name": "Huawei Cloud CCE (Cloud Container Engine)",
+      "category": "container-orchestration",
+      "domain": "cloud",
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "huawei-wa"
+      },
+      "license": "proprietary",
+      "hosting": [
+        "huawei-cloud"
+      ],
+      "best_when": [
+        "running Kubernetes workloads on Huawei Cloud",
+        "need CCE Turbo for high-performance networking"
+      ],
+      "avoid_when": [
+        "multi-cloud portability is a priority and vanilla Kubernetes suffices"
+      ],
+      "alternatives": [
+        "kubernetes"
+      ],
+      "innovation_token_cost": 1,
+      "signal_keywords": [
+        "huawei cce",
+        "cloud container engine",
+        "cce turbo"
+      ],
+      "hiring_pool": "niche",
+      "surfaces": [
+        "platform"
+      ],
+      "exit_cost": "high",
+      "tco_shape": "ops-light"
+    },
+    {
+      "id": "huawei-obs",
+      "name": "Huawei Cloud OBS (Object Storage Service)",
+      "category": "object-storage",
+      "domain": "cloud",
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "huawei-wa"
+      },
+      "license": "proprietary",
+      "hosting": [
+        "huawei-cloud"
+      ],
+      "best_when": [
+        "object storage on Huawei Cloud",
+        "data residency requires Huawei-operated regions"
+      ],
+      "avoid_when": [
+        "already standardized on S3-compatible tooling elsewhere"
+      ],
+      "alternatives": [
+        "s3",
+        "azure-blob",
+        "gcs"
+      ],
+      "innovation_token_cost": 1,
+      "signal_keywords": [
+        "huawei obs",
+        "object storage service"
+      ],
+      "hiring_pool": "niche",
+      "surfaces": [
+        "platform"
+      ],
+      "exit_cost": "high",
+      "tco_shape": "ops-light"
+    },
+    {
+      "id": "huawei-gaussdb",
+      "name": "Huawei GaussDB",
+      "category": "relational-database",
+      "domain": "database",
+      "maturity": {
+        "ring": "trial",
+        "source_id": "huawei-wa"
+      },
+      "license": "proprietary",
+      "hosting": [
+        "huawei-cloud",
+        "on-prem"
+      ],
+      "best_when": [
+        "distributed SQL at scale within the Huawei ecosystem",
+        "financial-services workloads in markets where GaussDB is an approved vendor"
+      ],
+      "avoid_when": [
+        "team has no GaussDB experience and Postgres/MySQL-compatible options meet the same scale needs"
+      ],
+      "alternatives": [
+        "cockroachdb",
+        "spanner",
+        "aurora"
+      ],
+      "innovation_token_cost": 2,
+      "signal_keywords": [
+        "gaussdb",
+        "huawei database"
+      ],
+      "hiring_pool": "niche",
+      "surfaces": [
+        "platform"
+      ],
+      "exit_cost": "high",
+      "tco_shape": "ops-light"
+    },
+    {
+      "id": "huawei-rds",
+      "name": "Huawei Cloud RDS",
+      "category": "relational-database",
+      "domain": "database",
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "huawei-wa"
+      },
+      "license": "proprietary",
+      "hosting": [
+        "huawei-cloud"
+      ],
+      "best_when": [
+        "managed MySQL/PostgreSQL/SQL Server on Huawei Cloud"
+      ],
+      "avoid_when": [
+        "not running on Huawei Cloud"
+      ],
+      "alternatives": [
+        "aurora",
+        "azure-sql",
+        "cloud-sql"
+      ],
+      "innovation_token_cost": 1,
+      "signal_keywords": [
+        "huawei rds",
+        "huawei cloud rds"
+      ],
+      "hiring_pool": "niche",
+      "surfaces": [
+        "platform"
+      ],
+      "exit_cost": "high",
+      "tco_shape": "ops-light"
+    },
+    {
+      "id": "huawei-elb",
+      "name": "Huawei Cloud ELB (Elastic Load Balance)",
+      "category": "load-balancing",
+      "domain": "cloud",
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "huawei-wa"
+      },
+      "license": "proprietary",
+      "hosting": [
+        "huawei-cloud"
+      ],
+      "best_when": [
+        "L4/L7 load balancing on Huawei Cloud"
+      ],
+      "avoid_when": [
+        "not running on Huawei Cloud"
+      ],
+      "alternatives": [
+        "elb-aws",
+        "azure-lb",
+        "gcp-lb"
+      ],
+      "innovation_token_cost": 1,
+      "signal_keywords": [
+        "huawei elb",
+        "elastic load balance"
+      ],
+      "hiring_pool": "niche",
+      "surfaces": [
+        "platform"
+      ],
+      "exit_cost": "high",
+      "tco_shape": "ops-light"
+    },
+    {
+      "id": "huawei-direct-connect",
+      "name": "Huawei Cloud Direct Connect (DC)",
+      "category": "hybrid-connectivity",
+      "domain": "cloud",
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "huawei-wa"
+      },
+      "license": "proprietary",
+      "hosting": [
+        "huawei-cloud",
+        "on-prem"
+      ],
+      "best_when": [
+        "dedicated private link between on-prem and Huawei Cloud is required for latency, bandwidth, or compliance"
+      ],
+      "avoid_when": [
+        "a standard site-to-site VPN is sufficient for the traffic volume"
+      ],
+      "alternatives": [
+        "aws-direct-connect",
+        "azure-expressroute",
+        "gcp-cloud-interconnect"
+      ],
+      "innovation_token_cost": 2,
+      "signal_keywords": [
+        "huawei direct connect",
+        "huawei dc gateway"
+      ],
+      "hiring_pool": "niche",
+      "surfaces": [
+        "platform"
+      ],
+      "exit_cost": "high",
+      "tco_shape": "ops-light"
+    },
+    {
+      "id": "huawei-enterprise-router",
+      "name": "Huawei Cloud Enterprise Router (ER)",
+      "category": "hybrid-connectivity",
+      "domain": "cloud",
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "huawei-wa"
+      },
+      "license": "proprietary",
+      "hosting": [
+        "huawei-cloud"
+      ],
+      "best_when": [
+        "need a central transit hub connecting multiple VPCs and Direct Connect circuits on Huawei Cloud"
+      ],
+      "avoid_when": [
+        "only one or two VPCs, no transit routing needed"
+      ],
+      "alternatives": [
+        "aws-transit-gateway",
+        "azure-virtual-wan",
+        "gcp-network-connectivity-center"
+      ],
+      "innovation_token_cost": 2,
+      "signal_keywords": [
+        "huawei enterprise router",
+        "huawei er"
+      ],
+      "hiring_pool": "niche",
+      "surfaces": [
+        "platform"
+      ],
+      "exit_cost": "high",
+      "tco_shape": "ops-light"
+    },
+    {
+      "id": "huawei-dew",
+      "name": "Huawei Cloud DEW (Data Encryption Workshop)",
+      "category": "secrets-management",
+      "domain": "identity",
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "huawei-wa"
+      },
+      "license": "proprietary",
+      "hosting": [
+        "huawei-cloud"
+      ],
+      "best_when": [
+        "key management and secrets on Huawei Cloud",
+        "need CloudHSM-backed encryption"
+      ],
+      "avoid_when": [
+        "not running on Huawei Cloud"
+      ],
+      "alternatives": [
+        "aws-kms",
+        "azure-key-vault",
+        "cloud-kms"
+      ],
+      "innovation_token_cost": 1,
+      "signal_keywords": [
+        "huawei dew",
+        "data encryption workshop",
+        "huawei kms"
+      ],
+      "hiring_pool": "niche",
+      "surfaces": [
+        "platform"
+      ],
+      "exit_cost": "high",
+      "tco_shape": "ops-light"
+    },
+    {
+      "id": "huawei-secmaster",
+      "name": "Huawei Cloud SecMaster",
+      "category": "siem",
+      "domain": "identity",
+      "maturity": {
+        "ring": "trial",
+        "source_id": "huawei-wa"
+      },
+      "license": "proprietary",
+      "hosting": [
+        "huawei-cloud"
+      ],
+      "best_when": [
+        "centralized security posture management and threat detection on Huawei Cloud"
+      ],
+      "avoid_when": [
+        "already standardized on Splunk/Sentinel/GuardDuty elsewhere"
+      ],
+      "alternatives": [
+        "aws-security-hub",
+        "microsoft-sentinel",
+        "chronicle"
+      ],
+      "innovation_token_cost": 2,
+      "signal_keywords": [
+        "huawei secmaster",
+        "secmaster"
+      ],
+      "hiring_pool": "niche",
+      "surfaces": [
+        "platform"
+      ],
+      "exit_cost": "high",
+      "tco_shape": "ops-light"
+    },
+    {
+      "id": "huawei-cloud-eye",
+      "name": "Huawei Cloud Eye (CES)",
+      "category": "observability",
+      "domain": "observability",
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "huawei-wa"
+      },
+      "license": "proprietary",
+      "hosting": [
+        "huawei-cloud"
+      ],
+      "best_when": [
+        "metrics and health monitoring on Huawei Cloud"
+      ],
+      "avoid_when": [
+        "not running on Huawei Cloud"
+      ],
+      "alternatives": [
+        "cloudwatch",
+        "azure-monitor",
+        "cloud-monitoring"
+      ],
+      "innovation_token_cost": 1,
+      "signal_keywords": [
+        "huawei cloud eye",
+        "cloud eye ces"
+      ],
+      "hiring_pool": "niche",
+      "surfaces": [
+        "platform"
+      ],
+      "exit_cost": "high",
+      "tco_shape": "ops-light"
+    },
+    {
+      "id": "huawei-lts",
+      "name": "Huawei Cloud LTS (Log Tank Service)",
+      "category": "logging",
+      "domain": "observability",
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "huawei-wa"
+      },
+      "license": "proprietary",
+      "hosting": [
+        "huawei-cloud"
+      ],
+      "best_when": [
+        "centralized log aggregation on Huawei Cloud"
+      ],
+      "avoid_when": [
+        "not running on Huawei Cloud"
+      ],
+      "alternatives": [
+        "cloudwatch-logs",
+        "azure-log-analytics",
+        "cloud-logging"
+      ],
+      "innovation_token_cost": 1,
+      "signal_keywords": [
+        "huawei lts",
+        "log tank service"
+      ],
+      "hiring_pool": "niche",
+      "surfaces": [
+        "platform"
+      ],
+      "exit_cost": "high",
+      "tco_shape": "ops-light"
+    },
+    {
+      "id": "aws-direct-connect",
+      "name": "AWS Direct Connect",
+      "category": "hybrid-connectivity",
+      "domain": "cloud",
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "aws-wa"
+      },
+      "license": "proprietary",
+      "hosting": [
+        "aws",
+        "on-prem"
+      ],
+      "best_when": [
+        "dedicated, low-latency private link between on-prem and AWS is required",
+        "workload needs consistent bandwidth VPN can't guarantee"
+      ],
+      "avoid_when": [
+        "traffic volume is low enough that Site-to-Site VPN over the public internet is sufficient"
+      ],
+      "alternatives": [
+        "azure-expressroute",
+        "gcp-cloud-interconnect",
+        "huawei-direct-connect"
+      ],
+      "innovation_token_cost": 2,
+      "signal_keywords": [
+        "aws direct connect",
+        "direct connect gateway",
+        "dxgw"
+      ],
+      "hiring_pool": "medium",
+      "surfaces": [
+        "platform"
+      ],
+      "exit_cost": "high",
+      "tco_shape": "ops-light"
+    },
+    {
+      "id": "azure-expressroute",
+      "name": "Azure ExpressRoute",
+      "category": "hybrid-connectivity",
+      "domain": "cloud",
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "azure-wa"
+      },
+      "license": "proprietary",
+      "hosting": [
+        "azure",
+        "on-prem"
+      ],
+      "best_when": [
+        "dedicated private connectivity to Azure VNets or Microsoft peering for M365/PaaS",
+        "need MACsec line-rate encryption on ExpressRoute Direct"
+      ],
+      "avoid_when": [
+        "a site-to-site VPN Gateway meets bandwidth and latency needs"
+      ],
+      "alternatives": [
+        "aws-direct-connect",
+        "gcp-cloud-interconnect",
+        "huawei-direct-connect"
+      ],
+      "innovation_token_cost": 2,
+      "signal_keywords": [
+        "expressroute",
+        "azure expressroute",
+        "ergw"
+      ],
+      "hiring_pool": "medium",
+      "surfaces": [
+        "platform"
+      ],
+      "exit_cost": "high",
+      "tco_shape": "ops-light"
+    },
+    {
+      "id": "gcp-cloud-interconnect",
+      "name": "GCP Cloud Interconnect",
+      "category": "hybrid-connectivity",
+      "domain": "cloud",
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "gcp-wa"
+      },
+      "license": "proprietary",
+      "hosting": [
+        "gcp",
+        "on-prem"
+      ],
+      "best_when": [
+        "dedicated or partner interconnect to GCP VPCs, needing 99.99% SLA with dual attachments across metros"
+      ],
+      "avoid_when": [
+        "Cloud HA-VPN over the public internet already meets throughput and latency needs"
+      ],
+      "alternatives": [
+        "aws-direct-connect",
+        "azure-expressroute",
+        "huawei-direct-connect"
+      ],
+      "innovation_token_cost": 2,
+      "signal_keywords": [
+        "cloud interconnect",
+        "gcp interconnect",
+        "dedicated interconnect",
+        "partner interconnect"
+      ],
+      "hiring_pool": "medium",
+      "surfaces": [
+        "platform"
+      ],
+      "exit_cost": "high",
+      "tco_shape": "ops-light"
+    },
+    {
+      "id": "aws-transit-gateway",
+      "name": "AWS Transit Gateway",
+      "category": "hybrid-connectivity",
+      "domain": "cloud",
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "aws-wa"
+      },
+      "license": "proprietary",
+      "hosting": [
+        "aws"
+      ],
+      "best_when": [
+        "central hub connecting many VPCs, VPNs, and Direct Connect circuits across accounts/regions"
+      ],
+      "avoid_when": [
+        "only one or two VPCs need connecting, VPC peering is simpler"
+      ],
+      "alternatives": [
+        "azure-virtual-wan",
+        "gcp-network-connectivity-center",
+        "huawei-enterprise-router"
+      ],
+      "innovation_token_cost": 2,
+      "signal_keywords": [
+        "transit gateway",
+        "aws tgw"
+      ],
+      "hiring_pool": "medium",
+      "surfaces": [
+        "platform"
+      ],
+      "exit_cost": "high",
+      "tco_shape": "ops-light"
+    },
+    {
+      "id": "azure-virtual-wan",
+      "name": "Azure Virtual WAN",
+      "category": "hybrid-connectivity",
+      "domain": "cloud",
+      "maturity": {
+        "ring": "adopt",
+        "source_id": "azure-wa"
+      },
+      "license": "proprietary",
+      "hosting": [
+        "azure"
+      ],
+      "best_when": [
+        "hub-and-spoke transit across many VNets and ExpressRoute circuits with auto route propagation"
+      ],
+      "avoid_when": [
+        "a single hub VNet with an ExpressRoute Gateway is enough"
+      ],
+      "alternatives": [
+        "aws-transit-gateway",
+        "gcp-network-connectivity-center",
+        "huawei-enterprise-router"
+      ],
+      "innovation_token_cost": 2,
+      "signal_keywords": [
+        "virtual wan",
+        "azure vwan"
+      ],
+      "hiring_pool": "medium",
+      "surfaces": [
+        "platform"
+      ],
+      "exit_cost": "high",
+      "tco_shape": "ops-light"
+    },
+    {
+      "id": "gcp-network-connectivity-center",
+      "name": "GCP Network Connectivity Center",
+      "category": "hybrid-connectivity",
+      "domain": "cloud",
+      "maturity": {
+        "ring": "trial",
+        "source_id": "gcp-wa"
+      },
+      "license": "proprietary",
+      "hosting": [
+        "gcp"
+      ],
+      "best_when": [
+        "central hub connecting Cloud Routers, Interconnects, and HA-VPNs as spokes for multi-cloud transit"
+      ],
+      "avoid_when": [
+        "a single Cloud Router and VPC already covers the topology"
+      ],
+      "alternatives": [
+        "aws-transit-gateway",
+        "azure-virtual-wan",
+        "huawei-enterprise-router"
+      ],
+      "innovation_token_cost": 2,
+      "signal_keywords": [
+        "network connectivity center",
+        "gcp ncc"
+      ],
+      "hiring_pool": "medium",
+      "surfaces": [
+        "platform"
+      ],
+      "exit_cost": "high",
+      "tco_shape": "ops-light"
     }
   ],
   "rules": [
