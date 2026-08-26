@@ -128,13 +128,20 @@ def test_empty_requirement_text_raises():
 def test_recommend_stack_returns_all_expected_categories():
     """Category set as of the frontend expansion pass (see docs/adr/0001, Addendum 2) —
     vram_tier was replaced by compute_tier, and cost_estimate/runtime plus 12 vendor-comparison
-    keys were added. If this test needs updating again, cross-check against the actual
-    index.html analyze() assembly, not against what an MCP client currently expects."""
+    keys were added; hybrid_connectivity and integration_guidance were added when the JS<->Python
+    parity gap they'd been sitting in was closed (see tests/test_engine_parity.py). If this test
+    needs updating again, cross-check against the actual index.html analyze() assembly, not
+    against what an MCP client currently expects.
+
+    Note this list is hand-maintained, so it only catches a key added on the PYTHON side — it is
+    not a substitute for test_engine_parity.py, which is what catches a category that landed in
+    index.html and never got ported here."""
     result = recommend_stack("A generic web app for a small team.")
     expected_categories = {
         "cloud", "gateway", "iam", "languages", "architecture", "compute", "messaging",
         "mesh", "cache", "database", "containers", "observability", "frontend", "cicd", "dns",
-        "docs", "llm", "mcp_servers", "rag", "guardrails", "cost_optimization", "cost_estimate",
+        "docs", "hybrid_connectivity", "llm", "mcp_servers", "rag", "guardrails",
+        "integration_guidance", "cost_optimization", "cost_estimate",
         "concurrency", "governance", "tradeoffs", "model_orchestration", "hosting_location",
         "compute_tier", "runtime", "interface_topology", "mcp_vs_api", "guardrail_pipeline",
         "vector_db_placement", "cloud_vendor", "compute_platform_vendor", "orchestrator_vendor",

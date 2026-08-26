@@ -13,7 +13,7 @@ automatically. Do not "clean up" or "simplify" any branch below without checking
 index.html's actual current logic first.
 
 Source of truth: index.html's <script> block, functions stripNegations() through
-pickGovernance() (roughly lines 352–1180 as of this port, ~45 pickX functions across signal
+pickGovernance() (roughly lines 352–1180 as of this port, 47 pickX functions across signal
 detection, core stack, vendor-alternatives comparisons, AI-serving architecture, trade-offs,
 and cost/governance). Two independent implementations of the same logic (JS for the
 zero-backend v1 product, Python for the MCP tool) — not one importing the other, since v1 must
@@ -43,7 +43,7 @@ def strip_negations(text: str) -> str:
 
 
 def detect_signals(text: str) -> dict:
-    """Mirrors index.html's detectSignals() exactly (65+ signal dimensions as of the
+    """Mirrors index.html's detectSignals() exactly (100+ signal dimensions as of the
     expansion pass — see KICKOFF_BRIEF.md Section 0)."""
     raw = text.lower()
     t = strip_negations(text).lower()
@@ -79,6 +79,10 @@ def detect_signals(text: str) -> dict:
     return {
         "onPrem": strong_on_prem or soft_on_prem,
         "hybridConnectivity": hybrid_connectivity,
+        "brownfieldOmnichannel": has([
+            "omnichannel ai support", "omnichannel support", "omni-channel ai",
+            "multiple channels", "across channels", "web widget, whatsapp", "channel routing",
+        ]),
         "healthcare": has(["health", "hipaa", "patient", "clinical", "ehr", "medical"]),
         "finance": has(["fintech", "bank", "payment", "fraud", "pci", "transaction", "trading", "ledger", "finance"]),
         "ecommerce": has(["ecommerce", "e-commerce", "retail", "shopping", "product recommendation", "cart", "checkout"]),
@@ -732,6 +736,42 @@ def pick_mesh(s):
     return {"v": "Not needed yet (revisit past ~10-15 services)", "why": "Service mesh adds operational complexity; skip until service count and cross-team traffic policy needs justify it.", "conf": "medium"}
 
 
+def pick_hybrid_connectivity(s, cloud):
+    if s["onPrem"]:
+        return {"v": "Not applicable — air-gapped means there is no cloud endpoint to build a dedicated link to", "why": "A dedicated private link (Direct Connect/ExpressRoute-class connectivity) exists to bridge on-prem infrastructure to a cloud provider. An air-gapped/no-public-cloud requirement means there is no cloud side to connect to in the first place.", "conf": "high", "needed": False}
+    if not s["hybridConnectivity"]:
+        return {"v": "Not required for this scenario", "why": "No hybrid (on-prem + cloud) or dedicated-link requirement detected — a standard internet-facing setup is fine until you specifically need a private, low-latency, high-bandwidth link between your own infrastructure and cloud VPCs.", "conf": "medium", "needed": False}
+
+    vendor = cloud.get("v") or ""
+    if "AWS" in vendor:
+        link = "AWS Direct Connect"
+        transit_hub = "AWS Transit Gateway"
+        note = "Terminate on a Transit Gateway if you need to fan the link out to multiple VPCs/accounts rather than a single VPC."
+    elif "Azure" in vendor:
+        link = "Azure ExpressRoute"
+        transit_hub = "Azure Virtual WAN"
+        note = "Use Azure Private Peering for VNet connectivity, Microsoft Peering if you also need PaaS/M365 endpoints over the same link."
+    elif "Google Cloud" in vendor:
+        link = "GCP Cloud Interconnect (Dedicated or Partner)"
+        transit_hub = "Network Connectivity Center"
+        note = "GCP's 99.99% SLA requires two attachments across two independent metros — a single attachment does not meet it."
+    elif "Huawei" in vendor:
+        link = "Huawei Cloud Direct Connect (DC)"
+        transit_hub = "Huawei Cloud Enterprise Router (ER)"
+        note = "The Enterprise Router aggregates routes across multiple VPCs the way Transit Gateway/Virtual WAN do for AWS/Azure."
+    else:
+        link = "your cloud provider's dedicated-interconnect service (AWS Direct Connect / Azure ExpressRoute / GCP Cloud Interconnect / Huawei Direct Connect)"
+        transit_hub = "the matching transit-hub service"
+        note = "Pick the specific service once the cloud provider is confirmed — they are not interchangeable at the provisioning level."
+
+    return {
+        "v": f"{link} + {transit_hub}, with a Site-to-Site VPN as an automatic failover path",
+        "why": f"Hybrid connectivity detected — {link} gives a dedicated, low-latency, high-bandwidth private link instead of routing on-prem-to-cloud traffic over the public internet. {note} Keep a Site-to-Site VPN (IPsec) on standby: cloud providers prioritize the dedicated link automatically by default routing preference, so the VPN only takes over if the dedicated link fails — advertise identical CIDR blocks on both so failover doesn't need a manual route change. For encryption in transit beyond the VPN's IPsec overlay, enable MACsec directly on the dedicated link if your circuit tier supports it (line-rate, no additional latency).",
+        "conf": "high",
+        "needed": True,
+    }
+
+
 def pick_cache(s):
     return {"v": "Redis", "why": "De facto standard for caching, session storage, rate limiting, and lightweight pub/sub — recommended almost universally.", "conf": "high"}
 
@@ -837,6 +877,46 @@ def pick_mcp(s):
     if not picks:
         picks.append("Lightweight internal-tools MCP server exposing your core APIs as callable tools")
     return picks
+
+
+def pick_integration_guidance(s):
+    # Pattern #2 (omnichannel) is architecturally different from pattern #1 (chatbot-only), not
+    # a bigger version of it — the hard part isn't the model, it's a channel-routing/session-
+    # continuity layer sitting in front of one AI core. Branch the whole guidance set, not just
+    # patch individual fields, so the omnichannel case doesn't inherit chatbot-only assumptions
+    # (e.g. "one webhook route" is simply wrong once there are multiple channel adapters).
+    if s["brownfieldOmnichannel"]:
+        integration_path = (
+            {"v": "Internal channel-routing service — no public webhooks", "why": "An air-gapped/on-prem existing system has no public ingress for any channel adapter to call. The routing layer and every channel adapter it fronts (web widget, WhatsApp, email, voice/IVR) have to run inside the same network boundary — some channels (WhatsApp Business API, public voice carriers) fundamentally require internet reachability, so confirm which channels are actually in scope before committing to full air-gap for all of them."}
+            if s["onPrem"] else
+            {"v": "A channel-routing/orchestration layer in front of one shared AI core, with a distinct adapter per channel (web widget, WhatsApp Business API, email, voice/IVR)", "why": "This is the piece pattern #1 doesn't need: each channel has its own message format, delivery guarantees, and identity model (a phone number for WhatsApp, an email address, a session cookie for the widget) — the routing layer's job is normalizing all of that into one representation before it ever reaches the AI core, and translating the core's response back into each channel's native format."}
+        )
+        auth_note = "Each channel authenticates differently (WhatsApp verifies phone numbers, email has no real-time auth at all, your web widget can reuse existing session cookies) — resolve every channel's identity to the SAME internal user/session ID at the routing layer, before the AI core ever sees the request. The AI core should never need to know which channel a message arrived on to identify who's asking."
+        session_note = "This is the hardest part of pattern #2, worth calling out explicitly: session/conversation state must be keyed by the resolved internal user ID (not per-channel), so a conversation started on the web widget and continued over WhatsApp is the SAME conversation, not two. Store it centrally (one session store the routing layer and AI core both read/write), not per-channel-adapter — a per-channel session store is exactly how \"channel amnesia\" (the bot forgetting context when a user switches channels) happens in practice."
+        scope_note = (
+            "Scope what the AI core can see and do explicitly, same as pattern #1 — but also scope each CHANNEL ADAPTER's permissions independently (e.g. the email adapter shouldn't be able to trigger actions only the authenticated web-widget channel should allow), since channels carry different trust levels for the same underlying user."
+            if s["compliance"] else
+            "Give the routing layer its own scoped credentials against your existing backend, and treat each channel adapter as a separate trust boundary — a compromised WhatsApp webhook shouldn't have the same blast radius as a compromised authenticated web-widget session."
+        )
+        return {"integrationPath": integration_path, "authNote": auth_note, "sessionNote": session_note, "scopeNote": scope_note, "patternLabel": "omnichannel AI support", "patternAssumption": "This section assumes pattern #2 — omnichannel AI support across multiple channels sharing one AI core. Pattern #1 (single-channel chatbot) uses simpler, single-webhook guidance instead — you'll see that version if you pick that pattern. Event-driven notification/feedback engines and per-microservice-vs-centralized AI gateway patterns are real, different architectures — not built yet, flagged rather than force-fit into this guidance."}
+
+    integration_path = (
+        {"v": "Internal service call — no public webhook", "why": "An air-gapped/on-prem existing system has no public ingress to receive a webhook from; the chatbot service has to be deployed inside the same network boundary and called as an internal service (gRPC/REST over your private network), not integrated via an external callback URL."}
+        if s["onPrem"] else
+        {"v": "A new API route or webhook on your existing backend, calling out to the chatbot service", "why": "The chatbot doesn't need to live inside your existing application's codebase — a thin new route (e.g. POST /api/chat) that proxies to a separately-deployed chatbot service keeps the integration surface small and the two deployable independently. Avoids a large refactor of code that's already working."}
+    )
+    auth_note = (
+        "Pass your existing auth/session token through to the chatbot service on every request rather than issuing a separate credential — a second auth system is exactly the kind of surface-area growth that turns a small integration into a compliance review."
+        if (s["compliance"] or s["enterprise"]) else
+        "Reuse whatever session/auth mechanism your existing app already has — a chatbot-specific login system is unnecessary complexity for what's fundamentally a new feature on an existing account."
+    )
+    session_note = "Conversation history needs its own storage — a lightweight table/collection keyed by your existing user ID (or a signed anonymous session ID for logged-out visitors), separate from your main application data. It doesn't need to live in your primary database; a small dedicated store (even Redis with a TTL for short-lived sessions) is usually simpler than bolting new tables onto a schema you didn't design for this."
+    scope_note = (
+        "Scope what the chatbot can see and do explicitly — for a regulated existing system, the chatbot should read from a defined, reviewed subset of your data (via an API your team controls), never given direct database access. That boundary is also what makes the Guardrails section below enforceable."
+        if s["compliance"] else
+        "Give the chatbot service its own scoped API key/credentials against your existing backend — least-privilege, not the same credentials your main application uses internally."
+    )
+    return {"integrationPath": integration_path, "authNote": auth_note, "sessionNote": session_note, "scopeNote": scope_note, "patternLabel": "chatbot / conversational assistant", "patternAssumption": "This section assumes pattern #1 — a standalone chatbot bolted onto one existing application. Omnichannel AI support uses a different, channel-routing-focused version of this guidance instead — you'll see that version if you pick that pattern. Event-driven notification/feedback engines and per-microservice-vs-centralized AI gateway patterns are real, different architectures — not built yet, flagged rather than force-fit into this guidance."}
 
 
 RAG_TYPES = [
@@ -1390,11 +1470,13 @@ def recommend_stack(requirement_text: str) -> dict:
         "frontend": fe,
         "cicd": cicd,
         "dns": pick_dns(s),
+        "hybrid_connectivity": pick_hybrid_connectivity(s, cloud),
         "docs": pick_docs(s),
         "llm": llm,
         "mcp_servers": pick_mcp(s),
         "rag": rag,
         "guardrails": pick_guardrails(s),
+        "integration_guidance": pick_integration_guidance(s),
         "cost_optimization": pick_cost_optimization(s),
         "cost_estimate": pick_cost_estimate(s, {"hosting": hosting}),
         "concurrency": pick_concurrency(s),
