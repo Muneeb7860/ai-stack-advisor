@@ -60,12 +60,25 @@ def detect_signals(text: str) -> dict:
             "no public cloud", "private cloud only", "bare metal deployment",
         ]
     )
+    # Unambiguous dedicated-link/hybrid-transit terms — mirrors the same fix in index.html's
+    # detectSignals(): a sentence like "Direct Connect to bridge our on-prem systems to AWS" is
+    # real hybrid intent, not an air-gapped requirement, even though it never says "hybrid" and
+    # "cloud" together (it names the vendor directly instead).
+    dedicated_link_terms = has_raw([
+        "direct connect", "expressroute", "express route", "cloud interconnect",
+        "dedicated link", "private link to cloud", "colocation cross-connect",
+        "cross-connect", "bgp peering", "transit gateway", "virtual wan", "enterprise router",
+    ])
     soft_on_prem = has_raw(["on-prem", "on premises", "on-premise"]) and not (
-        has_raw(["hybrid"]) and has_raw(["cloud"])
+        dedicated_link_terms or (has_raw(["hybrid"]) and has_raw(["cloud"]))
+    )
+    hybrid_connectivity = dedicated_link_terms or (
+        has_raw(["hybrid"]) and has_raw(["cloud"]) and not strong_on_prem
     )
 
     return {
         "onPrem": strong_on_prem or soft_on_prem,
+        "hybridConnectivity": hybrid_connectivity,
         "healthcare": has(["health", "hipaa", "patient", "clinical", "ehr", "medical"]),
         "finance": has(["fintech", "bank", "payment", "fraud", "pci", "transaction", "trading", "ledger", "finance"]),
         "ecommerce": has(["ecommerce", "e-commerce", "retail", "shopping", "product recommendation", "cart", "checkout"]),
@@ -108,6 +121,7 @@ def detect_signals(text: str) -> dict:
         "awsShop": has(["aws", "amazon web services"]),
         "azureShop": has(["azure", "microsoft"]),
         "gcpShop": has(["gcp", "google cloud"]),
+        "huaweiShop": has(["huawei", "huawei cloud"]),
         "oktaMentioned": has(["okta"]),
         "entraMentioned": has(["entra id", "entra", "azure ad", "azure active directory"]),
         "pingMentioned": has(["ping identity", "pingone", "ping federate"]),
@@ -128,6 +142,41 @@ def detect_signals(text: str) -> dict:
             or bool(re.search(r"\bgo\s*(lang|language)\b", t))
             or bool(re.search(r"\b(written in|using|in)\s+go\b", t))
         ),
+        "nodeMentioned": has(["node.js", "nodejs", "node js"]),
+        "dotnetMentioned": has([".net", "dotnet", "asp.net", "c#"]),
+        "rubyMentioned": has(["ruby on rails", "ruby/rails", "rails app"]) or bool(re.search(r"\bruby\b", t)),
+        "phpMentioned": has(["php", "laravel", "symfony framework"]),
+        "postgresMentioned": has(["postgres", "postgresql"]),
+        "mongoMentioned": has(["mongo", "mongodb"]),
+        "mysqlMentioned": has(["mysql"]),
+        "oracleDbMentioned": has(["oracle database", "oracle db", "oracle sql"]),
+        "sqlServerMentioned": has(["sql server", "mssql", "microsoft sql server"]),
+        "reactMentioned": bool(re.search(r"\breact\b", t)) and not has(["reaction", "reactive"]),
+        "angularMentioned": has(["angular"]),
+        "vueMentioned": has(["vue.js", "vuejs"]) or bool(re.search(r"\bvue\b", t)),
+        "vanillaWebMentioned": has(["html5", "html/css", "vanilla javascript", "vanilla js"]) or (has(["html"]) and has(["css"])),
+        "dockerMentioned": has(["docker"]),
+        "kubernetesMentioned": has(["kubernetes", "k8s"]),
+        "openshiftMentioned": has(["openshift"]),
+        "pineconeMentioned": has(["pinecone"]),
+        "weaviateMentioned": has(["weaviate"]),
+        "qdrantMentioned": has(["qdrant"]),
+        "terraformMentioned": has(["terraform"]),
+        "githubActionsMentioned": has(["github actions"]),
+        "jenkinsMentioned": has(["jenkins"]),
+        "gitlabCiMentioned": has(["gitlab ci", "gitlab-ci", "gitlab pipelines"]),
+        "circleciMentioned": has(["circleci", "circle ci"]),
+        "azureDevopsMentioned": has(["azure devops", "azure pipelines"]),
+        "datadogMentioned": has(["datadog"]),
+        "prometheusMentioned": has(["prometheus"]) or (has(["grafana"]) and not has(["datadog"])),
+        "grafanaMentioned": has(["grafana"]),
+        "splunkMentioned": has(["splunk"]),
+        "dynatraceMentioned": has(["dynatrace"]),
+        "newrelicMentioned": has(["new relic", "newrelic"]),
+        "elkMentioned": has(["elk stack", "elasticsearch", "opensearch"]),
+        "sonarqubeMentioned": has(["sonarqube", "sonar", "sonarcloud"]),
+        "jprofilerMentioned": has(["jprofiler"]),
+        "visualvmMentioned": has(["visualvm"]),
         "smallTeam": (
             has(["small team", "2 engineers", "3 engineers", "4 engineers", "5 engineers", "6 engineers", "solo founder", "few engineers"])
             or bool(re.search(r"\b([1-9]|1[0-2])[- ]?(person|people)\b", t))
