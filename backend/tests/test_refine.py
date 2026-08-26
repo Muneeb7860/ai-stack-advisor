@@ -14,6 +14,8 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.routers import refine as refine_module
 
+from tests.ollama_gate import requires_ollama
+
 client = TestClient(app)
 
 FAKE_REFINEMENT_RESULT = {
@@ -154,6 +156,7 @@ def test_refine_surfaces_anthropic_api_errors_as_502(monkeypatch, refine_payload
     assert resp.status_code == 502
 
 
+@requires_ollama
 def test_build_grounding_context_returns_citable_content_for_covered_domain():
     """RAG grounding (KICKOFF_BRIEF.md decision #6) — a requirement squarely in one of the 11
     knowledge-base domains should produce non-empty, citable grounding context. Uses eval case

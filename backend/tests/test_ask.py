@@ -13,6 +13,8 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.routers import ask as ask_module
 
+from tests.ollama_gate import requires_ollama
+
 client = TestClient(app)
 
 
@@ -226,6 +228,7 @@ def test_ask_persists_nothing_when_model_call_fails(monkeypatch, existing_analys
         db.close()
 
 
+@requires_ollama
 def test_build_grounding_context_uses_question_as_query():
     """/api/ask grounds on the follow-up QUESTION, not the original requirement text (module
     docstring: anti-pattern sections are written to directly answer 'is X okay?' phrasing)."""

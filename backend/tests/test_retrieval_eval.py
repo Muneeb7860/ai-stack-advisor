@@ -22,6 +22,10 @@ import pytest
 
 from app.retrieval import retrieve
 
+from tests.ollama_gate import requires_ollama
+
+pytestmark = requires_ollama
+
 EVAL_CASES_PATH = os.path.join(os.path.dirname(__file__), "eval_cases.json")
 
 
