@@ -108,6 +108,7 @@ def detect_signals(text: str) -> dict:
         "awsShop": has(["aws", "amazon web services"]),
         "azureShop": has(["azure", "microsoft"]),
         "gcpShop": has(["gcp", "google cloud"]),
+        "huaweiShop": has(["huawei", "huawei cloud"]),
         "oktaMentioned": has(["okta"]),
         "entraMentioned": has(["entra id", "entra", "azure ad", "azure active directory"]),
         "pingMentioned": has(["ping identity", "pingone", "ping federate"]),
