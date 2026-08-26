@@ -1189,9 +1189,22 @@ function detectSignals(text){
   // enough (unlike bare "self-hosted", which can mean "self-hosted software on a cloud VM") to
   // treat as a real on-prem signal, same tier as "bare metal deployment".
   const strongOnPrem = hasRaw(['air-gapped','air gapped','airgapped','cannot use any public cloud','no public cloud','private cloud only','bare metal deployment','own server','own servers','in-house server','in-house servers','in house server','in house servers']);
-  const softOnPrem = hasRaw(['on-prem','on premises','on-premise']) && !(hasRaw(['hybrid']) && hasRaw(['cloud']));
+  // Unambiguous dedicated-link/hybrid-transit terms — checked before softOnPrem below because a
+  // sentence like "Direct Connect to bridge our on-prem systems to AWS" is real hybrid intent, not
+  // an air-gapped requirement, even though it never uses the words "hybrid" or "cloud" together
+  // (it names the vendor directly instead). These specific technical terms are essentially never
+  // used in a negated way in this kind of input, unlike bare vendor names ("we don't use AWS"),
+  // which is why this list is narrower than just checking for aws/azure/gcp mentions.
+  const dedicatedLinkTerms = hasRaw(['direct connect','expressroute','express route','cloud interconnect','dedicated link','private link to cloud','colocation cross-connect','cross-connect','bgp peering','transit gateway','virtual wan','enterprise router']);
+  const softOnPrem = hasRaw(['on-prem','on premises','on-premise']) && !(dedicatedLinkTerms || (hasRaw(['hybrid']) && hasRaw(['cloud'])));
+  // Explicit dedicated-link/hybrid-transit intent — distinct from onPrem (which means NO public
+  // cloud reachability at all). This is the opposite case: some workloads on-prem, some in cloud,
+  // needing a private/dedicated link between them (Direct Connect/ExpressRoute/Cloud Interconnect-
+  // class connectivity), not just "run everything inside the boundary."
+  const hybridConnectivity = dedicatedLinkTerms || (hasRaw(['hybrid']) && hasRaw(['cloud']) && !strongOnPrem);
   return {
     onPrem: strongOnPrem || softOnPrem,
+    hybridConnectivity,
     healthcare: has(['health','hipaa','patient','clinical','ehr','medical']),
     finance: has(['fintech','bank','payment','fraud','pci','transaction','trading','ledger','finance']),
     ecommerce: has(['ecommerce','e-commerce','retail','shopping','product recommendation','cart','checkout']),
@@ -1815,6 +1828,27 @@ function pickMesh(s){
   }
   if(s.enterprise || s.largeTeam) return {v:'Istio', why:'Multiple services/teams benefit from mTLS, traffic shaping, and observability at the mesh layer.', conf:'medium'};
   return {v:'Not needed yet (revisit past ~10-15 services)', why:'Service mesh adds operational complexity; skip until service count and cross-team traffic policy needs justify it.', conf:'medium'};
+}
+// Takes the already-computed cloud pick so the dedicated-link/transit-hub recommendation matches
+// whichever vendor pickCloud() actually chose, instead of re-deriving vendor selection here too.
+function pickHybridConnectivity(s, cloud){
+  if(s.onPrem) return {v:'Not applicable — air-gapped means there is no cloud endpoint to build a dedicated link to', why:'A dedicated private link (Direct Connect/ExpressRoute-class connectivity) exists to bridge on-prem infrastructure to a cloud provider. An air-gapped/no-public-cloud requirement means there is no cloud side to connect to in the first place.', conf:'high', needed:false};
+  if(!s.hybridConnectivity) return {v:'Not required for this scenario', why:'No hybrid (on-prem + cloud) or dedicated-link requirement detected — a standard internet-facing setup is fine until you specifically need a private, low-latency, high-bandwidth link between your own infrastructure and cloud VPCs.', conf:'medium', needed:false};
+
+  const vendor = cloud.v || '';
+  let link, transitHub, note;
+  if(vendor.includes('AWS')){ link='AWS Direct Connect'; transitHub='AWS Transit Gateway'; note='Terminate on a Transit Gateway if you need to fan the link out to multiple VPCs/accounts rather than a single VPC.'; }
+  else if(vendor.includes('Azure')){ link='Azure ExpressRoute'; transitHub='Azure Virtual WAN'; note='Use Azure Private Peering for VNet connectivity, Microsoft Peering if you also need PaaS/M365 endpoints over the same link.'; }
+  else if(vendor.includes('Google Cloud')){ link='GCP Cloud Interconnect (Dedicated or Partner)'; transitHub='Network Connectivity Center'; note='GCP\'s 99.99% SLA requires two attachments across two independent metros — a single attachment does not meet it.'; }
+  else if(vendor.includes('Huawei')){ link='Huawei Cloud Direct Connect (DC)'; transitHub='Huawei Cloud Enterprise Router (ER)'; note='The Enterprise Router aggregates routes across multiple VPCs the way Transit Gateway/Virtual WAN do for AWS/Azure.'; }
+  else { link='your cloud provider\'s dedicated-interconnect service (AWS Direct Connect / Azure ExpressRoute / GCP Cloud Interconnect / Huawei Direct Connect)'; transitHub='the matching transit-hub service'; note='Pick the specific service once the cloud provider is confirmed — they are not interchangeable at the provisioning level.'; }
+
+  return {
+    v: `${link} + ${transitHub}, with a Site-to-Site VPN as an automatic failover path`,
+    why: `Hybrid connectivity detected — ${link} gives a dedicated, low-latency, high-bandwidth private link instead of routing on-prem-to-cloud traffic over the public internet. ${note} Keep a Site-to-Site VPN (IPsec) on standby: cloud providers prioritize the dedicated link automatically by default routing preference, so the VPN only takes over if the dedicated link fails — advertise identical CIDR blocks on both so failover doesn't need a manual route change. For encryption in transit beyond the VPN's IPsec overlay, enable MACsec directly on the dedicated link if your circuit tier supports it (line-rate, no additional latency).`,
+    conf: 'high',
+    needed: true,
+  };
 }
 function pickCache(s){
   return {v:'Redis', why:'De facto standard for caching, session storage, rate limiting, and lightweight pub/sub — recommended almost universally.', conf:'high'};
@@ -2612,7 +2646,7 @@ function computeRecommendations(s){
         arch = pickArchitecture(s), compute = pickCompute(s), msg = pickMessaging(s), mesh = pickMesh(s),
         cache = pickCache(s), db = pickDatabase(s), containers = pickContainers(s), obs = pickObservability(s),
         fe = pickFrontend(s), llm = pickLLM(s), mcp = pickMCP(s), rag = pickRAG(s), guardrails = pickGuardrails(s),
-        cicd = pickCICD(s), dns = pickDNS(s), docs = pickDocs(s);
+        cicd = pickCICD(s), dns = pickDNS(s), docs = pickDocs(s), hybridConnectivity = pickHybridConnectivity(s, cloud);
 
   const cost = pickCostOptimization(s), throughput = pickConcurrency(s), gov = pickGovernance(s), tradeoffs = pickTradeoffs(s);
   const orchestration = pickModelOrchestration(s), hosting = pickHostingLocation(s), computeTier = pickComputeTier(s),
@@ -2639,7 +2673,7 @@ function computeRecommendations(s){
 
   return {cloud, gw, iam, lang, arch, compute, msg, mesh, cache, db, containers, obs, fe, llm, mcp, rag,
     guardrails, cicd, dns, docs, cost, throughput, gov, tradeoffs, orchestration, hosting, computeTier,
-    topology, mcpVsApi, guardrailPipeline, vectorDb, runtime, costEstimate,
+    topology, mcpVsApi, guardrailPipeline, vectorDb, runtime, costEstimate, hybridConnectivity,
     cloudVendorPick, computePlatformPick, orchestratorPick, gatewayVendorPick, dbVendorPick, msgVendorPick,
     llmProviderPick, vectorDbVendorPick, guardrailsVendorPick, cicdVendorPick, obsVendorPick, feVendorPick};
 }
@@ -2676,7 +2710,7 @@ function computeVisibleSections(s){
 function renderRecommendations(s, rec){
   const {cloud, gw, iam, lang, arch, compute, msg, mesh, cache, db, containers, obs, fe, llm, mcp, rag,
     guardrails, cicd, dns, docs, cost, throughput, gov, tradeoffs, orchestration, hosting, computeTier,
-    topology, mcpVsApi, guardrailPipeline, vectorDb, runtime, costEstimate,
+    topology, mcpVsApi, guardrailPipeline, vectorDb, runtime, costEstimate, hybridConnectivity,
     cloudVendorPick, computePlatformPick, orchestratorPick, gatewayVendorPick, dbVendorPick, msgVendorPick,
     llmProviderPick, vectorDbVendorPick, guardrailsVendorPick, cicdVendorPick, obsVendorPick, feVendorPick} = rec;
 
@@ -2698,6 +2732,7 @@ function renderRecommendations(s, rec){
     frontend: !!(s.reactMentioned || s.angularMentioned || s.vueMentioned || s.vanillaWebMentioned || s.mobile || s.web),
     cicd: !!(s.terraformMentioned || s.githubActionsMentioned || s.jenkinsMentioned || s.gitlabCiMentioned || s.circleciMentioned || s.azureDevopsMentioned),
     dns: false,
+    hybridconnectivity: !!(s.hybridConnectivity || s.onPrem),
   };
   const getCardBasis = (cat, conf) => confToBasis(conf, !!cardExplicitMap[cat]);
 
@@ -2720,6 +2755,7 @@ function renderRecommendations(s, rec){
     ['Frontend', fe.v, fe.why, fe.conf, 'Application Architect', renderAltToggle(FRONTEND_VENDORS, feVendorPick.primaryId, FRONTEND_NOTE), getCardBasis('frontend', fe.conf)],
     ['CI/CD & Deployment', cicd.v, cicd.why, cicd.conf, 'SDE', renderAltToggle(CICD_VENDORS, cicdVendorPick.primaryId, CICD_NOTE), getCardBasis('cicd', cicd.conf)],
     ['DNS', dns.v, 'DNS routing and edge protection for your domain.', dns.conf, 'Solution Architect', '', getCardBasis('dns', dns.conf)],
+    ['Hybrid Connectivity', hybridConnectivity.v, hybridConnectivity.why, hybridConnectivity.conf, 'Enterprise Architect', '', getCardBasis('hybridconnectivity', hybridConnectivity.conf)],
   ];
 
   const confLabel = c => ({high:'High confidence', medium:'Medium confidence', low:'Low confidence (default)'}[c] || 'Low confidence (default)');
@@ -2994,7 +3030,7 @@ function renderRecommendations(s, rec){
   if (s.brownfieldAiOnly) setView('cards');
   document.getElementById('resultsShell').scrollIntoView({behavior:'smooth', block:'start'});
 
-  const graph = buildFlowGraph({cloud,gw,iam,lang,arch,compute,msg,mesh,cache,db,containers,obs,fe,cicd,dns,llm,rag,mcp,guardrails,vectorDb}, s);
+  const graph = buildFlowGraph({cloud,gw,iam,lang,arch,compute,msg,mesh,cache,db,containers,obs,fe,cicd,dns,llm,rag,mcp,guardrails,vectorDb,hybridConnectivity}, s);
   renderFlow(graph);
   setView(currentView); // preserve whichever view (Cards/Flow) the user had open across re-analysis
 }
@@ -3229,7 +3265,7 @@ const CATALOG_AI_OPPORTUNITIES = [
 // either that or lastRecommendations directly.
 function buildCanonicalArchitectureGraph(ctx, signals = {}){
   const s = signals || {};
-  const {cloud,gw,iam,lang,arch,compute,msg,mesh,cache,db,containers,obs,fe,cicd,dns,llm,rag,mcp,guardrails,vectorDb} = ctx;
+  const {cloud,gw,iam,lang,arch,compute,msg,mesh,cache,db,containers,obs,fe,cicd,dns,llm,rag,mcp,guardrails,vectorDb,hybridConnectivity} = ctx;
   const nodes = [], edges = [];
   const N = (id,cat,title,sub,conf,why,persona,detail) => {
     nodes.push({id,cat,title,sub:sub||'',conf:conf||null,why:why||'',persona:persona||'',detail:detail||null,opportunities:[]});
@@ -3241,6 +3277,11 @@ function buildCanonicalArchitectureGraph(ctx, signals = {}){
   N('iam','edge','Identity & Access — '+iam.v, '', iam.conf, iam.why, 'Enterprise Architect',
     [`<b>Best bet: ${iam.v}</b> — ${iam.why}`, ...iam.alternatives.map(v=>`<b>${v.name}</b> (${v.cat}) — ${v.bestFor}. ${v.pricing}`), ...iam.complementary.map(c=>`<b>+ ${c.vendor}</b> (${c.cat} add-on) — ${c.why}`)]);
   N('dns','edge','DNS', dns.v, dns.conf, 'DNS routing and edge protection for your domain.', 'Solution Architect');
+  // Defensive optional-chaining: older stored/shared analyses (share links) were computed before
+  // this field existed, so hybridConnectivity may be absent on a replayed `rec` — same backward-
+  // compatibility concern as any other field added to computeRecommendations() after it shipped.
+  let hybridId = null;
+  if(hybridConnectivity && hybridConnectivity.needed){ N('hybridconnectivity','edge','Hybrid Connectivity', hybridConnectivity.v, hybridConnectivity.conf, hybridConnectivity.why, 'Enterprise Architect'); hybridId='hybridconnectivity'; }
   N('cloud','compute','Cloud Provider', cloud.v, cloud.conf, cloud.why, 'Enterprise Architect');
   N('arch','compute','Architecture Style', arch.v, arch.conf, arch.why, 'Solution Architect');
   N('computemodel','compute','Compute Model', compute.v, compute.conf, compute.why, 'Solution Architect');
@@ -3263,6 +3304,7 @@ function buildCanonicalArchitectureGraph(ctx, signals = {}){
 
   const E = (a,b) => edges.push({from:a,to:b});
   E('frontend','gateway'); E('gateway','iam'); E('gateway','cloud');
+  if(hybridId) E(hybridId,'cloud');
   E('cloud','arch'); E('arch','computemodel'); E('computemodel','containers'); E('computemodel','lang');
   E('computemodel','db'); E('computemodel','cache'); E('computemodel','messaging'); E('computemodel','mesh');
   E('computemodel','llm');
@@ -3304,7 +3346,7 @@ function buildCanonicalArchitectureGraph(ctx, signals = {}){
 // Layout adapter: decorates the canonical graph with pixel positions + theme colors
 // for the Flow View canvas. Presentation concern only — never consumed by exporters.
 const FLOW_LAYOUT = {
-  frontend:[40,260], gateway:[300,40], iam:[300,165], dns:[300,290],
+  frontend:[40,260], gateway:[300,40], iam:[300,165], dns:[300,290], hybridconnectivity:[300,415],
   cloud:[560,30], arch:[560,155], computemodel:[560,280], containers:[560,405], lang:[560,530],
   db:[820,90], cache:[820,215], messaging:[820,340], mesh:[820,465],
   llm:[1080,30], rag:[1080,155], vectordb:[1080,280], mcp:[1080,405], guardrails:[1080,530],
@@ -5162,7 +5204,7 @@ const EDGE_LABELS = {
   'computemodel->mesh': 'Service-to-service', 'computemodel->llm': 'Inference / RAG',
   'llm->rag': 'Retrieval', 'rag->vectordb': 'Vector Search', 'llm->mcp': 'Tool calls',
   'guardrails->llm': 'Policy checks', 'computemodel->observability': 'Metrics & Traces',
-  'computemodel->cicd': 'Deploys via',
+  'computemodel->cicd': 'Deploys via', 'hybridconnectivity->cloud': 'Dedicated link',
 };
 
 function generateDrawioXml(rec, signals) {

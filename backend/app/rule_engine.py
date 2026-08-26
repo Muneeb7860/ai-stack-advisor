@@ -60,12 +60,25 @@ def detect_signals(text: str) -> dict:
             "no public cloud", "private cloud only", "bare metal deployment",
         ]
     )
+    # Unambiguous dedicated-link/hybrid-transit terms — mirrors the same fix in index.html's
+    # detectSignals(): a sentence like "Direct Connect to bridge our on-prem systems to AWS" is
+    # real hybrid intent, not an air-gapped requirement, even though it never says "hybrid" and
+    # "cloud" together (it names the vendor directly instead).
+    dedicated_link_terms = has_raw([
+        "direct connect", "expressroute", "express route", "cloud interconnect",
+        "dedicated link", "private link to cloud", "colocation cross-connect",
+        "cross-connect", "bgp peering", "transit gateway", "virtual wan", "enterprise router",
+    ])
     soft_on_prem = has_raw(["on-prem", "on premises", "on-premise"]) and not (
-        has_raw(["hybrid"]) and has_raw(["cloud"])
+        dedicated_link_terms or (has_raw(["hybrid"]) and has_raw(["cloud"]))
+    )
+    hybrid_connectivity = dedicated_link_terms or (
+        has_raw(["hybrid"]) and has_raw(["cloud"]) and not strong_on_prem
     )
 
     return {
         "onPrem": strong_on_prem or soft_on_prem,
+        "hybridConnectivity": hybrid_connectivity,
         "healthcare": has(["health", "hipaa", "patient", "clinical", "ehr", "medical"]),
         "finance": has(["fintech", "bank", "payment", "fraud", "pci", "transaction", "trading", "ledger", "finance"]),
         "ecommerce": has(["ecommerce", "e-commerce", "retail", "shopping", "product recommendation", "cart", "checkout"]),
