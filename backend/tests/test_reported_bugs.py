@@ -213,8 +213,13 @@ def test_bug8_only_user_named_technologies_are_marked_stated():
 def test_bug8_provenance_map_does_not_key_on_context_signals():
     """Static guard: the proxy signals that caused this must not reappear in the map."""
     html = INDEX_HTML.read_text(encoding="utf-8")
-    block = html[html.index("const cardExplicitMap = {"):]
-    block = block[:block.index("};")]
+    # One shared buildExplicitMap() now serves BOTH the on-screen cards and the ADR exporter —
+    # the exporter used to carry its own copy with the same defect, so fixing the cards left the
+    # export still reporting team size and traffic volume as things the user asked for.
+    assert "const cardExplicitMap = buildExplicitMap(s);" in html, "cards must use the shared map"
+    assert "const EX = buildExplicitMap(s);" in html, "the ADR exporter must use the shared map"
+    block = html[html.index("function buildExplicitMap(s){"):]
+    block = block[:block.index("\n}")]
     for proxy in ["s.startupMvp", "s.smallTeam", "s.enterprise", "s.largeTeam", "s.highScale",
                   "s.structured", "s.finance", "s.web", "s.mobile", "s.realtime"]:
         assert proxy not in block, (

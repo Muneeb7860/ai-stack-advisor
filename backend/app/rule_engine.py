@@ -165,6 +165,58 @@ def detect_latency_target(text: str):
     return best
 
 
+_CONCURRENCY_RE = re.compile(
+    r"([0-9][0-9,.]*)\s*(k|m)?\s*(?:\+\s*)?(?:concurrent|simultaneous|parallel|peak|active)\s+"
+    r"(?:users|sessions|connections|requests|clients)")
+
+_TIMELINE_RE = re.compile(
+    r"([0-9]+|one|two|three|four|five|six|seven|eight|nine|ten|twelve)[\s-]*"
+    r"(week|weeks|month|months|quarter|quarters|year|years)\b")
+
+
+def detect_concurrency_target(text: str):
+    """Mirrors index.html's detectConcurrencyTarget(). "500 concurrent users" parsed to nothing —
+    it does not even trip highScale, whose keywords are "high traffic"/"millions of users"."""
+    best = None
+    for m in _CONCURRENCY_RE.finditer(str(text or "").lower()):
+        try:
+            n = float(m.group(1).replace(",", ""))
+        except ValueError:
+            continue
+        if m.group(2) == "k":
+            n *= 1e3
+        elif m.group(2) == "m":
+            n *= 1e6
+        if best is None or n > best["count"]:
+            best = {"count": n, "text": m.group(0).strip()}
+    return best
+
+
+def detect_timeline(text: str):
+    """Mirrors index.html's detectTimeline(). Tightest stated window binds."""
+    best = None
+    for m in _TIMELINE_RE.finditer(str(text or "").lower()):
+        raw = m.group(1)
+        n = _WORD_NUMBERS.get(raw, 12 if raw == "twelve" else None)
+        if n is None:
+            try:
+                n = float(raw)
+            except ValueError:
+                continue
+        unit = m.group(2)
+        if unit.startswith("week"):
+            days = n * 7
+        elif unit.startswith("month"):
+            days = n * 30
+        elif unit.startswith("quarter"):
+            days = n * 91
+        else:
+            days = n * 365
+        if best is None or days < best["days"]:
+            best = {"days": days, "text": m.group(0).strip()}
+    return best
+
+
 def excluded_pick(what: str) -> dict:
     """A pick the user explicitly ruled out — kept as a real card so the report shows the
     constraint was understood rather than silently producing a shorter stack."""
@@ -219,6 +271,8 @@ def detect_signals(text: str) -> dict:
         "excluded": detect_exclusions(text),
         "known": detect_known_tech(text),
         "latencyTarget": detect_latency_target(text),
+        "concurrencyTarget": detect_concurrency_target(text),
+        "timeline": detect_timeline(text),
         "brownfieldOmnichannel": has([
             "omnichannel ai support", "omnichannel support", "omni-channel ai",
             "multiple channels", "across channels", "web widget, whatsapp", "channel routing",
@@ -301,6 +355,15 @@ def detect_signals(text: str) -> dict:
         "vanillaWebMentioned": has(["html5", "html/css", "vanilla javascript", "vanilla js"]) or (has(["html"]) and has(["css"])),
         "dockerMentioned": has(["docker"]),
         "kubernetesMentioned": has(["kubernetes", "k8s"]),
+        # Per-standard compliance flags — the generic `compliance` signal can't say WHICH regime.
+        "soc2Mentioned": has(["soc2", "soc 2"]),
+        "hipaaMentioned": has(["hipaa"]),
+        "pciMentioned": has(["pci", "pci dss", "pci-dss"]),
+        "govMentioned": has(["fedramp", "government", "defense", "public sector", "gov cloud", "govcloud"]),
+        "gdprMentioned": has(["gdpr"]),
+        "llmProviderMentioned": has(["anthropic", "claude", "openai", "gpt-4", "gpt4", "chatgpt",
+                                     "gemini", "llama", "mistral", "deepseek", "bedrock",
+                                     "azure openai", "vertex ai"]),
         "redisMentioned": has(["redis", "memcached", "valkey"]),
         "kafkaMentioned": has(["kafka", "rabbitmq", "message queue", "event bus"]),
         "microservicesMentioned": has(["microservice", "microservices"]),

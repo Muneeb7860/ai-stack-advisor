@@ -1307,6 +1307,45 @@ function detectKnownTech(text){
   return out;
 }
 
+// Same gap as detectLatencyTarget(): "500 concurrent users" and "4 month timeline" are hard,
+// checkable numbers that parsed to nothing — "500 concurrent users" does not even trip the
+// highScale signal, whose keywords are "high traffic"/"millions of users". Both end up in the
+// exported quality scenarios, which is why those were all _TBD_ even for a requirement that
+// stated real figures.
+function detectConcurrencyTarget(text){
+  const t = String(text || '').toLowerCase();
+  const RE = /([0-9][0-9,\.]*)\s*(k|m)?\s*(?:\+\s*)?(?:concurrent|simultaneous|parallel|peak|active)\s+(?:users|sessions|connections|requests|clients)/g;
+  let best = null, m;
+  while ((m = RE.exec(t)) !== null){
+    let n = parseFloat(m[1].replace(/,/g, ''));
+    if (!isFinite(n)) continue;
+    if (m[2] === 'k') n *= 1e3;
+    if (m[2] === 'm') n *= 1e6;
+    if (best === null || n > best.count) best = {count: n, text: m[0].trim()};
+  }
+  return best;
+}
+
+function detectTimeline(text){
+  const t = String(text || '').toLowerCase();
+  const RE = /([0-9]+|one|two|three|four|five|six|seven|eight|nine|ten|twelve)[\s-]*(week|weeks|month|months|quarter|quarters|year|years)\b(?:[^.,;!?]{0,20}(?:timeline|deadline|delivery|to launch|to ship|to deliver))?/g;
+  let best = null, m;
+  while ((m = RE.exec(t)) !== null){
+    const raw = m[1];
+    const n = _WORD_NUMBERS[raw] !== undefined ? _WORD_NUMBERS[raw] : (raw === 'twelve' ? 12 : parseFloat(raw));
+    if (!isFinite(n)) continue;
+    const unit = m[2];
+    let days;
+    if (unit.startsWith('week')) days = n * 7;
+    else if (unit.startsWith('month')) days = n * 30;
+    else if (unit.startsWith('quarter')) days = n * 91;
+    else days = n * 365;
+    // Tightest stated window binds, same rule as the latency target.
+    if (best === null || days < best.days) best = {days, text: m[0].trim()};
+  }
+  return best;
+}
+
 // A pick the user explicitly ruled out. Kept as a real card (not hidden) so the report shows
 // the constraint was understood rather than silently producing a shorter stack.
 function excludedPick(what){
@@ -1355,6 +1394,8 @@ function detectSignals(text){
     // Explicit numeric latency/response-time target, e.g. "under 3 seconds", "sub-200ms",
     // "p95 below 500ms". null when the requirement states no number (see detectLatencyTarget).
     latencyTarget: detectLatencyTarget(text),
+    concurrencyTarget: detectConcurrencyTarget(text),
+    timeline: detectTimeline(text),
     healthcare: has(['health','hipaa','patient','clinical','ehr','medical']),
     finance: has(['fintech','bank','payment','fraud','pci','transaction','trading','ledger','finance']),
     ecommerce: has(['ecommerce','e-commerce','retail','shopping','product recommendation','cart','checkout']),
@@ -1440,6 +1481,14 @@ function detectSignals(text){
     kubernetesMentioned: has(['kubernetes','k8s']),
     // "Named by the user" signals for categories that had none, so the provenance map below can
     // key on an actual statement instead of a proxy like team size or traffic volume.
+    // Per-standard flags. The generic `compliance` signal can't say WHICH regime applies, so
+    // the ADR export had no way to populate its compliance list from a free-text requirement.
+    llmProviderMentioned: has(['anthropic','claude','openai','gpt-4','gpt4','chatgpt','gemini','llama','mistral','deepseek','bedrock','azure openai','vertex ai']),
+    soc2Mentioned: has(['soc2','soc 2']),
+    hipaaMentioned: has(['hipaa']),
+    pciMentioned: has(['pci','pci dss','pci-dss']),
+    govMentioned: has(['fedramp','government','defense','public sector','gov cloud','govcloud']),
+    gdprMentioned: has(['gdpr']),
     redisMentioned: has(['redis','memcached','valkey']),
     kafkaMentioned: has(['kafka','rabbitmq','message queue','event bus']),
     microservicesMentioned: has(['microservice','microservices']),
@@ -2978,25 +3027,7 @@ function renderRecommendations(s, rec){
   // React as stated, and "enterprise" or "high traffic" marked microservices and Kubernetes as
   // stated, none of which the user ever asked for. An exclusion is equally a statement, so
   // ruling something out marks the card stated too.
-  const ex = s.excluded || {};
-  const cardExplicitMap = {
-    cloud: !!(s.awsShop || s.azureShop || s.gcpShop || s.huaweiShop || s.onPrem || ex.cloud),
-    gateway: !!(s.onPrem || ex.api),
-    iam: !!(s.oktaMentioned || s.entraMentioned || s.pingMentioned || s.forgerockMentioned || s.jumpcloudMentioned || s.onPrem || ex.iam),
-    languages: !!(s.javaMentioned || s.pythonMentioned || s.dotnetMentioned || s.goMentioned || s.nodeMentioned || s.rubyMentioned || s.phpMentioned),
-    architecture: !!(s.microservicesMentioned || s.monolithMentioned || ex.microservices),
-    compute: !!(s.onPrem || s.serverlessMentioned || ex.serverless),
-    messaging: !!(s.kafkaMentioned || ex.messaging),
-    mesh: !!(s.mtlsMentioned || ex.mesh),
-    cache: !!(s.redisMentioned || ex.cache),
-    database: !!(s.postgresMentioned || s.mongoMentioned || s.mysqlMentioned || s.sqlServerMentioned || s.oracleDbMentioned || ex.database),
-    containers: !!(s.dockerMentioned || s.kubernetesMentioned || s.openshiftMentioned || s.onPrem || ex.kubernetes || ex.containers),
-    observability: !!(s.datadogMentioned || s.prometheusMentioned || s.splunkMentioned || s.dynatraceMentioned || s.newrelicMentioned || s.elkMentioned || ex.observability),
-    frontend: !!(s.reactMentioned || s.angularMentioned || s.vueMentioned || s.vanillaWebMentioned || ex.frontend),
-    cicd: !!(s.terraformMentioned || s.githubActionsMentioned || s.jenkinsMentioned || s.gitlabCiMentioned || s.circleciMentioned || s.azureDevopsMentioned),
-    dns: false,
-    hybridconnectivity: !!(s.hybridConnectivity || s.onPrem),
-  };
+  const cardExplicitMap = buildExplicitMap(s);
   const getCardBasis = (cat, conf) => confToBasis(conf, !!cardExplicitMap[cat]);
 
   // Each stack card: [title, pick, why, conf, persona, altToggleHtml, basis]. altToggleHtml is '' for
@@ -4863,6 +4894,38 @@ async function onAskClick(cardKey){
 //     pick, e.g. compliance -> Java) -> 'constraint-derived'.
 //   - conf 'medium' (best general fit, not forced by a hard constraint) -> 'consensus'.
 //   - conf 'low' (no real signal, generic fallback) -> 'heuristic-default'.
+// Single source of truth for "did the user actually state this?".
+//
+// This logic existed TWICE — once for the on-screen cards and once, independently, inside
+// mapAppPicksToKb() for the ADR export. Fixing the on-screen copy left the export still
+// reporting team size as an architecture decision the user stated, "web app" as a React
+// request, and traffic volume as a Kafka request. Two copies of a rule is two chances to be
+// wrong, so both callers now read this one.
+//
+// `stated` must mean the user named a technology or stated a hard constraint — never context
+// that merely correlates with a pick (team size, traffic, industry, "web app").
+function buildExplicitMap(s){
+  const ex = (s && s.excluded) || {};
+  return {
+    cloud: !!(s.awsShop || s.azureShop || s.gcpShop || s.huaweiShop || s.onPrem || ex.cloud),
+    gateway: !!(s.onPrem || ex.api),
+    iam: !!(s.oktaMentioned || s.entraMentioned || s.pingMentioned || s.forgerockMentioned || s.jumpcloudMentioned || s.onPrem || ex.iam),
+    languages: !!(s.javaMentioned || s.pythonMentioned || s.dotnetMentioned || s.goMentioned || s.nodeMentioned || s.rubyMentioned || s.phpMentioned),
+    architecture: !!(s.microservicesMentioned || s.monolithMentioned || ex.microservices),
+    compute: !!(s.onPrem || s.serverlessMentioned || ex.serverless),
+    messaging: !!(s.kafkaMentioned || ex.messaging),
+    mesh: !!(s.mtlsMentioned || ex.mesh),
+    cache: !!(s.redisMentioned || ex.cache),
+    database: !!(s.postgresMentioned || s.mongoMentioned || s.mysqlMentioned || s.sqlServerMentioned || s.oracleDbMentioned || ex.database),
+    containers: !!(s.dockerMentioned || s.kubernetesMentioned || s.openshiftMentioned || s.onPrem || ex.kubernetes || ex.containers),
+    observability: !!(s.datadogMentioned || s.prometheusMentioned || s.splunkMentioned || s.dynatraceMentioned || s.newrelicMentioned || s.elkMentioned || ex.observability),
+    frontend: !!(s.reactMentioned || s.angularMentioned || s.vueMentioned || s.vanillaWebMentioned || ex.frontend),
+    cicd: !!(s.terraformMentioned || s.githubActionsMentioned || s.jenkinsMentioned || s.gitlabCiMentioned || s.circleciMentioned || s.azureDevopsMentioned),
+    dns: false,
+    hybridconnectivity: !!(s.hybridConnectivity || s.onPrem),
+  };
+}
+
 function confToBasis(conf, explicit){
   if (explicit) return 'stated';
   if (conf === 'high') return 'constraint-derived';
@@ -5057,7 +5120,32 @@ ${JSON.stringify(tech, null, 2)}
 // text names more than one plausible techId with no way to disambiguate — is reported via
 // `omitted` instead of being forced onto the nearest techId, matching the KB's own "visible gap,
 // not silent omission" design (see CLAUDE.md's expansion_backlog invariant).
+// Pick strings are ' · '-separated lists, each segment starting with the technology itself and
+// continuing into rationale after a '(' or em-dash. The exporter matched technology names against
+// that WHOLE string, which produced two opposite failures from one cause:
+//
+//   "RabbitMQ (task queue / flexible routing) for now — move to Kafka if you need durable
+//    replay"  ->  matched 'Kafka' in the CONTRA-indication, so the ADR recorded "use Kafka"
+//                 while the report on screen recommended RabbitMQ.
+//   "PostgreSQL (…) · MongoDB (…)"  ->  the `if PostgreSQL` branch won and the `else omitted`
+//                 never ran, so MongoDB vanished from the export with no omission note at all.
+//
+// Matching the leading technology of each segment fixes both: rationale prose is out of scope,
+// and every segment is considered rather than only the first one that matched.
+function parsePickHeads(text){
+  return String(text || '')
+    .split(' · ')
+    .map(seg => seg.split(/[(—]/)[0].trim())
+    .filter(Boolean);
+}
+
+function headMatches(head, name){
+  return new RegExp('\\b' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(head);
+}
+
 function mapAppPicksToKb(rec, s){
+  // Shared with the on-screen cards — see buildExplicitMap().
+  const EX = buildExplicitMap(s);
   const recs = [];
   const omitted = [];
   const has = (str, kw) => (str || '').toLowerCase().includes(kw.toLowerCase());
@@ -5074,21 +5162,30 @@ function mapAppPicksToKb(rec, s){
 
   // Architecture Style — decomposition category.
   const archText = rec.arch.v || '';
-  if (has(archText, 'Modular monolith')) recs.push({techId:'modular-monolith', role:'Architecture Style', basis: confToBasis(rec.arch.conf, !!(s.startupMvp || s.smallTeam)), ruleIds:[]});
-  else if (has(archText, 'Microservices')) recs.push({techId:'microservices', role:'Architecture Style', basis: confToBasis(rec.arch.conf, !!(s.enterprise || s.largeTeam)), ruleIds:[]});
+  if (has(archText, 'Modular monolith')) recs.push({techId:'modular-monolith', role:'Architecture Style', basis: confToBasis(rec.arch.conf, EX.architecture), ruleIds:[]});
+  else if (has(archText, 'Microservices')) recs.push({techId:'microservices', role:'Architecture Style', basis: confToBasis(rec.arch.conf, EX.architecture), ruleIds:[]});
 
   // Messaging / Streaming — the KB's eventing coverage is Kafka and the transactional-outbox
   // pattern; RabbitMQ/SQS/Pub-Sub/Redis-pub-sub picks (the app's other messaging outcomes) have
   // no KB entry and are reported as omitted rather than force-mapped onto "outbox-pattern",
   // which is a specific design pattern, not a generic stand-in for "not Kafka".
   const msgText = rec.msg.v || '';
-  if (has(msgText, 'Kafka')) recs.push({techId:'kafka', role:'Messaging / Streaming', basis: confToBasis(rec.msg.conf, !!(s.highScale && s.realtime)), ruleIds:[]});
+  const msgHeads = parsePickHeads(msgText);
+  if (msgHeads.some(h => headMatches(h, 'Kafka'))) recs.push({techId:'kafka', role:'Messaging / Streaming', basis: confToBasis(rec.msg.conf, EX.messaging), ruleIds:[]});
   else omitted.push({category:'Messaging / Streaming', detail:`Picked "${msgText.split(' · ')[0] || msgText}" — no direct KB entry (KB eventing coverage is Kafka and the transactional-outbox pattern only).`});
 
   // Primary Database(s) — postgres is authored; MongoDB/Cassandra/warehouse picks are not.
   const dbText = rec.db.v || '';
-  if (has(dbText, 'PostgreSQL')) recs.push({techId:'postgres', role:'Primary Database', basis: confToBasis(rec.db.conf, !!(s.structured || s.finance)), ruleIds:[]});
-  else omitted.push({category:'Primary Database(s)', detail:`Picked "${dbText.split(' · ')[0] || dbText}" — no direct KB entry (KB database coverage is PostgreSQL and a dedicated-vector-DB category only).`});
+  const dbHeads = parsePickHeads(dbText);
+  const dbMapped = dbHeads.filter(h => headMatches(h, 'PostgreSQL'));
+  const dbUnmapped = dbHeads.filter(h => !headMatches(h, 'PostgreSQL'));
+  if (dbMapped.length) recs.push({techId:'postgres', role:'Primary Database', basis: confToBasis(rec.db.conf, EX.database), ruleIds:[]});
+  // Every OTHER store in a multi-store pick gets declared too — previously only the first
+  // recognised one survived and the rest were dropped without a trace.
+  if (dbMapped.length && dbUnmapped.length){
+    omitted.push({category:'Primary Database(s)', detail:`Also recommended on screen alongside PostgreSQL: ${dbUnmapped.join('; ')} — no KB entry (KB database coverage is PostgreSQL and a dedicated-vector-DB category only), so not exported as a decision record.`});
+  }
+  if (!dbMapped.length) omitted.push({category:'Primary Database(s)', detail:`Picked "${dbHeads[0] || dbText}" — no direct KB entry (KB database coverage is PostgreSQL and a dedicated-vector-DB category only).`});
   // Vector Database — joined by pickVectorDBPlacement()'s own techId, never by parsing
   // dbChoice's prose. The KB has real per-vendor entries (pgvector/qdrant/weaviate/milvus/
   // pinecone all confirmed present, each with an accurate hosting field — pinecone is
@@ -5115,10 +5212,10 @@ function mapAppPicksToKb(rec, s){
   const iamId = rec.iam.primaryId;
   const IAM_VENDOR_TO_KB = {okta:'okta-workforce', entra:'entra-id', ping:'ping-identity', jumpcloud:'jumpcloud'};
   if (iamId === 'selfhosted'){
-    recs.push({techId:'keycloak', role:'Identity & Access', basis: confToBasis(rec.iam.conf, !!s.onPrem), ruleIds:[]});
+    recs.push({techId:'keycloak', role:'Identity & Access', basis: confToBasis(rec.iam.conf, EX.iam), ruleIds:[]});
   } else if (IAM_VENDOR_TO_KB[iamId]){
     const explicitVendor = !!(s.oktaMentioned || s.entraMentioned || s.pingMentioned || s.forgerockMentioned || s.jumpcloudMentioned);
-    recs.push({techId: IAM_VENDOR_TO_KB[iamId], role:'Identity & Access', basis: confToBasis(rec.iam.conf, explicitVendor), ruleIds:[]});
+    recs.push({techId: IAM_VENDOR_TO_KB[iamId], role:'Identity & Access', basis: confToBasis(rec.iam.conf, EX.iam), ruleIds:[]});
   } else if (iamId === 'oracle' || iamId === 'onelogin'){
     omitted.push({category:'Identity & Access (IAM)', detail:`Picked "${rec.iam.v}" — neither Oracle IAM nor OneLogin has a dedicated KB entry; the closest-named entry, "managed-idp", explicitly scopes itself to Entra ID/Auth0/Cognito/Okta only, so mapping either vendor onto it would misrepresent the pick.`});
   }
@@ -5141,9 +5238,9 @@ function mapAppPicksToKb(rec, s){
   // Frontend — react-ts / flutter are authored; plain "React" (no TS distinction in the app's
   // pick) is mapped to the KB's closest entry with a note; Angular has no KB entry yet.
   const feText = rec.fe.v || '';
-  if (has(feText, 'Flutter')) recs.push({techId:'flutter', role:'Frontend', basis: confToBasis(rec.fe.conf, !!s.mobile), ruleIds:[]});
+  if (has(feText, 'Flutter')) recs.push({techId:'flutter', role:'Frontend', basis: confToBasis(rec.fe.conf, EX.frontend), ruleIds:[]});
   if (has(feText, 'Angular')) omitted.push({category:'Frontend', detail:'Angular is in the KB expansion backlog but not yet authored as a full entry.'});
-  else if (has(feText, 'React')) recs.push({techId:'react-ts', role:'Frontend', basis: confToBasis(rec.fe.conf, !!s.web), ruleIds:[],
+  else if (has(feText, 'React')) recs.push({techId:'react-ts', role:'Frontend', basis: confToBasis(rec.fe.conf, EX.frontend), ruleIds:[],
     note:'App pick was plain "React" — mapped to the KB\'s closest entry, "React + TypeScript", which is a slightly more specific stack than what was actually recommended.'});
 
   // Cloud Provider — the headline addition in this KB upgrade: 26 Cloud-domain entries where
@@ -5154,7 +5251,7 @@ function mapAppPicksToKb(rec, s){
   const cloudPrimaryId = rec.cloudVendorPick && rec.cloudVendorPick.primaryId;
   if (cloudPrimaryId === 'aws' || cloudPrimaryId === 'azure' || cloudPrimaryId === 'gcp'){
     const explicitCloud = !!(s.awsShop || s.azureShop || s.gcpShop);
-    recs.push({techId: cloudPrimaryId, role:'Cloud Provider', basis: confToBasis(rec.cloud.conf, explicitCloud), ruleIds:[]});
+    recs.push({techId: cloudPrimaryId, role:'Cloud Provider', basis: confToBasis(rec.cloud.conf, EX.cloud), ruleIds:[]});
   } else if (s.onPrem){
     // The KB's closest-sounding entry, "sovereign-cloud" (AWS European Sovereign Cloud / Azure
     // Local sovereign), is still a *hosted* public-cloud product reachable over the network
@@ -5176,7 +5273,7 @@ function mapAppPicksToKb(rec, s){
   // doesn't change the underlying mesh choice); the "not needed yet" branch correctly stays
   // unmapped since no technology was actually recommended there.
   const meshText = rec.mesh.v || '';
-  if (has(meshText, 'Istio')) recs.push({techId:'istio', role:'Service Mesh', basis: confToBasis(rec.mesh.conf, !!s.mtlsMentioned), ruleIds:[]});
+  if (has(meshText, 'Istio')) recs.push({techId:'istio', role:'Service Mesh', basis: confToBasis(rec.mesh.conf, EX.mesh), ruleIds:[]});
   else omitted.push({category:'Service Mesh', detail:`Picked "${meshText}" — no service mesh was actually recommended (or it names a product outside current KB coverage), so nothing to map.`});
 
   // Containers / Orchestration — "kubernetes" and "serverless-containers" are now KB entries
@@ -5185,10 +5282,10 @@ function mapAppPicksToKb(rec, s){
   // mapped anyway since the underlying technology is the same and KB's own `hosting` field lists
   // both "managed" and "self", with a note flagging the distinction rather than silently eliding it.
   const containersText = rec.containers.v || '';
-  if (has(containersText, 'serverless containers')) recs.push({techId:'serverless-containers', role:'Containers / Orchestration', basis: confToBasis(rec.containers.conf, !!s.startupMvp), ruleIds:[]});
-  else if (has(containersText, 'self-managed Kubernetes')) recs.push({techId:'kubernetes', role:'Containers / Orchestration', basis: confToBasis(rec.containers.conf, !!s.onPrem), ruleIds:[],
+  if (has(containersText, 'serverless containers')) recs.push({techId:'serverless-containers', role:'Containers / Orchestration', basis: confToBasis(rec.containers.conf, EX.containers), ruleIds:[]});
+  else if (has(containersText, 'self-managed Kubernetes')) recs.push({techId:'kubernetes', role:'Containers / Orchestration', basis: confToBasis(rec.containers.conf, EX.containers), ruleIds:[],
     note:'Pick was self-managed Kubernetes (on-prem/air-gapped) — the KB entry is titled "Kubernetes (managed)" but its own `hosting` field lists both "managed" and "self", so the underlying technology match still holds.'});
-  else if (has(containersText, 'Kubernetes')) recs.push({techId:'kubernetes', role:'Containers / Orchestration', basis: confToBasis(rec.containers.conf, !!(s.enterprise || s.highScale)), ruleIds:[]});
+  else if (has(containersText, 'Kubernetes')) recs.push({techId:'kubernetes', role:'Containers / Orchestration', basis: confToBasis(rec.containers.conf, EX.containers), ruleIds:[]});
   else omitted.push({category:'Containers / Orchestration', detail:`Picked "${containersText}" — no direct KB entry.`});
 
   // Compute Model — deliberately NOT mapped to a techId, even though the KB has genuine entries
@@ -5247,8 +5344,8 @@ function mapAppPicksToKb(rec, s){
       note:'Pick is a hybrid posture (self-hosted for sensitive/high-volume traffic, cloud API for the rest) — mapped to Ollama for the self-hosted half; the cloud-API half is mapped separately below via the LLM Provider pick.'});
   }
   if (has(llmProviderText, 'Anthropic Claude')) {
-    recs.push({techId:'cloud-api-anthropic', role:'AI / LLM Access Strategy', basis: confToBasis(rec.llmProviderPick.conf, !!(s.compliance || s.enterprise || s.security)), ruleIds: s.agentic ? ['r-llm-frontier-for-agentic-gate'] : []});
-    recs.push({techId:'claude-sonnet', role:'AI / LLM Model (frontier tier)', basis: confToBasis(rec.llmProviderPick.conf, !!(s.compliance || s.enterprise || s.security)), ruleIds: s.agentic ? ['r-llm-frontier-for-agentic-gate'] : []});
+    recs.push({techId:'cloud-api-anthropic', role:'AI / LLM Access Strategy', basis: confToBasis(rec.llmProviderPick.conf, !!s.llmProviderMentioned), ruleIds: s.agentic ? ['r-llm-frontier-for-agentic-gate'] : []});
+    recs.push({techId:'claude-sonnet', role:'AI / LLM Model (frontier tier)', basis: confToBasis(rec.llmProviderPick.conf, !!s.llmProviderMentioned), ruleIds: s.agentic ? ['r-llm-frontier-for-agentic-gate'] : []});
   } else if (has(llmProviderText, 'OpenAI GPT')) {
     recs.push({techId:'cloud-api-openai', role:'AI / LLM Access Strategy', basis: confToBasis(rec.llmProviderPick.conf, false), ruleIds: s.agentic ? ['r-llm-frontier-for-agentic-gate'] : []});
     recs.push({techId:'openai-gpt-frontier', role:'AI / LLM Model (frontier tier)', basis: confToBasis(rec.llmProviderPick.conf, false), ruleIds: s.agentic ? ['r-llm-frontier-for-agentic-gate'] : []});
@@ -5362,12 +5459,72 @@ function buildAdrInput(s){
     ? `Recommended stack for ${buildLabels.join(' + ')}`
     : 'Recommended stack (AI Stack Advisor)'; // generic default — no wizard/product-name field exists to derive a real name from
 
+  // ---- Free-text fallback -------------------------------------------------
+  // Everything above reads wizState, which is populated ONLY by the guided wizard. Analysing a
+  // pasted requirement leaves it empty, so the exported ADR pack was built from an essentially
+  // blank input: no compliance regime, no existing stack, no team size, and a generic product
+  // name — even when the requirement stated all of them. The analysis already knows these; the
+  // export just never asked. Wizard values still win where present; signals fill the gaps.
+  const sig = s || {};
+  const sigCompliance = [
+    sig.soc2Mentioned && 'soc2', sig.hipaaMentioned && 'hipaa', sig.pciMentioned && 'pci',
+    sig.govMentioned && 'gov', sig.gdprMentioned && 'gdpr',
+  ].filter(Boolean);
+  // Fall back to the domain signals when no standard is named by name — a healthcare or payments
+  // requirement carries the regime implicitly.
+  if (!sigCompliance.length && sig.compliance){
+    if (sig.healthcare) sigCompliance.push('hipaa');
+    if (sig.finance) sigCompliance.push('pci');
+    if (!sigCompliance.length) sigCompliance.push('soc2');
+  }
+
+  const SIG_STACK = {
+    javaMentioned:'java', pythonMentioned:'python', nodeMentioned:'node.js', dotnetMentioned:'.net',
+    goMentioned:'go', rubyMentioned:'ruby', phpMentioned:'php',
+    postgresMentioned:'postgresql', mysqlMentioned:'mysql', sqlServerMentioned:'sql server',
+    oracleDbMentioned:'oracle database', mongoMentioned:'mongodb', redisMentioned:'redis',
+    pineconeMentioned:'pinecone', weaviateMentioned:'weaviate', qdrantMentioned:'qdrant',
+    reactMentioned:'react', angularMentioned:'angular', vueMentioned:'vue',
+    awsShop:'aws', azureShop:'azure', gcpShop:'gcp', huaweiShop:'huawei cloud',
+    dockerMentioned:'docker', kubernetesMentioned:'kubernetes', openshiftMentioned:'openshift',
+    terraformMentioned:'terraform', githubActionsMentioned:'github actions', jenkinsMentioned:'jenkins',
+    gitlabCiMentioned:'gitlab ci', circleciMentioned:'circleci', azureDevopsMentioned:'azure devops',
+    datadogMentioned:'datadog', prometheusMentioned:'prometheus/grafana', splunkMentioned:'splunk',
+    dynatraceMentioned:'dynatrace', newrelicMentioned:'new relic', elkMentioned:'elastic stack',
+    oktaMentioned:'okta', entraMentioned:'microsoft entra id', pingMentioned:'ping identity',
+    forgerockMentioned:'forgerock', jumpcloudMentioned:'jumpcloud',
+  };
+  const sigStack = Object.keys(SIG_STACK).filter(k => sig[k]).map(k => SIG_STACK[k]);
+
+  // Surface/product name from what the requirement describes, not from wizard checkboxes.
+  const sigSurface = sig.mobile ? 'mobile'
+    : sig.chatbot || sig.knowledgeBase ? 'business-app'
+    : sig.dataHeavy ? 'platform'
+    : sig.web ? 'web-app'
+    : 'business-app';
+  const sigProductName = sig.chatbot && sig.knowledgeBase ? 'Recommended stack for an internal knowledge assistant'
+    : sig.chatbot ? 'Recommended stack for an AI assistant'
+    : sig.ecommerce ? 'Recommended stack for an e-commerce platform'
+    : sig.dataHeavy ? 'Recommended stack for a data/analytics platform'
+    : sig.web ? 'Recommended stack for a web application'
+    : null;
+
+  const sigTeamSize = sig.smallTeam ? 'a small team (detected in the requirement text)'
+    : sig.largeTeam ? 'a large team (detected in the requirement text)'
+    : undefined;
+
   return {
-    productName, surface,
-    audience: wizState.audience || 'enterprise', // KB weight_hint_by_audience ids match wizState.audience values exactly (internal/smb/enterprise/consumer)
-    compliance,
-    teamSize: wizState.teamsize || undefined,
-    existingStack,
+    productName: (buildLabels.length ? productName : (sigProductName || productName)),
+    surface: (wizState.building || []).length ? surface : sigSurface,
+    audience: wizState.audience || (sig.enterprise ? 'enterprise' : sig.startupMvp ? 'smb' : 'enterprise'),
+    compliance: compliance.length ? compliance : sigCompliance,
+    teamSize: wizState.teamsize || sigTeamSize,
+    existingStack: existingStack.length ? existingStack : sigStack,
+    // Explicit numeric targets stated in the requirement — previously dropped entirely, which is
+    // why the exported quality scenarios were all _TBD_ even when the user gave real numbers.
+    latencyTarget: sig.latencyTarget || undefined,
+    concurrencyTarget: sig.concurrencyTarget || undefined,
+    timeline: sig.timeline || undefined,
     // The resolved hosting constraint, from real signals not wizard state — a systemic
     // invariant check (buildWarnings' hosting-constraint-violation check) reads this to catch
     // ANY recommended technology whose KB `hosting` array lacks a self-hostable option, not
@@ -17435,11 +17592,34 @@ function renderArc42(ix, recs, adrs, drivers, input) {
   L.push('');
   L.push('| Attribute | Stimulus | Expected response | Measure |');
   L.push('|---|---|---|---|');
+  // Rows the REQUIREMENT already quantified. These were emitted as _TBD_ alongside everything
+  // else even when the user gave hard numbers ("under three seconds", "500 concurrent users",
+  // "4 month timeline"), because nothing parsed them and buildAdrInput() never carried them —
+  // so the exported quality section asked the reader to supply figures they had already stated.
+  const stated = [];
+  if (input.latencyTarget) {
+    stated.push(`| Performance | A user submits a request on the primary path | The complete response is returned within the stated budget | P95 ≤ ${input.latencyTarget.ms} ms (stated: "${input.latencyTarget.text}") |`);
+  }
+  if (input.concurrencyTarget) {
+    stated.push(`| Scalability | Load reaches the stated peak | The system serves it without error-rate or latency regression | ${input.concurrencyTarget.count.toLocaleString()} concurrent (stated: "${input.concurrencyTarget.text}") |`);
+  }
+  if (input.timeline) {
+    stated.push(`| Delivery | Team builds against this architecture | First production release ships inside the stated window | ≤ ${input.timeline.days} days (stated: "${input.timeline.text}") |`);
+  }
+  if (input.compliance?.length) {
+    stated.push(`| Compliance fit | An auditor requests evidence for ${input.compliance.map(c => c.toUpperCase()).join(', ')} | Every control has a named owning component and an evidence source | 0 controls without an owner |`);
+  }
+  for (const row of stated) L.push(row);
+
+  const statedAttributes = new Set(stated.map(r => r.split('|')[1].trim()));
   for (const d of drivers.drivers) {
+    if (statedAttributes.has(d.name)) continue;
     L.push(`| ${d.name} | _TBD_ | _TBD_ | _TBD_ |`);
   }
   L.push('');
-  L.push('_Fill the scenarios in with real numbers. An unquantified quality requirement is a preference, not a requirement._');
+  L.push(stated.length
+    ? '_Rows with a stated measure came from your requirement text and are already quantified. Fill the remaining _TBD_ rows in with real numbers — an unquantified quality requirement is a preference, not a requirement._'
+    : '_Fill the scenarios in with real numbers. An unquantified quality requirement is a preference, not a requirement._');
   L.push('');
   return L.join('\n');
 }
@@ -17448,17 +17628,54 @@ function renderArc42(ix, recs, adrs, drivers, input) {
  * C4 container diagram (Mermaid)
  * ------------------------------------------------------------------ */
 
+// This covered 14 of the knowledge base's 60 categories, and everything unmatched fell through
+// to `|| 'app'` below. Since every app-layer container is wired "Reads/writes" to every data
+// container, that fallback produced relationships like `Rel(azure, postgres, "Reads/writes")`,
+// `Rel(terraform, kafka, ...)` and `Rel(claude_sonnet, postgres, ...)` — 24 invalid edges out of
+// 36 on a single diagram. The fallback is the failure mode, so the map has to be exhaustive:
+// C4_UNMAPPED_CATEGORIES below fails the contract test if the KB gains a category not listed here.
 const C4_LAYER = {
+  // People-facing surfaces.
   'frontend-framework': 'ui', 'meta-framework': 'ui', 'frontend-approach': 'ui',
   'mobile-framework': 'ui', 'admin-framework': 'ui', 'low-code-internal': 'ui', 'bi-tool': 'ui',
+  'component-library': 'ui', 'styling': 'ui', 'hypermedia': 'ui',
+  // Things that run your code.
   'backend-framework': 'app', 'workflow-orchestration': 'app', 'decisioning': 'app',
-  'database': 'data', 'eventing': 'data',
-  'identity': 'platform', 'observability': 'platform'
+  // Things that hold state — these are the only legitimate targets of a "Reads/writes" edge.
+  'database': 'data', 'eventing': 'data', 'relational-database': 'data', 'database-oltp': 'data',
+  'database-nosql': 'data', 'database-olap': 'data', 'database-timeseries': 'data',
+  'database-vector': 'data', 'object-storage': 'data', 'state-data': 'data',
+  // Cross-cutting infrastructure the primary container USES, rather than reads from.
+  'identity': 'platform', 'observability': 'platform', 'workforce-iam': 'platform',
+  'ciam': 'platform', 'workload-identity': 'platform', 'authentication-method': 'platform',
+  'authorization': 'platform', 'secrets-management': 'platform', 'observability-apm': 'platform',
+  'observability-saas': 'platform', 'observability-visualization': 'platform', 'logging': 'platform',
+  'log-analytics': 'platform', 'siem': 'platform', 'load-balancing': 'platform',
+  'compute-model': 'platform', 'container-orchestration': 'platform', 'k8s-ecosystem': 'platform',
+  'iaas-compute': 'platform', 'platform-engineering': 'platform',
+  // Models and model-access strategies are dependencies the application CALLS, not containers
+  // that hold or read application state — 'platform' gives them a "Uses" edge from the primary
+  // container instead of the app layer's automatic "Reads/writes" to every datastore, which had
+  // Claude Sonnet reading your Postgres.
+  'llm-access-strategy': 'platform', 'llm-model-frontier': 'platform', 'llm-model-small': 'platform',
 };
+
+// Data-holding layers, for choosing the ContainerDb macro (was hardcoded to database/eventing,
+// so a NoSQL store or a vector database was drawn as an ordinary container).
+const C4_DATA_CATEGORIES = new Set(
+  Object.keys(C4_LAYER).filter(k => C4_LAYER[k] === 'data')
+);
 
 // Decomposition style and build-vs-buy are PROPERTIES of the system, not containers.
 // Drawing them as boxes is the classic generated-diagram tell — render them as a note instead.
-const C4_NOT_A_CONTAINER = new Set(['decomposition', 'build-vs-buy']);
+// Build-time tooling and system-wide properties. Drawing Terraform, GitHub Actions or the cloud
+// provider as runtime containers inside the system boundary is a category error — none of them
+// is a thing that runs and talks to other things at request time. They render as a note instead.
+const C4_NOT_A_CONTAINER = new Set([
+  'decomposition', 'build-vs-buy', 'iac', 'ci-platform', 'gitops', 'build-tool',
+  'code-quality-security', 'supply-chain', 'profiling-tools', 'cloud-provider',
+  'sovereignty', 'hybrid-connectivity', 'protocol', 'table-format',
+]);
 
 function renderC4(ix, recs, input) {
   const L = [];
@@ -17486,7 +17703,7 @@ function renderC4(ix, recs, input) {
     const id = slug(t.id).replace(/-/g, '_');
     const desc = (rec.role || t.category).replace(/"/g, "'");
     const tech = t.name.replace(/"/g, "'");
-    const macro = ['database', 'eventing'].includes(t.category) ? 'ContainerDb' : 'Container';
+    const macro = C4_DATA_CATEGORIES.has(t.category) ? 'ContainerDb' : 'Container';
     L.push(`    ${macro}(${id}, "${desc}", "${tech}", "${(t.best_when?.[0] || '').replace(/"/g, "'")}")`);
     return id;
   };
