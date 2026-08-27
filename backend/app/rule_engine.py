@@ -119,8 +119,11 @@ def detect_known_tech(text: str) -> dict:
         for term in terms:
             idx = t.find(term)
             while idx != -1:
-                before = t[max(0, idx - 60):idx]
-                after = t[idx + len(term): idx + len(term) + 40]
+                # Clip at sentence boundaries — without this, "We must not use Kubernetes. We
+                # run PostgreSQL in production today." reads the next sentence's "in production
+                # today" as Kubernetes ownership, on a sentence that excludes it.
+                before = re.split(r"[.;!?]", t[max(0, idx - 60):idx])[-1]
+                after = re.split(r"[.;!?]", t[idx + len(term): idx + len(term) + 40])[0]
                 disclaimed = any(d in before or d in after for d in EXPERIENCE_DISCLAIMERS)
                 if not disclaimed and (any(e in before for e in EXPERIENCE_BEFORE)
                                        or any(e in after for e in EXPERIENCE_AFTER)):

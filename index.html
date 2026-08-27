@@ -1290,8 +1290,11 @@ function detectKnownTech(text){
     for (const term of KNOWN_TERMS[key]){
       let idx = t.indexOf(term);
       while (idx !== -1){
-        const before = t.slice(Math.max(0, idx - 60), idx);
-        const after = t.slice(idx + term.length, idx + term.length + 40);
+        // Clip both windows at sentence boundaries. Without this, "We must not use Kubernetes.
+        // We run PostgreSQL in production today." reads the NEXT sentence's "in production
+        // today" as evidence of Kubernetes ownership — on a sentence that excludes it.
+        const before = t.slice(Math.max(0, idx - 60), idx).split(/[.;!?]/).pop();
+        const after = t.slice(idx + term.length, idx + term.length + 40).split(/[.;!?]/)[0];
         const disclaimed = EXPERIENCE_DISCLAIMERS.some(d => before.includes(d) || after.includes(d));
         if (!disclaimed){
           if (EXPERIENCE_BEFORE.some(e => before.includes(e)) || EXPERIENCE_AFTER.some(e => after.includes(e))){
@@ -3091,11 +3094,39 @@ function renderRecommendations(s, rec){
         <b>not a recommendation for your project</b>. Describe what you are building — what it does, who
         uses it, scale, compliance, and any technology you must or must not use — and re-run.
       </div>` : '';
-  const excludedHtml = excludedList.length ? `
-      <div class="signals" style="margin-top:6px;">
-        <span class="sig" style="opacity:.75;">excluded by you:</span>
-        ${excludedList.map(x=>`<span class="sig">${x}</span>`).join('')}
-      </div>` : '';
+  // Inference chips. These are the two HEURISTIC reads — what you ruled out, and what the engine
+  // assumed your team already runs — and both change the output, so both are shown and both are
+  // yours to switch off. A chip the user has overridden stays visible, struck through, so the
+  // report never quietly hides a reading it made; clicking it again restores the inference.
+  // Rendered from the RAW signals so suppressed ones remain listed and restorable.
+  const rawForChips = (typeof lastRawSignals !== 'undefined' && lastRawSignals) || s;
+  const renderChipRow = (kind, label, title) => {
+    const all = Object.keys(rawForChips[kind] || {});
+    const overridden = Object.keys((typeof signalOverrides !== 'undefined' ? signalOverrides[kind] : {}) || {})
+      .filter(k => signalOverrides[kind][k] === false);
+    const keys = [...new Set([...all, ...overridden])];
+    if (!keys.length) return '';
+    return `
+      <div class="signals" style="margin-top:6px;" title="${title}">
+        <span class="sig" style="opacity:.75;">${label}</span>
+        ${keys.map(k => {
+          const off = (typeof signalOverrides !== 'undefined') && signalOverrides[kind][k] === false;
+          return `<span class="sig" role="button" tabindex="0" style="cursor:pointer;${off ? 'text-decoration:line-through;opacity:.5;' : ''}"
+            title="${off ? 'Switched off by you — click to re-apply this inference' : 'Detected from your text — click to switch this inference off'}"
+            onclick="toggleInference('${kind}','${k}')"
+            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleInference('${kind}','${k}');}">${k}${off ? '' : ' ×'}</span>`;
+        }).join('')}
+      </div>`;
+  };
+  const excludedHtml =
+    renderChipRow('excluded', 'excluded by you:', 'Detected from negations in your requirement. Click any chip to switch that exclusion off.') +
+    renderChipRow('known', 'assumed your team runs:', 'Detected from ownership phrasing in your requirement. Click any chip to drop that assumption.') +
+    ((Object.keys(rawForChips.excluded || {}).length || Object.keys(rawForChips.known || {}).length) ? `
+      <div class="why" style="margin-top:6px; opacity:.7; font-size:12px;">
+        These two rows are keyword inferences, not things you typed verbatim — click any chip to
+        override it. You'll be shown exactly which recommendations that one change alters before it
+        is applied.
+      </div>` : '');
   const signalsHtml = `<div class="results-hero">
       <div class="rh-eyebrow">${activeSignals.length} signal${activeSignals.length===1?'':'s'} detected${excludedList.length?` · ${excludedList.length} exclusion${excludedList.length===1?'':'s'}`:''}</div>
       <div class="rh-headline">${heroHeadline}</div>
@@ -3348,11 +3379,119 @@ function renderRecommendations(s, rec){
 }
 
 let lastRequirementText = '', lastSignals = null, lastRecommendations = null;
+// The raw, un-overridden signal read. Kept alongside lastSignals so a suppressed inference can
+// still be displayed and restored — the user is overriding the ENGINE'S READING, not editing
+// their requirement text, and the difference has to stay visible.
+let lastRawSignals = null;
+
+// detectExclusions() and detectKnownTech() are keyword heuristics: they will occasionally decide
+// you excluded something you only mentioned, or that you own a technology you were asking about.
+// Both drive real changes to the output, so the user gets the final say — these hold the
+// inferences they have switched off. Cleared whenever the requirement text changes, since the
+// inferences are re-derived from scratch at that point and a stale override would silently apply
+// to a different sentence than the one it was made about.
+let signalOverrides = { excluded: {}, known: {} };
+
+function applySignalOverrides(raw){
+  const out = Object.assign({}, raw, {
+    excluded: Object.assign({}, raw.excluded),
+    known: Object.assign({}, raw.known),
+  });
+  for (const k in signalOverrides.excluded) if (signalOverrides.excluded[k] === false) delete out.excluded[k];
+  for (const k in signalOverrides.known) if (signalOverrides.known[k] === false) delete out.known[k];
+  return out;
+}
+
+// Cards whose pick is a plain {v} — used to describe an override's effect in terms of what the
+// reader will actually see change, rather than a generic "results may differ" warning.
+const OVERRIDE_EFFECT_CARDS = {
+  cloud:'Cloud Provider', gw:'API Gateway / Edge', iam:'Identity & Access (IAM)',
+  lang:'Backend Language(s)', arch:'Architecture Style', compute:'Compute Model',
+  msg:'Messaging / Streaming', mesh:'Service Mesh', cache:'Caching', db:'Primary Database(s)',
+  containers:'Containers / Orchestration', obs:'Observability', fe:'Frontend',
+  cicd:'CI/CD & Deployment', dns:'DNS', hybridConnectivity:'Hybrid Connectivity',
+};
+
+function diffRecommendations(before, after){
+  const changes = [];
+  for (const key in OVERRIDE_EFFECT_CARDS){
+    const b = before[key] && before[key].v, a = after[key] && after[key].v;
+    if (b !== a) changes.push({ card: OVERRIDE_EFFECT_CARDS[key], from: b, to: a });
+  }
+  if ((before.rag && before.rag.name) !== (after.rag && after.rag.name)){
+    changes.push({ card:'RAG Pattern', from: before.rag && before.rag.name, to: after.rag && after.rag.name });
+  }
+  const llmOf = r => (r.llm || []).map(x => x.name).join(', ');
+  if (llmOf(before) !== llmOf(after)) changes.push({ card:'AI / LLM Recommendation', from: llmOf(before), to: llmOf(after) });
+  // Confidence and rationale shifts matter too, and are easy to miss: withdrawing a "your team
+  // already knows X" claim often leaves the pick identical and changes only the reasoning printed
+  // under it. Reporting that as "no changes" would make this warning wrong in exactly the case it
+  // exists for, so same-pick differences are described rather than skipped.
+  for (const key in OVERRIDE_EFFECT_CARDS){
+    const b = before[key], a = after[key];
+    if (!b || !a || b.v !== a.v) continue;
+    if (b.conf !== a.conf){
+      changes.push({ card: OVERRIDE_EFFECT_CARDS[key], from: `${b.conf} confidence`, to: `${a.conf} confidence` });
+    }
+    if (b.why !== a.why){
+      changes.push({ card: `${OVERRIDE_EFFECT_CARDS[key]} (reasoning)`, from: 'the stated rationale', to: 'a different rationale — the pick itself is unchanged' });
+    }
+  }
+  return changes;
+}
+
+const _truncate = (v, n) => { v = String(v == null ? '—' : v); return v.length > n ? v.slice(0, n - 1) + '…' : v; };
+
+// The user has authority here — this never refuses. It states, specifically, what this one change
+// does to this one report, and lets them decide.
+function toggleInference(kind, key){
+  if (!lastRawSignals) return;
+  const wasOff = signalOverrides[kind][key] === false;
+
+  const before = computeRecommendations(applySignalOverrides(lastRawSignals));
+  const saved = signalOverrides[kind][key];
+  if (wasOff) delete signalOverrides[kind][key]; else signalOverrides[kind][key] = false;
+  const after = computeRecommendations(applySignalOverrides(lastRawSignals));
+
+  const changes = diffRecommendations(before, after);
+  const label = kind === 'excluded'
+    ? (wasOff ? `Re-apply the exclusion of "${key}"` : `Ignore the exclusion of "${key}"`)
+    : (wasOff ? `Re-apply the assumption that your team knows ${key}` : `Drop the assumption that your team knows ${key}`);
+
+  const effect = changes.length
+    ? changes.map(c => `  • ${c.card}: ${_truncate(c.from, 70)}  →  ${_truncate(c.to, 70)}`).join('\n')
+    : '  • No recommendation changes — this inference is not currently driving any pick.';
+
+  if (!confirm(`${label}?\n\nThis specific change will alter the following:\n\n${effect}\n\nApply it?`)){
+    // Restore exactly what was there, including "not present at all".
+    if (saved === undefined) delete signalOverrides[kind][key]; else signalOverrides[kind][key] = saved;
+    return;
+  }
+
+  const s = applySignalOverrides(lastRawSignals);
+  const rec = computeRecommendations(s);
+  lastSignals = s; lastRecommendations = rec;
+  renderRecommendations(s, rec);
+  if (typeof attachRefineUI === 'function') attachRefineUI();
+}
+
+// Read-only test seam. index.html has no module system, and a top-level `let` is unreachable
+// from the indirect eval the JS-runtime tests use — it lands in that eval's lexical scope, not on
+// globalThis. Rather than weaken these to `var` or have the tests poke at internals, the tests
+// drive the real analyze()/toggleInference() entry points and read the resulting state back here.
+function __inferenceState(){
+  return { signalOverrides, lastRawSignals, lastSignals, lastRecommendations };
+}
 
 function analyze(){
   const text = document.getElementById('input').value.trim();
   if(!text){ alert('Please describe your business/product requirements first.'); return; }
-  const s = detectSignals(text);
+  // A different requirement means the inferences are re-derived — carrying overrides across would
+  // apply a decision made about one sentence to a different one.
+  if (text !== lastRequirementText) signalOverrides = { excluded: {}, known: {} };
+  const raw = detectSignals(text);
+  lastRawSignals = raw;
+  const s = applySignalOverrides(raw);
   const rec = computeRecommendations(s);
   lastRequirementText = text; lastSignals = s; lastRecommendations = rec;
   if (typeof resetRefineSession === 'function') resetRefineSession(); // forget any previous analysis_id/refine cache
