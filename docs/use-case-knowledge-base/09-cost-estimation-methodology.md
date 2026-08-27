@@ -14,6 +14,14 @@ honest design choice: **a range, not a point estimate**, because a static client
 backend and no live pricing API cannot know a user's actual traffic. A false-precision single
 dollar figure would be a worse answer than an honestly-bounded range with its assumptions stated.
 
+## Signals / triggers
+
+Cost questions: `how much will this cost`, `monthly cost`, `cost estimate`, `budget`, `cloud bill`,
+`what will we spend`, `pricing`, `cost per month`, `TCO`, `run rate`. Cost drivers: `LLM API cost`,
+`token cost`, `cost per request`, `compute cost`, `database cost`, `egress cost`, `idle cost`.
+Cost pressure: `cost-sensitive`, `budget conscious`, `reduce spend`, `too expensive`, `cheaper
+alternative`, `self-host to save money`, `break-even`, `when does self-hosting pay off`.
+
 ## Design principle
 
 Every competitor/reference tool researched (Helicone, YourGPT, DocsBot, AWS/GCP/Azure calculators)

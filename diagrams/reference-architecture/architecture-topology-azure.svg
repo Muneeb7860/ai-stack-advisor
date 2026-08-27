@@ -1,0 +1,181 @@
+<svg viewBox="0 0 1340 1340" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <marker id="rest" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#2563eb"/></marker>
+    <marker id="grpc" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#0d9488"/></marker>
+    <marker id="evt"  markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#7c3aed"/></marker>
+    <marker id="egr"  markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#dc2626"/></marker>
+    <marker id="pe"   markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#0f766e"/></marker>
+    <style>
+      .svc  { font-size:12px; font-weight:700; fill:#0f172a; }
+      .tag  { font-size:9.5px; fill:#475569; }
+      .zt   { font-size:13px; font-weight:800; fill:#0f172a; }
+      .lbl  { font-size:10px; font-weight:700; }
+      .rest { stroke:#2563eb; stroke-width:2; fill:none; }
+      .grpc { stroke:#0d9488; stroke-width:2.6; fill:none; }
+      .evt  { stroke:#7c3aed; stroke-width:2; fill:none; stroke-dasharray:6 4; }
+      .egr  { stroke:#dc2626; stroke-width:2.4; fill:none; }
+      .pe   { stroke:#0f766e; stroke-width:2; fill:none; stroke-dasharray:2 2; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1340" height="1340" fill="#f8fafc"/>
+  <text x="30" y="36" font-size="23" font-weight="800" fill="#0f172a">Azure Topology — NSIP on AKS + Istio</text>
+  <text x="30" y="58" font-size="13" fill="#64748b">Key distinction: Azure PaaS is reached over Private Endpoint (stays in the VNet) — only TRUE 3rd-party SaaS exits through the egress gateway.</text>
+
+  <!-- LEGEND -->
+  <rect x="30" y="72" width="1280" height="40" rx="8" fill="#fff" stroke="#cbd5e1"/>
+  <line x1="44" y1="92" x2="82" y2="92" class="rest" marker-end="url(#rest)"/><text x="88" y="96" class="tag"><tspan font-weight="700" fill="#2563eb">REST</tspan> client</text>
+  <line x1="190" y1="92" x2="228" y2="92" class="grpc" marker-end="url(#grpc)"/><text x="234" y="96" class="tag"><tspan font-weight="700" fill="#0d9488">gRPC</tspan> internal sync</text>
+  <line x1="380" y1="92" x2="418" y2="92" class="evt" marker-end="url(#evt)"/><text x="424" y="96" class="tag"><tspan font-weight="700" fill="#7c3aed">Async</tspan> Event Hubs</text>
+  <line x1="560" y1="92" x2="598" y2="92" class="pe" marker-end="url(#pe)"/><text x="604" y="96" class="tag"><tspan font-weight="700" fill="#0f766e">Private Endpoint</tspan> to Azure PaaS (stays in VNet)</text>
+  <line x1="900" y1="92" x2="938" y2="92" class="egr" marker-end="url(#egr)"/><text x="944" y="96" class="tag"><tspan font-weight="700" fill="#dc2626">Egress</tspan> to true 3rd-party (public internet)</text>
+
+  <!-- CLIENTS -->
+  <text x="36" y="146" class="zt">Clients</text>
+  <rect x="30" y="156" width="128" height="150" rx="10" fill="#eef2ff" stroke="#c7d2fe"/>
+  <rect x="42" y="172" width="104" height="24" rx="5" fill="#fff" stroke="#c7d2fe"/><text class="svc" x="50" y="189" font-size="10.5">Admin / Web</text>
+  <rect x="42" y="202" width="104" height="24" rx="5" fill="#fff" stroke="#c7d2fe"/><text class="svc" x="50" y="219" font-size="10.5">Mobile</text>
+  <rect x="42" y="232" width="104" height="24" rx="5" fill="#fff" stroke="#c7d2fe"/><text class="svc" x="50" y="249" font-size="10.5">B2B partner</text>
+  <rect x="42" y="262" width="104" height="24" rx="5" fill="#dcfce7" stroke="#86efac"/><text class="svc" x="50" y="279" font-size="10.5" fill="#166534">Support chat</text>
+
+  <!-- FRONT DOOR (public edge) -->
+  <text x="172" y="146" class="zt">Edge (public)</text>
+  <rect x="166" y="156" width="118" height="170" rx="10" fill="#fef9c3" stroke="#fde047"/>
+  <text x="176" y="178" font-size="11" font-weight="800" fill="#854d0e">Azure Front Door</text>
+  <text x="176" y="193" font-size="11" font-weight="800" fill="#854d0e">+ WAF</text>
+  <text class="tag" x="176" y="214">public IP · TLS</text>
+  <text class="tag" x="176" y="229">OWASP rules</text>
+  <text class="tag" x="176" y="244">DDoS Protection</text>
+  <text class="tag" x="176" y="268">the ONLY</text>
+  <text class="tag" x="176" y="282">internet-facing</text>
+  <text class="tag" x="176" y="296">entry</text>
+  <line x1="158" y1="184" x2="164" y2="184" class="rest" marker-end="url(#rest)"/>
+  <line x1="158" y1="214" x2="164" y2="214" class="rest" marker-end="url(#rest)"/>
+  <line x1="158" y1="244" x2="164" y2="244" class="rest" marker-end="url(#rest)"/>
+  <line x1="158" y1="274" x2="164" y2="274" class="rest" marker-end="url(#rest)"/>
+
+  <!-- VNET boundary -->
+  <rect x="300" y="130" width="820" height="850" rx="14" fill="#eff6ff" stroke="#60a5fa" stroke-width="2"/>
+  <text x="314" y="152" class="zt" fill="#1d4ed8">Azure VNet — everything below is private (no public IPs except Front Door)</text>
+
+  <!-- AKS cluster -->
+  <rect x="316" y="164" width="404" height="720" rx="12" fill="#f0f9ff" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="7 4"/>
+  <text x="328" y="184" font-size="12" font-weight="800" fill="#0369a1">AKS cluster · Istio mesh (mTLS sidecars, private ClusterIPs)</text>
+
+  <!-- Istio ingress -->
+  <rect x="328" y="196" width="376" height="30" rx="6" fill="#fde68a" stroke="#f59e0b"/><text x="338" y="216" font-size="11" font-weight="700" fill="#92400e">Istio Ingress Gateway (internal LB — receives from Front Door)</text>
+
+  <!-- services left column -->
+  <rect x="328" y="242" width="130" height="42" rx="8" fill="#fff" stroke="#93c5fd"/><text class="svc" x="338" y="260">auth</text><text class="tag" x="338" y="276">Entra ID tokens</text>
+  <rect x="328" y="300" width="130" height="42" rx="8" fill="#fff" stroke="#93c5fd"/><text class="svc" x="338" y="318">claim</text><text class="tag" x="338" y="334">eligibility entry</text>
+  <rect x="328" y="358" width="130" height="42" rx="8" fill="#fff" stroke="#93c5fd"/><text class="svc" x="338" y="376">payment</text><text class="tag" x="338" y="392">disburses loan</text>
+  <rect x="328" y="416" width="130" height="40" rx="8" fill="#fff" stroke="#93c5fd"/><text class="svc" x="338" y="440">rewards</text>
+  <rect x="328" y="470" width="130" height="40" rx="8" fill="#fff" stroke="#93c5fd"/><text class="svc" x="338" y="494" font-size="11.5">notification</text>
+  <rect x="328" y="560" width="130" height="46" rx="8" fill="#dcfce7" stroke="#86efac"/><text class="svc" x="338" y="580" fill="#166534">support</text><text class="tag" x="338" y="596">tickets + chat</text>
+
+  <!-- services right column -->
+  <rect x="474" y="300" width="146" height="42" rx="8" fill="#ede9fe" stroke="#c4b5fd"/><text class="svc" x="484" y="318" fill="#6b21a8" font-size="11">authorization-score</text><text class="tag" x="484" y="334">AI risk / eligibility</text>
+  <rect x="474" y="358" width="146" height="42" rx="8" fill="#fef3c7" stroke="#fbbf24"/><text class="svc" x="484" y="376" fill="#92400e" font-size="11">saga-orchestrator</text><text class="tag" x="484" y="392">loan workflow</text>
+  <rect x="474" y="560" width="146" height="46" rx="8" fill="#f5f3ff" stroke="#a78bfa"/><text class="svc" x="484" y="580" fill="#6b21a8" font-size="11">chatbot (RAG)</text><text class="tag" x="484" y="596">MCP + retrieval</text>
+
+  <!-- Istio egress -->
+  <rect x="328" y="820" width="376" height="46" rx="6" fill="#fee2e2" stroke="#fca5a5"/><text x="338" y="840" font-size="11" font-weight="700" fill="#991b1b">Istio Egress Gateway</text><text class="tag" x="338" y="856">ServiceEntry allowlist — the one controlled exit to the public internet</text>
+
+  <!-- ingress -> services (REST) -->
+  <line x1="360" y1="226" x2="380" y2="242" class="rest" marker-end="url(#rest)"/>
+  <line x1="400" y1="226" x2="400" y2="300" class="rest" marker-end="url(#rest)"/>
+  <line x1="440" y1="226" x2="380" y2="560" class="rest" marker-end="url(#rest)"/>
+
+  <!-- claim -> auth gRPC -->
+  <line x1="393" y1="300" x2="393" y2="286" class="grpc" marker-end="url(#grpc)"/>
+  <!-- claim -> authz-score gRPC -->
+  <line x1="458" y1="320" x2="472" y2="320" class="grpc" marker-end="url(#grpc)"/><text x="455" y="313" class="lbl" fill="#0d9488" font-size="9">gRPC</text>
+  <!-- support -> chatbot gRPC -->
+  <line x1="458" y1="582" x2="472" y2="582" class="grpc" marker-end="url(#grpc)"/>
+  <!-- chatbot -> claim gRPC read -->
+  <line x1="500" y1="560" x2="420" y2="342" class="grpc" marker-end="url(#grpc)"/><text x="505" y="470" class="lbl" fill="#0d9488" font-size="9" transform="rotate(-70 505 470)">read status</text>
+
+  <!-- ==== PRIVATE ENDPOINT rail ==== -->
+  <line x1="726" y1="170" x2="726" y2="800" stroke="#0f766e" stroke-width="1.5" stroke-dasharray="3 3"/>
+  <text x="732" y="188" font-size="10.5" font-weight="700" fill="#0f766e" transform="rotate(90 732 188)">Private Endpoint subnet — Azure PaaS via Private Link (private DNS, Microsoft backbone)</text>
+
+  <!-- PaaS boxes -->
+  <rect x="748" y="196" width="180" height="120" rx="9" fill="#f0fdfa" stroke="#5eead4"/>
+  <text class="svc" x="758" y="214" font-size="11" fill="#0f766e">Azure DB for PostgreSQL</text>
+  <text class="tag" x="758" y="228">Flexible Server — 1 DB per service:</text>
+  <rect x="758" y="234" width="76" height="20" rx="4" fill="#fff" stroke="#5eead4"/><text class="tag" x="764" y="248">auth-db</text>
+  <rect x="840" y="234" width="80" height="20" rx="4" fill="#fff" stroke="#5eead4"/><text class="tag" x="846" y="248">claim-db</text>
+  <rect x="758" y="258" width="76" height="20" rx="4" fill="#fff" stroke="#5eead4"/><text class="tag" x="764" y="272">pay-db</text>
+  <rect x="840" y="258" width="80" height="20" rx="4" fill="#fff" stroke="#5eead4"/><text class="tag" x="846" y="272">rewards-db</text>
+  <rect x="758" y="282" width="76" height="20" rx="4" fill="#fff" stroke="#5eead4"/><text class="tag" x="764" y="296">support-db</text>
+  <rect x="840" y="282" width="80" height="20" rx="4" fill="#f5f3ff" stroke="#c4b5fd"/><text class="tag" x="846" y="296" fill="#6b21a8">pgvector KB</text>
+
+  <rect x="748" y="330" width="180" height="38" rx="9" fill="#f0fdfa" stroke="#5eead4"/><text class="svc" x="758" y="348" font-size="11" fill="#0f766e">Azure Cache for Redis</text><text class="tag" x="758" y="362">cache · session · idempotency</text>
+
+  <rect x="748" y="380" width="180" height="38" rx="9" fill="#f0fdfa" stroke="#5eead4"/><text class="svc" x="758" y="398" font-size="11" fill="#0f766e">Azure Key Vault</text><text class="tag" x="758" y="412">secrets · CMK · certs</text>
+
+  <rect x="748" y="430" width="180" height="46" rx="9" fill="#ede9fe" stroke="#a78bfa" stroke-width="2"/><text class="svc" x="758" y="448" font-size="11" fill="#6b21a8">Azure OpenAI</text><text class="tag" x="758" y="462">via Private Endpoint —</text><text class="tag" x="758" y="472">LLM call never leaves VNet</text>
+
+  <rect x="748" y="560" width="180" height="46" rx="9" fill="#faf5ff" stroke="#d8b4fe"/><text class="svc" x="758" y="578" font-size="11" fill="#6b21a8">Azure Event Hubs</text><text class="tag" x="758" y="592">Kafka surface — async backbone</text>
+
+  <rect x="748" y="700" width="180" height="52" rx="9" fill="#fffbeb" stroke="#fcd34d"/><text class="svc" x="758" y="720" font-size="11" fill="#92400e">Azure Synapse / Fabric</text><text class="tag" x="758" y="734">OLAP — BI, fraud models,</text><text class="tag" x="758" y="746">reporting</text>
+
+  <!-- data ownership lines (PE, teal dashed) service -> its DB -->
+  <line x1="458" y1="258" x2="746" y2="244" class="pe" marker-end="url(#pe)"/>
+  <line x1="458" y1="318" x2="746" y2="244" class="pe" marker-end="url(#pe)"/>
+  <line x1="458" y1="376" x2="746" y2="268" class="pe" marker-end="url(#pe)"/>
+  <line x1="458" y1="436" x2="746" y2="268" class="pe" marker-end="url(#pe)"/>
+  <line x1="458" y1="580" x2="746" y2="292" class="pe" marker-end="url(#pe)"/>
+  <line x1="620" y1="576" x2="746" y2="292" class="pe" marker-end="url(#pe)"/><text x="632" y="450" class="lbl" fill="#0f766e" font-size="9">bot reads KB</text>
+
+  <!-- services -> Redis (PE) representative -->
+  <line x1="620" y1="330" x2="746" y2="345" class="pe" marker-end="url(#pe)"/>
+  <!-- services -> KeyVault (PE) -->
+  <line x1="458" y1="470" x2="746" y2="398" class="pe" marker-end="url(#pe)"/>
+
+  <!-- authz-score & chatbot -> Azure OpenAI (PE, PRIVATE not egress) -->
+  <line x1="620" y1="330" x2="746" y2="448" class="pe" marker-end="url(#pe)"/><text x="636" y="410" class="lbl" fill="#6b21a8" font-size="9">score→AOAI (private)</text>
+  <line x1="620" y1="576" x2="746" y2="458" class="pe" marker-end="url(#pe)"/>
+
+  <!-- async: claim -> Event Hubs, EH -> saga, saga -> payment/rewards/notif -->
+  <line x1="393" y1="342" x2="393" y2="588" class="evt"/><line x1="393" y1="588" x2="746" y2="583" class="evt" marker-end="url(#evt)"/><text x="398" y="560" class="lbl" fill="#7c3aed" font-size="9">publish loan.requested</text>
+  <line x1="746" y1="576" x2="548" y2="400" class="evt" marker-end="url(#evt)"/><text x="600" y="500" class="lbl" fill="#7c3aed" font-size="9" transform="rotate(-40 600 500)">saga consumes</text>
+  <line x1="474" y1="384" x2="460" y2="384" class="evt" marker-end="url(#evt)"/>
+  <line x1="520" y1="400" x2="420" y2="416" class="evt" marker-end="url(#evt)"/>
+  <line x1="540" y1="400" x2="420" y2="480" class="evt" marker-end="url(#evt)"/>
+
+  <!-- Event Hubs -> Synapse (CDC OLAP) -->
+  <line x1="838" y1="606" x2="838" y2="698" class="pe" marker-end="url(#pe)"/><text x="844" y="660" class="lbl" fill="#0f766e" font-size="9">CDC → OLAP (one-way)</text>
+
+  <!-- ==== EXTERNAL SaaS (outside VNet) ==== -->
+  <text x="1150" y="146" class="zt" fill="#991b1b">3rd-party SaaS</text>
+  <text x="1150" y="162" font-size="10" fill="#991b1b">(public internet)</text>
+  <rect x="1148" y="300" width="164" height="60" rx="9" fill="#fff" stroke="#fca5a5"/><text class="svc" x="1158" y="322" font-size="11" fill="#991b1b">Payment Gateway</text><text class="tag" x="1158" y="340">Moyasar / HyperPay</text><text class="tag" x="1158" y="354">REST + webhook (PCI)</text>
+  <rect x="1148" y="430" width="164" height="52" rx="9" fill="#fff" stroke="#fca5a5"/><text class="svc" x="1158" y="452" font-size="11" fill="#991b1b">Twilio (SMS)</text><text class="tag" x="1158" y="470">REST</text>
+  <rect x="1148" y="500" width="164" height="52" rx="9" fill="#fff" stroke="#fca5a5"/><text class="svc" x="1158" y="522" font-size="11" fill="#991b1b">Firebase (push)</text><text class="tag" x="1158" y="540">REST / webhook</text>
+
+  <!-- egress: payment -> egress gw -> Payment GW ; notification -> egress gw -> Twilio/Firebase -->
+  <line x1="393" y1="400" x2="393" y2="818" class="egr" marker-end="url(#egr)"/><text x="360" y="700" class="lbl" fill="#dc2626" font-size="9" transform="rotate(90 360 700)">payment → egress</text>
+  <line x1="420" y1="510" x2="500" y2="820" class="egr" marker-end="url(#egr)"/>
+  <line x1="704" y1="838" x2="1146" y2="330" class="egr" marker-end="url(#egr)"/>
+  <line x1="704" y1="848" x2="1146" y2="456" class="egr" marker-end="url(#egr)"/>
+  <line x1="704" y1="852" x2="1146" y2="526" class="egr" marker-end="url(#egr)"/>
+
+  <!-- ANSWER BOX -->
+  <rect x="30" y="1000" width="1282" height="320" rx="12" fill="#0f172a"/>
+  <text x="54" y="1036" font-size="18" font-weight="800" fill="#fff">The Azure answer that wins a bank panel: two kinds of "outbound"</text>
+
+  <text x="54" y="1072" font-size="14" font-weight="700" fill="#5eead4">1 · To Azure PaaS → Private Endpoint (stays inside the VNet)</text>
+  <text x="54" y="1093" font-size="12.5" fill="#e2e8f0">Postgres, Redis, Key Vault, Event Hubs, Synapse — and Azure OpenAI — all get a private IP via Private Link. Traffic rides the Microsoft backbone,</text>
+  <text x="54" y="1110" font-size="12.5" fill="#e2e8f0">never the public internet. A private DNS zone resolves privatelink.* to the private IP. This is how "the LLM call never leaves our network" is literally true.</text>
+
+  <text x="54" y="1144" font-size="14" font-weight="700" fill="#fca5a5">2 · To true 3rd-party SaaS → Istio egress gateway (public internet, allowlisted)</text>
+  <text x="54" y="1165" font-size="12.5" fill="#e2e8f0">Payment gateway, Twilio, Firebase have no Azure Private Link — so they exit through the egress gateway, with a ServiceEntry allowlisting each host.</text>
+  <text x="54" y="1182" font-size="12.5" fill="#e2e8f0">One audited exit point; a pod cannot open an arbitrary internet connection. That is the control an auditor asks you to prove.</text>
+
+  <line x1="54" y1="1208" x2="1288" y2="1208" stroke="#334155"/>
+  <text x="54" y="1236" font-size="13.5" font-weight="700" fill="#fcd34d">Say it like this:</text>
+  <text x="54" y="1257" font-size="12.5" fill="#e2e8f0">"Anything Azure-native I reach over Private Endpoint, so it stays on the VNet — including Azure OpenAI, which matters for a bank because the model call</text>
+  <text x="54" y="1274" font-size="12.5" fill="#e2e8f0">never touches the internet. Only genuine third parties like the payment gateway go out, and those go through one allowlisted egress gateway I can audit."</text>
+  <text x="54" y="1305" font-size="12.5" font-style="italic" fill="#94a3b8">Identity throughout = Entra ID (workload identity for pods → Key Vault / PaaS, no static secrets). Next: ERD.</text>
+</svg>

@@ -83,8 +83,21 @@ sourced tool is trying to avoid in the first place.
 | 9 | `09-cost-estimation-methodology.md` | Directional monthly cost estimate methodology (compute/database/LLM API bands) — sourcing for `pickCostEstimate()` | Yes — new "Directional monthly cost estimate" block in the Cost section |
 | 10 | `10-hexagonal-intraservice-code-organization.md` | Ports & adapters folder structure within one service — one level deeper than the system-level hexagonal pick | Yes — `pickArchitecture()`'s `hexagonalNote` |
 | 11 | `11-semantic-routing-guardrail-service.md` | Dedicated AI-gateway pattern for LLM routing + centralized guardrails, distinct from the guardrails vendor comparison | Yes — new trade-off card |
+| 12 | `12-secure-delivery-pipeline.md` | CI security gates (secrets/SAST/SCA/image scan/sign+SBOM), GitOps promotion, progressive delivery, admission control | No — `pickCICD()` picks a CI product, nothing reasons about pipeline controls |
+| 13 | `13-private-network-egress-control.md` | Private endpoints vs. one audited egress path; single public entry; private model endpoints for regulated AI | No — `pickHybridConnectivity()` covers on-prem↔cloud links, not in-cloud network boundary |
+| 14 | `14-request-path-layer-ordering.md` | Layer order (DNS→edge→LB→gateway→platform), and which boxes are mutually exclusive alternatives | Partial — tiers exist in the canonical graph; ordering and exclusivity are not surfaced |
 
-Each of the 8 was chosen because the existing rule engine had **zero coverage** for it before this
+Documents 12–14 were contributed later, from reference architectures authored by the project owner
+for a BFSI architecture review (the source SVGs are committed at
+`diagrams/reference-architecture/`). They are the first entries in this corpus that are **not**
+web-researched: their primary source is that author's own design work, and each one's Sources
+section says so explicitly and lists the specific claims that still need external citation before
+`/api/ask` repeats them as fact rather than as design guidance. They were added because they cover
+three questions the corpus could not answer at all — what has to happen inside a delivery pipeline
+for a regulated buyer to accept it, whether an LLM call leaves the network, and what order the
+layers actually go in.
+
+Each of the original 8 was chosen because the existing rule engine had **zero coverage** for it before this
 research pass — confirmed by testing representative requirement text against the live tool and
 finding no dedicated reasoning, only generic fallback branches. This list is not exhaustive of every
 possible architecture pattern; it's the set of gaps that surfaced from (a) the user's own prior-project
@@ -105,7 +118,7 @@ shared-schema multi-tenancy") is sourced in that document's Sources section.
 
 Everything above describes what the corpus *should* do once retrieved — it says nothing about
 whether retrieval actually works. `RETRIEVAL-EVAL-SET.md` (+ `eval_cases.json` +
-`test_retrieval_eval.py` in this same folder) is a 21-case eval set built specifically to catch
+`test_retrieval_eval.py` in this same folder) is a 27-case eval set built specifically to catch
 retrieval bugs before they reach a user: wrong-document matches, anti-pattern sections that don't
 surface for "is X okay?" phrasing, cross-document queries that only return one hit, and — just as
 important — out-of-scope queries that shouldn't return a confident match at all but do anyway

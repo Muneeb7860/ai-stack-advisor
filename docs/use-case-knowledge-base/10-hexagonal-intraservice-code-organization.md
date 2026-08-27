@@ -15,6 +15,15 @@ user's own prior-project repository blueprint shared during this session, which 
 Java Spring Boot services with an implied hexagonal-core structure — this document makes that
 structure explicit instead of leaving it implicit in the system-level recommendation.
 
+## Signals / triggers
+
+Pattern names: `hexagonal architecture`, `ports and adapters`, `clean architecture`, `onion
+architecture`, `domain-driven design`, `DDD`. Code organisation: `folder structure`, `project
+layout`, `how should we structure the code`, `where does business logic go`, `package by feature`,
+`package by layer`, `separation of concerns`. Symptoms: `business logic in the controller`,
+`framework coupling`, `hard to test`, `database logic everywhere`, `swap the database`, `mock the
+repository`, `testable without a database`.
+
 ## The pattern
 
 A hexagonal (ports & adapters) service has three layers, and the dependency rule only goes one
