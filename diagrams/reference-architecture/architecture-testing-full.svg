@@ -1,0 +1,201 @@
+<svg viewBox="0 0 1360 1780" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <marker id="d" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#334155"/></marker>
+    <style>
+      .t  { font-size:13px; font-weight:800; fill:#0f172a; }
+      .h  { font-size:15px; font-weight:800; }
+      .s  { font-size:11.5px; font-weight:700; fill:#0f172a; }
+      .g  { font-size:10px; fill:#475569; }
+      .chip{ font-size:10.5px; font-weight:700; }
+    </style>
+  </defs>
+  <rect x="0" y="0" width="1360" height="1780" fill="#f8fafc"/>
+  <text x="30" y="38" font-size="23" font-weight="800" fill="#0f172a">Testing — Full Strategy + Environments (BFSI)</text>
+  <text x="30" y="60" font-size="13" fill="#64748b">Three things: WHAT you test (functional pyramid + non-functional bands), WHERE it runs (environments), WHAT DATA it uses (the BFSI crux).</text>
+
+  <!-- ============ FUNCTIONAL PYRAMID ============ -->
+  <text x="30" y="96" class="h" fill="#0f172a" font-size="15">Functional tests — the pyramid (many fast → few slow)</text>
+  <rect x="30" y="108" width="460" height="360" rx="12" fill="#f8fafc" stroke="#cbd5e1"/>
+
+  <polygon points="260,122 340,170 180,170" fill="#fee2e2" stroke="#fca5a5"/>
+  <text x="260" y="160" text-anchor="middle" class="s" font-size="10.5" fill="#991b1b">E2E (few)</text>
+  <rect x="168" y="174" width="184" height="40" rx="4" fill="#ffedd5" stroke="#fb923c"/>
+  <text x="260" y="190" text-anchor="middle" class="s" font-size="10.5" fill="#9a3412">Component / API</text>
+  <text x="260" y="206" text-anchor="middle" class="g">one service through its own API</text>
+  <rect x="150" y="218" width="220" height="40" rx="4" fill="#fef3c7" stroke="#fbbf24"/>
+  <text x="260" y="234" text-anchor="middle" class="s" font-size="10.5" fill="#92400e">Contract (Pact)</text>
+  <text x="260" y="250" text-anchor="middle" class="g">A's calls match B's schema — no full E2E needed</text>
+  <rect x="120" y="262" width="280" height="42" rx="4" fill="#eff6ff" stroke="#93c5fd"/>
+  <text x="260" y="279" text-anchor="middle" class="s" font-size="10.5" fill="#1d4ed8">Integration</text>
+  <text x="260" y="295" text-anchor="middle" class="g">service + real DB / Kafka (Testcontainers)</text>
+  <rect x="90" y="308" width="340" height="44" rx="4" fill="#f0fdf4" stroke="#86efac"/>
+  <text x="260" y="326" text-anchor="middle" class="s" font-size="10.5" fill="#166534">Unit — base: thousands, milliseconds, every push</text>
+  <text x="260" y="342" text-anchor="middle" class="g">pure logic, mocked collaborators</text>
+
+  <text x="46" y="378" class="g" font-weight="700">Cross-cutting functional (run across tiers):</text>
+  <rect x="46" y="386" width="120" height="24" rx="5" fill="#fff" stroke="#cbd5e1"/><text class="chip" x="54" y="402" fill="#334155">Smoke (post-deploy)</text>
+  <rect x="172" y="386" width="130" height="24" rx="5" fill="#fff" stroke="#cbd5e1"/><text class="chip" x="180" y="402" fill="#334155">Regression (full re-run)</text>
+  <rect x="308" y="386" width="120" height="24" rx="5" fill="#fff" stroke="#cbd5e1"/><text class="chip" x="316" y="402" fill="#334155">Sanity (targeted)</text>
+  <rect x="46" y="414" width="140" height="24" rx="5" fill="#fff" stroke="#cbd5e1"/><text class="chip" x="54" y="430" fill="#334155">UAT (business sign-off)</text>
+  <rect x="192" y="414" width="150" height="24" rx="5" fill="#fff" stroke="#cbd5e1"/><text class="chip" x="200" y="430" fill="#334155">Exploratory (manual)</text>
+  <text x="46" y="456" class="g" font-style="italic">Anti-pattern: the "ice-cream cone" — mostly E2E, few units. Slow, flaky, untrusted.</text>
+
+  <!-- ============ NON-FUNCTIONAL BANDS (right of pyramid) ============ -->
+  <text x="510" y="96" class="h" fill="#0f172a" font-size="15">Non-functional tests — the bands a BFSI panel probes</text>
+
+  <!-- Performance band -->
+  <rect x="510" y="108" width="820" height="130" rx="12" fill="#fffbeb" stroke="#fcd34d"/>
+  <text x="524" y="130" class="s" fill="#92400e">Performance (k6 / Gatling / JMeter) — these are DIFFERENT tests, name them separately</text>
+  <rect x="524" y="140" width="192" height="42" rx="7" fill="#fff" stroke="#fcd34d"/><text class="chip" x="534" y="158" fill="#92400e">Load</text><text class="g" x="534" y="174">at expected peak — does it hold SLOs?</text>
+  <rect x="724" y="140" width="192" height="42" rx="7" fill="#fff" stroke="#fcd34d"/><text class="chip" x="734" y="158" fill="#92400e">Stress</text><text class="g" x="734" y="174">past breaking point — where + how it fails</text>
+  <rect x="924" y="140" width="192" height="42" rx="7" fill="#fff" stroke="#fcd34d"/><text class="chip" x="934" y="158" fill="#92400e">Soak / endurance</text><text class="g" x="934" y="174">hours of load — finds memory leaks</text>
+  <rect x="1124" y="140" width="192" height="42" rx="7" fill="#fff" stroke="#fcd34d"/><text class="chip" x="1134" y="158" fill="#92400e">Spike</text><text class="g" x="1134" y="174">sudden surge — payday, market open</text>
+  <text x="524" y="204" class="g">Load/stress size the pods and validate HPA thresholds. Soak is the one teams skip — a leak only shows after hours, and it's what pages you at 3am.</text>
+  <text x="524" y="224" class="g" font-style="italic">Volume testing (large data sets) + scalability testing (does adding nodes actually add throughput?) sit here too.</text>
+
+  <!-- Security band -->
+  <rect x="510" y="248" width="820" height="120" rx="12" fill="#fef2f2" stroke="#fca5a5"/>
+  <text x="524" y="270" class="s" fill="#991b1b">Security testing — mostly in the CI gates, plus periodic deep tests</text>
+  <rect x="524" y="280" width="150" height="40" rx="7" fill="#fff" stroke="#fca5a5"/><text class="chip" x="532" y="298" fill="#991b1b">SAST</text><text class="g" x="532" y="313">static code scan (PR gate)</text>
+  <rect x="682" y="280" width="150" height="40" rx="7" fill="#fff" stroke="#fca5a5"/><text class="chip" x="690" y="298" fill="#991b1b">DAST</text><text class="g" x="690" y="313">running-app scan (ZAP)</text>
+  <rect x="840" y="280" width="150" height="40" rx="7" fill="#fff" stroke="#fca5a5"/><text class="chip" x="848" y="298" fill="#991b1b">SCA + SBOM</text><text class="g" x="848" y="313">deps + licences</text>
+  <rect x="998" y="280" width="150" height="40" rx="7" fill="#fff" stroke="#fca5a5"/><text class="chip" x="1006" y="298" fill="#991b1b">Pen test</text><text class="g" x="1006" y="313">periodic, external</text>
+  <rect x="1156" y="280" width="160" height="40" rx="7" fill="#fff" stroke="#fca5a5"/><text class="chip" x="1164" y="298" fill="#991b1b">Image / container scan</text><text class="g" x="1164" y="313">Trivy / Defender</text>
+  <text x="524" y="344" class="g">For a bank, add: OWASP LLM Top 10 on the AI layer, and your agentic-redteam scanner as the adversarial harness. Security testing is a release gate, not a phase.</text>
+
+  <!-- Resilience / DR band -->
+  <rect x="510" y="378" width="820" height="90" rx="12" fill="#f0fdfa" stroke="#5eead4"/>
+  <text x="524" y="400" class="s" fill="#0f766e">Resilience &amp; recovery — a regulatory requirement in BFSI, not optional</text>
+  <rect x="524" y="410" width="240" height="44" rx="7" fill="#fff" stroke="#5eead4"/><text class="chip" x="532" y="428" fill="#0f766e">Chaos / fault injection</text><text class="g" x="532" y="444">kill a pod / AZ — does it self-heal?</text>
+  <rect x="772" y="410" width="260" height="44" rx="7" fill="#fff" stroke="#5eead4"/><text class="chip" x="780" y="428" fill="#0f766e">DR / failover drill</text><text class="g" x="780" y="444">region failover — prove RTO/RPO are real</text>
+  <rect x="1040" y="410" width="276" height="44" rx="7" fill="#fff" stroke="#5eead4"/><text class="chip" x="1048" y="428" fill="#0f766e">Backup RESTORE verification</text><text class="g" x="1048" y="444">restore a backup — logs aren't evidence</text>
+
+  <!-- Accessibility / compliance small band -->
+  <rect x="30" y="484" width="1300" height="54" rx="10" fill="#f1f5f9" stroke="#cbd5e1"/>
+  <text x="44" y="506" class="s" fill="#334155">Compliance / usability layers a gov + BFSI system is expected to cover:</text>
+  <rect x="470" y="492" width="200" height="36" rx="6" fill="#fff" stroke="#cbd5e1"/><text class="chip" x="478" y="508" fill="#334155">Accessibility (WCAG 2.x)</text><text class="g" x="478" y="522">gov mandate</text>
+  <rect x="680" y="492" width="210" height="36" rx="6" fill="#fff" stroke="#cbd5e1"/><text class="chip" x="688" y="508" fill="#334155">Localization (EN + AR, RTL)</text><text class="g" x="688" y="522">bilingual</text>
+  <rect x="900" y="492" width="200" height="36" rx="6" fill="#fff" stroke="#cbd5e1"/><text class="chip" x="908" y="508" fill="#334155">Compliance / audit trail</text><text class="g" x="908" y="522">controls evidenced</text>
+  <rect x="1110" y="492" width="205" height="36" rx="6" fill="#fff" stroke="#cbd5e1"/><text class="chip" x="1118" y="508" fill="#334155">Data-migration testing</text><text class="g" x="1118" y="522">reconciliation counts</text>
+
+  <!-- ============ ENVIRONMENTS ============ -->
+  <text x="30" y="576" class="h" fill="#0f172a" font-size="15">Where it runs — environment topology (parity via one IaC source)</text>
+  <rect x="30" y="588" width="1300" height="196" rx="12" fill="#eff6ff" stroke="#60a5fa" stroke-width="2"/>
+
+  <rect x="46" y="604" width="300" height="164" rx="10" fill="#faf5ff" stroke="#d8b4fe"/>
+  <text x="58" y="626" class="s" fill="#6b21a8">① Ephemeral PR env</text>
+  <text x="58" y="646" class="g">spun up per PR, torn down on merge</text>
+  <text x="58" y="662" class="g">• namespace-per-PR on AKS</text>
+  <text x="58" y="678" class="g">• same Terraform as prod (parity)</text>
+  <text x="58" y="694" class="g">• synthetic seed data</text>
+  <text x="58" y="714" class="g" font-style="italic" fill="#6b21a8">reviewers test a live URL, not a</text>
+  <text x="58" y="728" class="g" font-style="italic" fill="#6b21a8">description; no staging queue</text>
+  <text x="58" y="752" class="g">runs: smoke + PR's own tests</text>
+
+  <rect x="358" y="604" width="300" height="164" rx="10" fill="#eff6ff" stroke="#93c5fd"/>
+  <text x="370" y="626" class="s" fill="#1d4ed8">② Dev / Integration</text>
+  <text x="370" y="646" class="g">shared, always-on, latest merged code</text>
+  <text x="370" y="666" class="g">• integration + contract tests</text>
+  <text x="370" y="682" class="g">• DAST + IaC scan</text>
+  <text x="370" y="698" class="g">• synthetic + small masked set</text>
+  <text x="370" y="722" class="g" font-style="italic">stable enough to demo,</text>
+  <text x="370" y="736" class="g" font-style="italic">disposable enough to reset</text>
+
+  <rect x="670" y="604" width="320" height="164" rx="10" fill="#fefce8" stroke="#fde047"/>
+  <text x="682" y="626" class="s" fill="#854d0e">③ Staging / Pre-prod</text>
+  <text x="682" y="646" class="g">PROD-IDENTICAL — same IaC + sizes</text>
+  <text x="682" y="666" class="g">• full E2E, regression</text>
+  <text x="682" y="682" class="g">• load / stress / soak / spike</text>
+  <text x="682" y="698" class="g">• chaos + DR drill</text>
+  <text x="682" y="714" class="g">• UAT + regulatory sign-off</text>
+  <text x="682" y="730" class="g">• masked prod-SHAPE data</text>
+  <text x="682" y="750" class="g" font-style="italic" fill="#854d0e">if staging ≠ prod, a pass proves nothing</text>
+
+  <rect x="1002" y="604" width="314" height="164" rx="10" fill="#f0fdf4" stroke="#22c55e" stroke-width="2"/>
+  <text x="1014" y="626" class="s" fill="#166534">④ Production</text>
+  <text x="1014" y="646" class="g">testing doesn't stop at deploy:</text>
+  <text x="1014" y="666" class="g">• synthetic probes (outside-in)</text>
+  <text x="1014" y="682" class="g">• canary + SLO-gated promotion</text>
+  <text x="1014" y="698" class="g">• feature flags → 1% real users</text>
+  <text x="1014" y="722" class="g" font-style="italic" fill="#166534">progressive delivery = safest</text>
+  <text x="1014" y="736" class="g" font-style="italic" fill="#166534">"test in prod": real load, tiny</text>
+  <text x="1014" y="750" class="g" font-style="italic" fill="#166534">blast radius, auto-rollback</text>
+
+  <!-- ============ BFSI TEST DATA ============ -->
+  <text x="30" y="822" class="h" fill="#991b1b" font-size="15">Test data in a bank — the hard part, and your differentiator</text>
+  <rect x="30" y="834" width="1300" height="252" rx="12" fill="#fef2f2" stroke="#fca5a5" stroke-width="2"/>
+  <text x="46" y="858" class="s" fill="#991b1b">The rule: real production data NEVER lands in a lower environment — not once, not "temporarily for a bug." That's a breach and an audit finding.</text>
+
+  <rect x="46" y="870" width="410" height="200" rx="10" fill="#fff" stroke="#fca5a5"/>
+  <text x="58" y="892" class="s" fill="#991b1b">A · Masked / anonymised prod copy</text>
+  <text x="58" y="912" class="g">mask BEFORE it leaves the prod boundary:</text>
+  <text x="58" y="926" class="g">tokenise national IDs, shuffle names,</text>
+  <text x="58" y="940" class="g">perturb balances, null contacts.</text>
+  <text x="58" y="962" class="g" font-weight="700">Must be:</text>
+  <text x="58" y="978" class="g">• referentially intact (claim still links to</text>
+  <text x="58" y="992" class="g">&#160;&#160;its customer) — or joins break</text>
+  <text x="58" y="1006" class="g">• irreversible (no re-identification key)</text>
+  <text x="58" y="1020" class="g">• consistent (same input → same token)</text>
+  <text x="58" y="1042" class="g" font-style="italic" fill="#991b1b">best fidelity; the masking pipeline is</text>
+  <text x="58" y="1056" class="g" font-style="italic" fill="#991b1b">itself the risk surface to secure.</text>
+
+  <rect x="466" y="870" width="410" height="200" rx="10" fill="#fff" stroke="#fca5a5"/>
+  <text x="478" y="892" class="s" fill="#991b1b">B · Synthetic generation</text>
+  <text x="478" y="912" class="g">data matching prod's SHAPE and</text>
+  <text x="478" y="926" class="g">distribution, derived from no real person.</text>
+  <text x="478" y="946" class="g">model referential integrity + realistic</text>
+  <text x="478" y="960" class="g">distributions — not random junk.</text>
+  <text x="478" y="982" class="g" font-weight="700">Trade-off:</text>
+  <text x="478" y="998" class="g">• zero PII risk — nothing to leak (safest)</text>
+  <text x="478" y="1012" class="g">• misses the weird real-world edge cases</text>
+  <text x="478" y="1026" class="g">&#160;&#160;that only exist in production</text>
+  <text x="478" y="1048" class="g" font-style="italic" fill="#991b1b">safest; lower fidelity on edge cases.</text>
+
+  <rect x="886" y="870" width="430" height="200" rx="10" fill="#fff" stroke="#fca5a5"/>
+  <text x="898" y="892" class="s" fill="#991b1b">C · Subsetting (usually WITH masking)</text>
+  <text x="898" y="912" class="g">take a referentially-complete SLICE</text>
+  <text x="898" y="926" class="g">(2% of customers + all their rows),</text>
+  <text x="898" y="940" class="g">then mask it.</text>
+  <text x="898" y="962" class="g" font-weight="700">Why:</text>
+  <text x="898" y="978" class="g">• full prod clone is costly + slow to refresh</text>
+  <text x="898" y="992" class="g">• smaller = faster spin-up, cheaper storage</text>
+  <text x="898" y="1006" class="g">• integrity preserved within the slice</text>
+  <text x="898" y="1028" class="g" font-weight="700" fill="#991b1b">Common production answer:</text>
+  <text x="898" y="1044" class="g" font-style="italic" fill="#991b1b">synthetic for volume + a masked subset</text>
+  <text x="898" y="1058" class="g" font-style="italic" fill="#991b1b">for edge-case realism.</text>
+
+  <!-- ============ ANSWER BOX ============ -->
+  <rect x="30" y="1106" width="1300" height="644" rx="12" fill="#0f172a"/>
+  <text x="54" y="1142" font-size="18" font-weight="800" fill="#fff">How to walk it</text>
+
+  <text x="54" y="1178" class="h" fill="#93c5fd" font-size="14">1 · Split the question first.</text>
+  <text x="54" y="1200" font-size="12.5" fill="#e2e8f0">"Testing" is three things: WHAT I test (functional pyramid + non-functional bands), WHERE it runs (environments), and WHAT DATA it uses. Most of</text>
+  <text x="54" y="1218" font-size="12.5" fill="#e2e8f0">the real architecture is in the last two, so that's where I'd spend the time.</text>
+
+  <text x="54" y="1254" class="h" fill="#86efac" font-size="14">2 · Functional = pyramid; non-functional = bands.</text>
+  <text x="54" y="1276" font-size="12.5" fill="#e2e8f0">Pyramid: thousands of unit, then integration, contract (Pact — the microservices multiplier), few E2E. Plus smoke, regression, UAT across tiers.</text>
+  <text x="54" y="1294" font-size="12.5" fill="#e2e8f0">Non-functional bands run per release: performance (load/stress/soak/spike are DIFFERENT tests), security (SAST/DAST/SCA/pen), resilience (chaos/DR/restore).</text>
+
+  <text x="54" y="1330" class="h" fill="#fcd34d" font-size="14">3 · Name the performance tests separately.</text>
+  <text x="54" y="1352" font-size="12.5" fill="#e2e8f0">Load = expected peak, stress = past breaking point, soak = hours (finds leaks), spike = sudden surge (payday, market open). Saying "we do load testing"</text>
+  <text x="54" y="1370" font-size="12.5" fill="#e2e8f0">is the junior answer; naming the four and when each applies is the architect one.</text>
+
+  <text x="54" y="1406" class="h" fill="#5eead4" font-size="14">4 · Resilience testing is a BFSI regulatory requirement.</text>
+  <text x="54" y="1428" font-size="12.5" fill="#e2e8f0">Chaos (kill a pod/AZ, prove self-heal), DR failover drill (prove RTO/RPO are real, not aspirational), and backup RESTORE verification — because a</text>
+  <text x="54" y="1446" font-size="12.5" fill="#e2e8f0">successful-backup log is not evidence you can recover. SAMA-style BCM frameworks mandate evidenced DR testing, so this is a control, not a nicety.</text>
+
+  <text x="54" y="1482" class="h" fill="#c4b5fd" font-size="14">5 · Environment parity via one IaC source.</text>
+  <text x="54" y="1504" font-size="12.5" fill="#e2e8f0">Ephemeral PR envs, dev, staging, prod — all stamped from the same Terraform, differing only in sizing and data. Staging is prod-identical because a</text>
+  <text x="54" y="1522" font-size="12.5" fill="#e2e8f0">pass on a half-size, hand-patched staging proves nothing. You can't load-test a half-size cluster and trust the number.</text>
+
+  <text x="54" y="1558" class="h" fill="#fca5a5" font-size="14">6 · Test data — the differentiator.</text>
+  <text x="54" y="1580" font-size="12.5" fill="#e2e8f0">Real prod data NEVER enters a lower environment. Three strategies: masked prod copy (best fidelity, masking is the risk), synthetic (zero PII risk,</text>
+  <text x="54" y="1598" font-size="12.5" fill="#e2e8f0">misses edge cases), subsetting (a referentially-complete slice, then masked). Masking must be irreversible, referentially intact, consistent across tables.</text>
+
+  <line x1="54" y1="1628" x2="1306" y2="1628" stroke="#334155"/>
+  <text x="54" y="1656" class="h" fill="#67e8f9" font-size="14">One-paragraph answer:</text>
+  <text x="54" y="1676" font-size="12.5" fill="#e2e8f0">"Functional testing is a pyramid — unit-heavy, contract tests between services, few E2E — plus smoke and regression. Non-functional runs per release:</text>
+  <text x="54" y="1694" font-size="12.5" fill="#e2e8f0">performance split into load/stress/soak/spike, security in the CI gates, and resilience — chaos, DR failover, restore verification — which for a bank is a</text>
+  <text x="54" y="1712" font-size="12.5" fill="#e2e8f0">regulatory control. Environments are stamped from one Terraform source so staging is genuinely prod-like, with ephemeral per-PR envs on top. And the</text>
+  <text x="54" y="1730" font-size="12.5" fill="#e2e8f0">crux for a bank is data: no real PII in lower environments — synthetic for volume, a masked, subsetted prod slice for edge-case realism."</text>
+</svg>

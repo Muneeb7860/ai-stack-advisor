@@ -129,6 +129,7 @@ and, later, surfaced in a citation.
 | 13 | `13-private-network-egress-control.md` | Private endpoints vs. one audited egress path; single public entry; private model endpoints for regulated AI | No — `pickHybridConnectivity()` covers on-prem↔cloud links, not in-cloud network boundary |
 | 14 | `14-request-path-layer-ordering.md` | Layer order (DNS→edge→LB→gateway→platform), and which boxes are mutually exclusive alternatives | Partial — tiers exist in the canonical graph; ordering and exclusivity are not surfaced |
 | 15 | `15-observability-and-audit-logging.md` | Signal classes and one-backend-per-class, alerting on SLO burn rate, async trace propagation, and audit logging as a separate immutable pipeline | No — `pickObservability()` picks an APM vendor and reasons about nothing else |
+| 16 | `16-testing-strategy-and-environments.md` | Functional test pyramid, the four named performance-test types, three test-data strategies (masked/synthetic/subsetted), DR-as-evidence | No — `pickCICD()` reasons about deployment shape only; nothing reasons about test taxonomy or test data |
 
 Documents 12–14 were contributed later, from reference architectures authored by the project owner
 for a BFSI architecture review (the source SVGs are committed at

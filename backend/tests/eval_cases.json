@@ -3,7 +3,7 @@
     "description": "Machine-readable retrieval eval set for docs/use-case-knowledge-base/. See RETRIEVAL-EVAL-SET.md for full rationale per case. Built ahead of /api/refine's existence so it's ready to run the moment retrieval is wired up. Cases 22-27 cover documents 12-14, contributed from the project owner's own reference architectures; case 20 was reclassified from negative_control to direct when doc 12 made its out-of-scope premise false.",
     "corpus_dir": "docs/use-case-knowledge-base/",
     "status": "cases_only_not_yet_run",
-    "total_cases": 32
+    "total_cases": 37
   },
   "cases": [
     {
@@ -404,6 +404,65 @@
       "top_k_pass": 3,
       "min_confidence": "high",
       "note": "Cardinality — added during review of the source diagram, which does not mention it. One of the three 'silently breaks in production' conditions."
+    },
+    {
+      "id": 33,
+      "section": "direct",
+      "query": "What is the ice-cream cone anti-pattern in testing?",
+      "expected_docs": [
+        "16-testing-strategy-and-environments.md"
+      ],
+      "expected_decision_point": "A",
+      "top_k_pass": 3,
+      "min_confidence": "high",
+      "note": "Functional pyramid inverted — the net-new content doc 16 exists to hold."
+    },
+    {
+      "id": 34,
+      "section": "boundary",
+      "query": "What is the difference between load testing and soak testing?",
+      "expected_docs": [
+        "16-testing-strategy-and-environments.md"
+      ],
+      "expected_decision_point": "B",
+      "top_k_pass": 3,
+      "min_confidence": "high",
+      "note": "Tests that the four named performance-test types are distinguishable, not collapsed into one 'load testing' label."
+    },
+    {
+      "id": 35,
+      "section": "boundary",
+      "query": "Should we use synthetic test data or a masked production copy?",
+      "expected_docs": [
+        "16-testing-strategy-and-environments.md"
+      ],
+      "expected_decision_point": "D",
+      "top_k_pass": 3,
+      "min_confidence": "high",
+      "note": "Test-data strategy trade-off — doc 16's, not doc 12's (doc 12 owns only the masking RULE, not the strategy comparison)."
+    },
+    {
+      "id": 36,
+      "section": "anti_pattern",
+      "query": "Is a successful backup log enough proof we can recover from a disaster?",
+      "expected_docs": [
+        "16-testing-strategy-and-environments.md"
+      ],
+      "top_k_pass": 3,
+      "min_confidence": "high",
+      "note": "DR-as-evidence, not a log entry."
+    },
+    {
+      "id": 37,
+      "section": "cross_document",
+      "query": "How do we test in staging with the right kind of data before promoting to production?",
+      "expected_docs": [
+        "12-secure-delivery-pipeline.md",
+        "16-testing-strategy-and-environments.md"
+      ],
+      "top_k_pass": 5,
+      "min_confidence": "high",
+      "note": "THE OWNERSHIP-BOUNDARY CASE. Doc 12 owns the environment ladder and the masking rule; doc 16 owns test-data strategy and taxonomy. Unlike the 14/15 case, this pair was deliberately NOT given a duplicated canonical-rule sentence — the two documents were scoped so neither needed to restate the other's content, and each states an explicit ownership note naming what it does and does not cover. This case verifies that split still lets a spanning query reach both."
     }
   ]
 }

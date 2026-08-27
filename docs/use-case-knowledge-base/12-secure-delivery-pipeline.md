@@ -27,7 +27,9 @@ workflow`, `who approved`, `evidence for auditors`, `regulated deployment`. Supp
 `dependency scanning`, `CVE`, `vulnerability scanning`, `shift left`. Delivery mechanics: `GitOps`,
 `ArgoCD`, `Flux`, `canary`, `blue/green`, `progressive delivery`, `feature flags`, `rollback`,
 `admission control`, `OPA`, `Gatekeeper`, `policy as code`. Pipeline scanning: `SAST`, `DAST`,
-`SCA`, `IaC scan`, `secrets scan`, `gitleaks`, `Trivy`, `Checkov`.
+`SCA`, `IaC scan`, `secrets scan`, `gitleaks`, `Trivy`, `Checkov`. Environments: `staging`, `pre-prod`,
+`prod-identical`, `environment parity`, `dev environment`, `is staging like production`, `why does
+staging need to match prod`.
 
 ## Decision points
 
@@ -66,6 +68,15 @@ that is not declaratively describable (some managed PaaS, certain serverless con
 less from this model, and a push-based pipeline is a defensible choice there.
 
 ### C. Environments gate risk progressively, and the gates differ per environment
+
+**Ownership note:** this document owns the environment ladder itself (what each environment is for
+and what gate sits in it), the canary/blue-green promotion mechanics, and the one-line masking rule
+below. `16-testing-strategy-and-environments.md` owns test *taxonomy* — the functional pyramid, the
+four named performance-test types, the three data-generation strategies with their trade-offs, and
+DR-as-evidence — and references the environment ladder and masking rule stated here rather than
+restating them. Split this way because a rule stated in two places, worded two ways, is what broke
+retrieval the first time (see 00-INDEX §2b): each document states what it alone is authoritative
+for, and points at the other for the rest.
 
 **Dev** — auto-deploy on merge, smoke tests, plus the two gates that need a *running* application:
 DAST (OWASP ZAP against the live app, catching runtime vulnerabilities SAST structurally cannot see)
