@@ -130,6 +130,7 @@ and, later, surfaced in a citation.
 | 14 | `14-request-path-layer-ordering.md` | Layer order (DNS→edge→LB→gateway→platform), and which boxes are mutually exclusive alternatives | Partial — tiers exist in the canonical graph; ordering and exclusivity are not surfaced |
 | 15 | `15-observability-and-audit-logging.md` | Signal classes and one-backend-per-class, alerting on SLO burn rate, async trace propagation, and audit logging as a separate immutable pipeline | No — `pickObservability()` picks an APM vendor and reasons about nothing else |
 | 16 | `16-testing-strategy-and-environments.md` | Functional test pyramid, the four named performance-test types, three test-data strategies (masked/synthetic/subsetted), DR-as-evidence | No — `pickCICD()` reasons about deployment shape only; nothing reasons about test taxonomy or test data |
+| 17 | `17-multi-cloud-bridging.md` | Constraint-first framing for a split-provider architecture, three cross-cloud bridging mechanisms, workload identity federation, cache-locally/cross-async latency mitigation | No — `pickCloud()` is structurally single-answer; `pickHybridConnectivity()` covers on-prem↔one-cloud, not cloud↔cloud |
 
 Documents 12–14 were contributed later, from reference architectures authored by the project owner
 for a BFSI architecture review (the source SVGs are committed at

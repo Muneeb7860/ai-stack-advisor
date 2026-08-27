@@ -21,6 +21,12 @@ cannot currently answer at all: **"does our data leave the network when we call 
 cloud-native model endpoint reached over a private link, the answer is literally no — and that fact
 frequently determines whether an AI feature is approvable.
 
+**Ownership note:** this document covers the network boundary *within one cloud* — what stays
+private and what has to cross to the public internet. Bridging two *different* cloud providers
+together (a physical link between two networks that do not otherwise exist on the same backbone,
+plus identity federation across a trust boundary neither provider owns) is a disjoint problem, owned
+by `17-multi-cloud-bridging.md`.
+
 ## Signals / triggers
 
 Network boundary: `private endpoint`, `private link`, `VNet`, `VPC`, `no public IP`, `private

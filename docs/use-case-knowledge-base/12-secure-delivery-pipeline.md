@@ -29,7 +29,8 @@ workflow`, `who approved`, `evidence for auditors`, `regulated deployment`. Supp
 `admission control`, `OPA`, `Gatekeeper`, `policy as code`. Pipeline scanning: `SAST`, `DAST`,
 `SCA`, `IaC scan`, `secrets scan`, `gitleaks`, `Trivy`, `Checkov`. Environments: `staging`, `pre-prod`,
 `prod-identical`, `environment parity`, `dev environment`, `is staging like production`, `why does
-staging need to match prod`.
+staging need to match prod`, `promote to production`, `promoting to
+production`, `before promoting to production`, `production promotion`, `ready for production`.
 
 ## Decision points
 

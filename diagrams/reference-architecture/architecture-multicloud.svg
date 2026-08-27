@@ -1,0 +1,182 @@
+<svg viewBox="0 0 1340 1480" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <marker id="d" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#334155"/></marker>
+    <marker id="x" markerWidth="11" markerHeight="11" refX="8" refY="3.5" orient="auto"><path d="M0,0 L9,3.5 L0,7 Z" fill="#dc2626"/></marker>
+    <marker id="au" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#7c3aed"/></marker>
+    <style>
+      .t  { font-size:13px; font-weight:800; fill:#0f172a; }
+      .h  { font-size:15px; font-weight:800; }
+      .s  { font-size:11.5px; font-weight:700; fill:#0f172a; }
+      .g  { font-size:10px; fill:#475569; }
+      .fl { stroke:#334155; stroke-width:2.2; fill:none; }
+      .x  { stroke:#dc2626; stroke-width:3; fill:none; }
+      .au { stroke:#7c3aed; stroke-width:2; fill:none; stroke-dasharray:5 3; }
+    </style>
+  </defs>
+  <rect x="0" y="0" width="1340" height="1480" fill="#f8fafc"/>
+  <text x="30" y="38" font-size="23" font-weight="800" fill="#0f172a">Multi-Cloud — GCP compute, Azure data (constraint-driven)</text>
+  <text x="30" y="60" font-size="13" fill="#64748b">This split is only justified by a hard constraint (data residency / org mandate). The red cross-cloud hop is the cost + latency you're accepting — name it, don't hide it.</text>
+
+  <!-- ONE TERRAFORM -->
+  <rect x="30" y="80" width="1280" height="50" rx="10" fill="#ede9fe" stroke="#a78bfa"/>
+  <text x="46" y="100" class="s" fill="#5b21b6">main.tf — ONE Terraform config, TWO providers: `google` (GKE, GLB, Apigee) + `azurerm` (Postgres, Redis, Event Hubs, Entra ID)</text>
+  <text x="46" y="120" class="g" fill="#5b21b6">Terraform doesn't make the clouds interchangeable — it gives you one workflow, one state, one review process across both. The cross-cloud link (VPN/interconnect), the workload-identity federation, the firewall rules — all version-controlled here.</text>
+
+  <!-- LATENCY STRIP -->
+  <rect x="30" y="140" width="1280" height="44" rx="10" fill="#fff1f2" stroke="#fda4af"/>
+  <text x="46" y="160" class="s" fill="#9f1239">Latency floor (physics — can't be configured away):</text>
+  <text x="360" y="160" class="g" fill="#9f1239">same-region cross-cloud ~1–5ms (a tax you absorb)  ·  cross-REGION 10–100ms+ (felt on every call — avoid)  ·  so co-locate compute + data in ONE region even when clouds differ.</text>
+  <text x="46" y="177" class="g" fill="#9f1239">The reframe: you don't "optimise" the hop — you MINIMISE how many there are and make the unavoidable ones asynchronous.</text>
+
+  <!-- ============ CLIENT + EDGE ============ -->
+  <rect x="30" y="200" width="150" height="120" rx="10" fill="#eef2ff" stroke="#c7d2fe"/>
+  <text x="42" y="222" class="s">Clients</text>
+  <rect x="44" y="234" width="122" height="24" rx="5" fill="#fff" stroke="#c7d2fe"/><text class="g" x="52" y="250">Web / Mobile</text>
+  <rect x="44" y="264" width="122" height="24" rx="5" fill="#fff" stroke="#c7d2fe"/><text class="g" x="52" y="280">B2B partner</text>
+  <rect x="44" y="294" width="122" height="20" rx="5" fill="#dcfce7" stroke="#86efac"/><text class="g" x="52" y="308" fill="#166534">Admin</text>
+
+  <rect x="200" y="200" width="150" height="120" rx="10" fill="#fff7ed" stroke="#fdba74"/>
+  <text x="212" y="222" class="s" fill="#9a3412">Cloudflare</text>
+  <text x="212" y="242" class="g">DNS + WAF + CDN</text>
+  <text x="212" y="258" class="g">+ DDoS protection</text>
+  <text x="212" y="278" class="g">the public edge —</text>
+  <text x="212" y="294" class="g">cloud-neutral, sits in</text>
+  <text x="212" y="310" class="g">front of both clouds</text>
+
+  <line x1="180" y1="260" x2="198" y2="260" class="fl" marker-end="url(#d)"/>
+
+  <!-- ============ GCP ============ -->
+  <rect x="380" y="200" width="500" height="880" rx="14" fill="#eff6ff" stroke="#4285f4" stroke-width="2.5"/>
+  <text x="396" y="226" class="t" fill="#1a56db">GCP — compute plane</text>
+
+  <!-- GLB -->
+  <rect x="396" y="242" width="468" height="52" rx="9" fill="#fef9c3" stroke="#fde047"/>
+  <text x="408" y="262" class="s" fill="#854d0e">Cloud Load Balancing (GLB)</text>
+  <text x="408" y="280" class="g">global anycast entry · TLS termination · health-based routing · comes BEFORE the gateway</text>
+
+  <!-- Apigee -->
+  <rect x="396" y="306" width="468" height="56" rx="9" fill="#ffedd5" stroke="#fb923c"/>
+  <text x="408" y="326" class="s" fill="#9a3412">Apigee (API Gateway)</text>
+  <text x="408" y="344" class="g">authN/Z · rate limiting · quotas · versioning · API productization for B2B — AFTER the load balancer</text>
+
+  <line x1="350" y1="268" x2="394" y2="268" class="fl" marker-end="url(#d)"/>
+  <line x1="630" y1="294" x2="630" y2="304" class="fl" marker-end="url(#d)"/>
+  <line x1="630" y1="362" x2="630" y2="376" class="fl" marker-end="url(#d)"/>
+
+  <!-- GKE cluster -->
+  <rect x="396" y="380" width="468" height="286" rx="12" fill="#f0f9ff" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="7 4"/>
+  <text x="408" y="402" class="s" fill="#0369a1">GKE cluster — code deploys here (mesh, private ClusterIPs)</text>
+
+  <rect x="410" y="414" width="130" height="40" rx="7" fill="#fff" stroke="#93c5fd"/><text class="g" x="418" y="430" font-weight="700">auth-svc</text><text class="g" x="418" y="446">token validate</text>
+  <rect x="552" y="414" width="130" height="40" rx="7" fill="#fff" stroke="#93c5fd"/><text class="g" x="560" y="430" font-weight="700">claim-svc</text><text class="g" x="560" y="446">eligibility</text>
+  <rect x="694" y="414" width="156" height="40" rx="7" fill="#fff" stroke="#93c5fd"/><text class="g" x="702" y="430" font-weight="700">payment-svc</text><text class="g" x="702" y="446">disburses</text>
+  <rect x="410" y="464" width="130" height="40" rx="7" fill="#fff" stroke="#93c5fd"/><text class="g" x="418" y="480" font-weight="700">rewards-svc</text>
+  <rect x="552" y="464" width="130" height="40" rx="7" fill="#fef3c7" stroke="#fbbf24"/><text class="g" x="560" y="480" font-weight="700">saga-orch</text><text class="g" x="560" y="496">loan workflow</text>
+  <rect x="694" y="464" width="156" height="40" rx="7" fill="#fff" stroke="#93c5fd"/><text class="g" x="702" y="480" font-weight="700">notification-svc</text>
+
+  <!-- GCP-SIDE CACHE (fix: cache local to compute) -->
+  <rect x="410" y="516" width="440" height="52" rx="8" fill="#f0fdfa" stroke="#5eead4"/>
+  <text x="420" y="536" class="s" fill="#0f766e">GCP-side cache — Memorystore (Redis), co-located with compute</text>
+  <text x="420" y="554" class="g">cache-aside for hot reads → turns N cross-cloud DB reads into ~0. Data locality is the #1 latency tool.</text>
+
+  <!-- workload identity federation box (taller, no overflow) -->
+  <rect x="410" y="580" width="440" height="76" rx="8" fill="#f5f3ff" stroke="#a78bfa"/>
+  <text x="420" y="600" class="s" fill="#6b21a8">Workload Identity Federation (cross-cloud auth mechanism)</text>
+  <text x="420" y="620" class="g">GKE service account → federates to Entra ID → gets a SHORT-LIVED Azure token.</text>
+  <text x="420" y="638" class="g">No Azure secret stored in GCP — this is what makes "auth by Entra ID" work across clouds.</text>
+
+  <!-- CI/CD note -->
+  <rect x="396" y="676" width="468" height="54" rx="8" fill="#f0fdf4" stroke="#86efac"/>
+  <text x="408" y="696" class="s" fill="#166534">Deploy: GitOps (ArgoCD) → GKE</text>
+  <text x="408" y="714" class="g">signed image from Artifact Registry · admission control · canary. Code ships to GKE only; Azure data tier is managed PaaS (no deploy).</text>
+
+  <!-- egress / bridge box: ALL cross-cloud traffic funnels here -->
+  <rect x="396" y="742" width="468" height="70" rx="8" fill="#fee2e2" stroke="#fca5a5" stroke-width="2"/>
+  <text x="408" y="762" class="s" fill="#991b1b">Cross-cloud bridge — GCP Cloud VPN / Partner Interconnect</text>
+  <text x="408" y="780" class="g">ALL cross-cloud traffic funnels through here. Private encrypted path; non-overlapping CIDR required.</text>
+  <text x="408" y="796" class="g">Interconnect (not internet VPN) for a bank — predictable, SLA-backed latency, no public transit.</text>
+
+  <!-- connectivity options mini-strip -->
+  <rect x="396" y="824" width="468" height="240" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="408" y="846" class="s" fill="#0f172a">The 3 ways to bridge two clouds (pick by volume + sensitivity)</text>
+  <rect x="408" y="856" width="444" height="60" rx="7" fill="#fff" stroke="#fca5a5"/>
+  <text x="418" y="874" class="g" font-weight="700" fill="#991b1b">A · Public endpoint + mTLS + IP allowlist</text>
+  <text x="418" y="890" class="g">internet path, variable latency, cheapest, minutes to set up.</text>
+  <text x="418" y="906" class="g">Low-volume / non-sensitive only. Not for a bank moving real data.</text>
+  <rect x="408" y="922" width="444" height="60" rx="7" fill="#fff" stroke="#fcd34d"/>
+  <text x="418" y="940" class="g" font-weight="700" fill="#92400e">B · Site-to-site VPN (IPsec)</text>
+  <text x="418" y="956" class="g">private routing over internet backbone, throughput CAPPED per tunnel,</text>
+  <text x="418" y="972" class="g">hours to set up. The cost-sensitive middle ground.</text>
+  <rect x="408" y="988" width="444" height="66" rx="7" fill="#fff" stroke="#5eead4"/>
+  <text x="418" y="1006" class="g" font-weight="700" fill="#0f766e">C · Dedicated interconnect (Partner Interconnect ↔ ExpressRoute)</text>
+  <text x="418" y="1022" class="g">off the public internet, lowest + PREDICTABLE latency, SLA-backed, high</text>
+  <text x="418" y="1038" class="g">throughput. Weeks to provision, most expensive. The bank answer.</text>
+
+  <!-- ============ CROSS-CLOUD LINK ============ -->
+  <text x="906" y="470" class="s" fill="#dc2626" text-anchor="middle" transform="rotate(-90 906 470)">CROSS-CLOUD HOP — egress $ + latency, every call</text>
+  <line x1="864" y1="777" x2="944" y2="777" class="x" marker-end="url(#x)"/>
+
+  <!-- ============ AZURE ============ -->
+  <rect x="948" y="200" width="362" height="880" rx="14" fill="#eef6fc" stroke="#0078d4" stroke-width="2.5"/>
+  <text x="964" y="226" class="t" fill="#0063b1">Azure — data plane (residency-bound)</text>
+
+  <!-- Entra ID -->
+  <rect x="964" y="242" width="330" height="70" rx="9" fill="#f5f3ff" stroke="#a78bfa"/>
+  <text x="976" y="262" class="s" fill="#5b21b6">Entra ID (Azure AD)</text>
+  <text x="976" y="280" class="g">identity provider — issues tokens the GKE</text>
+  <text x="976" y="296" class="g">workloads federate to. AuthN source of truth.</text>
+
+  <!-- Postgres -->
+  <rect x="964" y="330" width="330" height="120" rx="9" fill="#f0fdfa" stroke="#5eead4"/>
+  <text x="976" y="350" class="s" fill="#0f766e">Azure DB for PostgreSQL (Flexible Server)</text>
+  <text x="976" y="368" class="g">one DB per service · Private Endpoint · reached</text>
+  <text x="976" y="382" class="g">over the cross-cloud bridge, not the internet</text>
+  <rect x="976" y="392" width="90" height="22" rx="4" fill="#fff" stroke="#5eead4"/><text class="g" x="984" y="407">claim-db</text>
+  <rect x="1072" y="392" width="90" height="22" rx="4" fill="#fff" stroke="#5eead4"/><text class="g" x="1080" y="407">pay-db</text>
+  <rect x="1168" y="392" width="116" height="22" rx="4" fill="#fff" stroke="#5eead4"/><text class="g" x="1176" y="407">auth / rewards-db</text>
+  <rect x="976" y="420" width="180" height="22" rx="4" fill="#f5f3ff" stroke="#c4b5fd"/><text class="g" x="984" y="435" fill="#6b21a8">pgvector (RAG store)</text>
+
+  <!-- Redis (reframed: residency-bound session store, NOT the hot cache) -->
+  <rect x="964" y="468" width="330" height="62" rx="9" fill="#f0fdfa" stroke="#5eead4"/>
+  <text x="976" y="488" class="s" fill="#0f766e">Azure Cache for Redis — session / durable state</text>
+  <text x="976" y="506" class="g">residency-bound session + idempotency keys.</text>
+  <text x="976" y="522" class="g">Hot read-cache lives GCP-side (left) — don't cache across the hop.</text>
+
+  <!-- Event Hubs / Kafka -->
+  <rect x="964" y="548" width="330" height="66" rx="9" fill="#faf5ff" stroke="#d8b4fe"/>
+  <text x="976" y="568" class="s" fill="#6b21a8">Azure Event Hubs (Kafka surface)</text>
+  <text x="976" y="586" class="g">async event backbone — saga events, outbox→CDC</text>
+  <text x="976" y="602" class="g">publishes here. Async tolerates the cross-cloud hop.</text>
+
+  <text x="964" y="642" class="g" font-style="italic" fill="#0063b1">All data + identity is residency-bound to Azure —</text>
+  <text x="964" y="658" class="g" font-style="italic" fill="#0063b1">the reason compute-in-GCP has to reach across.</text>
+
+  <!-- cross-cloud arrows: originate from the BRIDGE box, funnel to azure -->
+  <line x1="864" y1="760" x2="962" y2="290" class="au" marker-end="url(#au)"/><text x="890" y="360" class="g" fill="#7c3aed" font-size="9" transform="rotate(-74 890 360)">auth (federated)</text>
+  <line x1="864" y1="770" x2="962" y2="380" class="x" marker-end="url(#x)"/><text x="892" y="520" class="g" fill="#dc2626" font-size="9" transform="rotate(-64 892 520)">DB queries (sync — minimise)</text>
+  <line x1="864" y1="784" x2="962" y2="580" class="x" marker-end="url(#x)"/>
+  <text x="900" y="640" class="g" fill="#7c3aed" font-size="9">events (async — tolerant)</text>
+
+  <!-- ============ ANSWER BOX ============ -->
+  <rect x="30" y="1096" width="1280" height="366" rx="12" fill="#0f172a"/>
+  <text x="54" y="1132" font-size="18" font-weight="800" fill="#fff">How to defend this design (and when NOT to)</text>
+
+  <text x="54" y="1166" class="h" fill="#fca5a5" font-size="14">1 · Lead with honesty: this split is a constraint, not a preference.</text>
+  <text x="54" y="1186" font-size="12.5" fill="#e2e8f0">"I'd only put compute in GCP and data in Azure if a hard constraint forced it — residency law, or an org mandate. Left to choose I co-locate them,</text>
+  <text x="54" y="1204" font-size="12.5" fill="#e2e8f0">because every cross-cloud call costs egress and adds latency. And I don't optimise the hop — I minimise hop count and make the rest async."</text>
+
+  <text x="54" y="1238" class="h" fill="#fcd34d" font-size="14">2 · The bridge is the crux — private IPs don't route across clouds by themselves.</text>
+  <text x="54" y="1258" font-size="12.5" fill="#e2e8f0">A VPN or Partner Interconnect/ExpressRoute connects the networks first; only then does private DB access work. First constraint: non-overlapping CIDR.</text>
+  <text x="54" y="1276" font-size="12.5" fill="#e2e8f0">For a bank, dedicated interconnect over internet VPN — predictable SLA-backed latency, no public transit.</text>
+
+  <text x="54" y="1310" class="h" fill="#c4b5fd" font-size="14">3 · Cross-cloud auth = workload identity federation, never a stored secret.</text>
+  <text x="54" y="1330" font-size="12.5" fill="#e2e8f0">GKE service account federates to Entra ID for a short-lived token. A static Azure credential in GCP is what a security review fails you for.</text>
+  <text x="54" y="1348" font-size="12.5" fill="#e2e8f0">Network gets you connected; federated identity gets you authenticated.</text>
+
+  <text x="54" y="1382" class="h" fill="#86efac" font-size="14">4 · Mitigate the latency you can't remove — cache LOCAL, cross async.</text>
+  <text x="54" y="1402" font-size="12.5" fill="#e2e8f0">Hot read-cache on the GCP side (Memorystore), not across the hop — caching in the other cloud defeats the cache. Batch cross-cloud calls, keep</text>
+  <text x="54" y="1420" font-size="12.5" fill="#e2e8f0">chatty sync DB reads out of the hot path, push work onto the async Event Hubs path which tolerates the latency far better than sync reads.</text>
+
+  <line x1="54" y1="1440" x2="1286" y2="1440" stroke="#334155"/>
+  <text x="54" y="1456" font-size="12" font-style="italic" fill="#94a3b8">One main.tf, two providers, one workflow. Red arrows = the price of the constraint. An architect names that price rather than pretending it's free.</text>
+</svg>
