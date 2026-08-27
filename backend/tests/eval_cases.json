@@ -1,31 +1,526 @@
 {
   "_meta": {
-    "description": "Machine-readable retrieval eval set for docs/use-case-knowledge-base/. See RETRIEVAL-EVAL-SET.md for full rationale per case. Built ahead of /api/refine's existence so it's ready to run the moment retrieval is wired up.",
+    "description": "Machine-readable retrieval eval set for docs/use-case-knowledge-base/. See RETRIEVAL-EVAL-SET.md for full rationale per case. Built ahead of /api/refine's existence so it's ready to run the moment retrieval is wired up. Cases 22-27 cover documents 12-14, contributed from the project owner's own reference architectures; case 20 was reclassified from negative_control to direct when doc 12 made its out-of-scope premise false.",
     "corpus_dir": "docs/use-case-knowledge-base/",
     "status": "cases_only_not_yet_run",
-    "total_cases": 21
+    "total_cases": 42
   },
   "cases": [
-    {"id": 1, "section": "direct", "query": "We're building a Figma-like design tool where multiple people edit the same canvas at once.", "expected_docs": ["01-realtime-collaborative-editing.md"], "expected_decision_point": "A", "top_k_pass": 1, "min_confidence": "high"},
-    {"id": 2, "section": "direct", "query": "How do we handle Zoom-style group video calls with screen sharing for up to 50 people?", "expected_docs": ["02-video-audio-conferencing.md"], "expected_decision_point": "A", "top_k_pass": 1, "min_confidence": "high"},
-    {"id": 3, "section": "direct", "query": "We have separate teams owning the customer app, the admin dashboard, and the driver app — how do we let them deploy independently?", "expected_docs": ["03-micro-frontend-architecture.md"], "expected_decision_point": null, "top_k_pass": 1, "min_confidence": "high"},
-    {"id": 4, "section": "direct", "query": "Our checkout needs to reserve inventory, charge payment, and book shipping across three services — how do we keep that consistent?", "expected_docs": ["04-event-driven-distributed-transactions.md"], "expected_decision_point": "A", "top_k_pass": 1, "min_confidence": "high"},
-    {"id": 5, "section": "direct", "query": "We're building a B2B SaaS product and each customer company's data needs to be completely isolated from every other customer.", "expected_docs": ["05-multi-tenant-saas.md"], "expected_decision_point": "A", "top_k_pass": 1, "min_confidence": "high"},
-    {"id": 6, "section": "direct", "query": "We're building a marketplace connecting freelancers with clients — how should we handle payments and escrow?", "expected_docs": ["06-two-sided-marketplace.md"], "expected_decision_point": "B", "top_k_pass": 1, "min_confidence": "high"},
-    {"id": 7, "section": "direct", "query": "We want to add a fraud-scoring model to flag suspicious transactions — what infrastructure do we need to train and serve it?", "expected_docs": ["07-ml-feature-store-and-model-serving.md"], "expected_decision_point": null, "top_k_pass": 1, "min_confidence": "high", "must_not_retrieve": ["rag-vector-db-reasoning-in-index-html"]},
-    {"id": 8, "section": "direct", "query": "Our product catalog needs a search bar with autocomplete and a 'you may also like' section.", "expected_docs": ["08-search-and-recommendation-engine.md"], "expected_decision_point": "A,C", "top_k_pass": 1, "min_confidence": "high"},
-    {"id": 9, "section": "direct", "query": "Roughly how much should we budget monthly for an AI chatbot handling a few thousand conversations a day?", "expected_docs": ["09-cost-estimation-methodology.md"], "expected_decision_point": "LLM-cost-table", "top_k_pass": 1, "min_confidence": "high"},
-    {"id": 10, "section": "direct", "query": "What does 'hexagonal architecture' actually look like inside one service's folder structure?", "expected_docs": ["10-hexagonal-intraservice-code-organization.md"], "expected_decision_point": null, "top_k_pass": 1, "min_confidence": "high"},
-    {"id": 11, "section": "direct", "query": "We have multiple agents calling different LLMs — should we route and guardrail that centrally or per-agent?", "expected_docs": ["11-semantic-routing-guardrail-service.md"], "expected_decision_point": "A", "top_k_pass": 1, "min_confidence": "high"},
-    {"id": 12, "section": "anti_pattern", "query": "Is it okay to just use Postgres LIKE queries for our search feature?", "expected_docs": ["08-search-and-recommendation-engine.md"], "expected_chunk_contains": ["anti-pattern", "LIKE", "ILIKE"], "top_k_pass": 3, "min_confidence": "medium"},
-    {"id": 13, "section": "anti_pattern", "query": "Can we use two-phase commit across our microservices instead of dealing with sagas?", "expected_docs": ["04-event-driven-distributed-transactions.md"], "expected_chunk_contains": ["2PC", "two-phase commit"], "top_k_pass": 3, "min_confidence": "medium"},
-    {"id": 14, "section": "anti_pattern", "query": "Our cursor and presence data for the collaborative editor is slowing down the database — is that normal?", "expected_docs": ["01-realtime-collaborative-editing.md"], "expected_chunk_contains": ["presence", "ephemeral"], "top_k_pass": 3, "min_confidence": "medium"},
-    {"id": 15, "section": "cross_document", "query": "We're building a virtual classroom app with live video calls and a shared collaborative whiteboard.", "expected_docs": ["01-realtime-collaborative-editing.md", "02-video-audio-conferencing.md"], "expected_decision_point": null, "top_k_pass": 5, "min_confidence": "medium", "requires_all_expected_docs": true},
-    {"id": 16, "section": "cross_document", "query": "We're an on-demand delivery marketplace connecting drivers and customers, and we need real-time driver location tracking on a map.", "expected_docs": ["06-two-sided-marketplace.md"], "known_gap": "geospatial/location-tracking reasoning exists only in index.html's pickDatabase() geospatial signal, not as its own KB doc", "top_k_pass": 5, "min_confidence": "low"},
-    {"id": 17, "section": "boundary", "query": "Should our video conferencing app use peer-to-peer or a server-based approach for 8 participants?", "expected_docs": ["02-video-audio-conferencing.md"], "expected_decision_point": "A", "expected_chunk_contains": ["P2P", "mesh", "3-5", "3–5"], "top_k_pass": 3, "min_confidence": "high"},
-    {"id": 18, "section": "boundary", "query": "We need a model registry so we always know which model version is actually live in production.", "expected_docs": ["07-ml-feature-store-and-model-serving.md"], "expected_decision_point": "D", "expected_chunk_contains": ["MLflow", "registry"], "top_k_pass": 3, "min_confidence": "high"},
-    {"id": 19, "section": "boundary", "query": "Should routing between cheap and expensive models be rule-based or a trained classifier?", "expected_docs": ["11-semantic-routing-guardrail-service.md"], "expected_decision_point": "C", "expected_chunk_contains": ["rule-based", "classifier"], "top_k_pass": 3, "min_confidence": "high"},
-    {"id": 20, "section": "negative_control", "query": "How do we set up CI/CD for our Kubernetes deployments?", "expected_docs": [], "note": "Covered in docs/alternatives-research/04-devops-frontend-cicd-observability-frameworks.md, a different corpus not part of this eval set.", "top_k_pass": null, "min_confidence": "none"},
-    {"id": 21, "section": "negative_control", "query": "What's the best way to configure DNS and SSL certificates for our custom domain?", "expected_docs": [], "note": "Genuinely out of scope for both docs/use-case-knowledge-base/ and docs/alternatives-research/.", "top_k_pass": null, "min_confidence": "none"}
+    {
+      "id": 1,
+      "section": "direct",
+      "query": "We're building a Figma-like design tool where multiple people edit the same canvas at once.",
+      "expected_docs": [
+        "01-realtime-collaborative-editing.md"
+      ],
+      "expected_decision_point": "A",
+      "top_k_pass": 1,
+      "min_confidence": "high"
+    },
+    {
+      "id": 2,
+      "section": "direct",
+      "query": "How do we handle Zoom-style group video calls with screen sharing for up to 50 people?",
+      "expected_docs": [
+        "02-video-audio-conferencing.md"
+      ],
+      "expected_decision_point": "A",
+      "top_k_pass": 1,
+      "min_confidence": "high"
+    },
+    {
+      "id": 3,
+      "section": "direct",
+      "query": "We have separate teams owning the customer app, the admin dashboard, and the driver app — how do we let them deploy independently?",
+      "expected_docs": [
+        "03-micro-frontend-architecture.md"
+      ],
+      "expected_decision_point": null,
+      "top_k_pass": 1,
+      "min_confidence": "high"
+    },
+    {
+      "id": 4,
+      "section": "direct",
+      "query": "Our checkout needs to reserve inventory, charge payment, and book shipping across three services — how do we keep that consistent?",
+      "expected_docs": [
+        "04-event-driven-distributed-transactions.md"
+      ],
+      "expected_decision_point": "A",
+      "top_k_pass": 1,
+      "min_confidence": "high"
+    },
+    {
+      "id": 5,
+      "section": "direct",
+      "query": "We're building a B2B SaaS product and each customer company's data needs to be completely isolated from every other customer.",
+      "expected_docs": [
+        "05-multi-tenant-saas.md"
+      ],
+      "expected_decision_point": "A",
+      "top_k_pass": 1,
+      "min_confidence": "high"
+    },
+    {
+      "id": 6,
+      "section": "direct",
+      "query": "We're building a marketplace connecting freelancers with clients — how should we handle payments and escrow?",
+      "expected_docs": [
+        "06-two-sided-marketplace.md"
+      ],
+      "expected_decision_point": "B",
+      "top_k_pass": 1,
+      "min_confidence": "high"
+    },
+    {
+      "id": 7,
+      "section": "direct",
+      "query": "We want to add a fraud-scoring model to flag suspicious transactions — what infrastructure do we need to train and serve it?",
+      "expected_docs": [
+        "07-ml-feature-store-and-model-serving.md"
+      ],
+      "expected_decision_point": null,
+      "top_k_pass": 1,
+      "min_confidence": "high",
+      "must_not_retrieve": [
+        "rag-vector-db-reasoning-in-index-html"
+      ]
+    },
+    {
+      "id": 8,
+      "section": "direct",
+      "query": "Our product catalog needs a search bar with autocomplete and a 'you may also like' section.",
+      "expected_docs": [
+        "08-search-and-recommendation-engine.md"
+      ],
+      "expected_decision_point": "A,C",
+      "top_k_pass": 1,
+      "min_confidence": "high"
+    },
+    {
+      "id": 9,
+      "section": "direct",
+      "query": "Roughly how much should we budget monthly for an AI chatbot handling a few thousand conversations a day?",
+      "expected_docs": [
+        "09-cost-estimation-methodology.md"
+      ],
+      "expected_decision_point": "LLM-cost-table",
+      "top_k_pass": 1,
+      "min_confidence": "high"
+    },
+    {
+      "id": 10,
+      "section": "direct",
+      "query": "What does 'hexagonal architecture' actually look like inside one service's folder structure?",
+      "expected_docs": [
+        "10-hexagonal-intraservice-code-organization.md"
+      ],
+      "expected_decision_point": null,
+      "top_k_pass": 1,
+      "min_confidence": "high"
+    },
+    {
+      "id": 11,
+      "section": "direct",
+      "query": "We have multiple agents calling different LLMs — should we route and guardrail that centrally or per-agent?",
+      "expected_docs": [
+        "11-semantic-routing-guardrail-service.md"
+      ],
+      "expected_decision_point": "A",
+      "top_k_pass": 1,
+      "min_confidence": "high"
+    },
+    {
+      "id": 12,
+      "section": "anti_pattern",
+      "query": "Is it okay to just use Postgres LIKE queries for our search feature?",
+      "expected_docs": [
+        "08-search-and-recommendation-engine.md"
+      ],
+      "expected_chunk_contains": [
+        "anti-pattern",
+        "LIKE",
+        "ILIKE"
+      ],
+      "top_k_pass": 3,
+      "min_confidence": "medium"
+    },
+    {
+      "id": 13,
+      "section": "anti_pattern",
+      "query": "Can we use two-phase commit across our microservices instead of dealing with sagas?",
+      "expected_docs": [
+        "04-event-driven-distributed-transactions.md"
+      ],
+      "expected_chunk_contains": [
+        "2PC",
+        "two-phase commit"
+      ],
+      "top_k_pass": 3,
+      "min_confidence": "medium"
+    },
+    {
+      "id": 14,
+      "section": "anti_pattern",
+      "query": "Our cursor and presence data for the collaborative editor is slowing down the database — is that normal?",
+      "expected_docs": [
+        "01-realtime-collaborative-editing.md"
+      ],
+      "expected_chunk_contains": [
+        "presence",
+        "ephemeral"
+      ],
+      "top_k_pass": 3,
+      "min_confidence": "medium"
+    },
+    {
+      "id": 15,
+      "section": "cross_document",
+      "query": "We're building a virtual classroom app with live video calls and a shared collaborative whiteboard.",
+      "expected_docs": [
+        "01-realtime-collaborative-editing.md",
+        "02-video-audio-conferencing.md"
+      ],
+      "expected_decision_point": null,
+      "top_k_pass": 5,
+      "min_confidence": "medium",
+      "requires_all_expected_docs": true
+    },
+    {
+      "id": 16,
+      "section": "cross_document",
+      "query": "We're an on-demand delivery marketplace connecting drivers and customers, and we need real-time driver location tracking on a map.",
+      "expected_docs": [
+        "06-two-sided-marketplace.md"
+      ],
+      "known_gap": "geospatial/location-tracking reasoning exists only in index.html's pickDatabase() geospatial signal, not as its own KB doc",
+      "top_k_pass": 5,
+      "min_confidence": "low"
+    },
+    {
+      "id": 17,
+      "section": "boundary",
+      "query": "Should our video conferencing app use peer-to-peer or a server-based approach for 8 participants?",
+      "expected_docs": [
+        "02-video-audio-conferencing.md"
+      ],
+      "expected_decision_point": "A",
+      "expected_chunk_contains": [
+        "P2P",
+        "mesh",
+        "3-5",
+        "3–5"
+      ],
+      "top_k_pass": 3,
+      "min_confidence": "high"
+    },
+    {
+      "id": 18,
+      "section": "boundary",
+      "query": "We need a model registry so we always know which model version is actually live in production.",
+      "expected_docs": [
+        "07-ml-feature-store-and-model-serving.md"
+      ],
+      "expected_decision_point": "D",
+      "expected_chunk_contains": [
+        "MLflow",
+        "registry"
+      ],
+      "top_k_pass": 3,
+      "min_confidence": "high"
+    },
+    {
+      "id": 19,
+      "section": "boundary",
+      "query": "Should routing between cheap and expensive models be rule-based or a trained classifier?",
+      "expected_docs": [
+        "11-semantic-routing-guardrail-service.md"
+      ],
+      "expected_decision_point": "C",
+      "expected_chunk_contains": [
+        "rule-based",
+        "classifier"
+      ],
+      "top_k_pass": 3,
+      "min_confidence": "high"
+    },
+    {
+      "id": 20,
+      "section": "direct",
+      "query": "How do we set up CI/CD for our Kubernetes deployments?",
+      "expected_docs": [
+        "12-secure-delivery-pipeline.md"
+      ],
+      "note": "RECLASSIFIED from negative_control. It was a valid negative control while this corpus had no CI/CD content — the original note read 'Covered in docs/alternatives-research/04-devops-frontend-cicd-observability-frameworks.md, a different corpus not part of this eval set.' Adding 12-secure-delivery-pipeline.md made that premise false: the corpus now covers pipeline security gates, GitOps promotion and progressive delivery directly, so retrieving for this query is correct behaviour, not a threshold failure. Kept as a positive case rather than deleted, so the corpus change is recorded where someone reading the eval set will see it.",
+      "top_k_pass": 3,
+      "min_confidence": "high",
+      "expected_decision_point": "A",
+      "expected_chunk_contains": [
+        "SAST",
+        "SBOM"
+      ]
+    },
+    {
+      "id": 21,
+      "section": "negative_control",
+      "query": "What's the best way to configure DNS and SSL certificates for our custom domain?",
+      "expected_docs": [],
+      "note": "Genuinely out of scope for both docs/use-case-knowledge-base/ and docs/alternatives-research/.",
+      "top_k_pass": null,
+      "min_confidence": "none"
+    },
+    {
+      "id": 22,
+      "section": "direct",
+      "query": "Does our data leave the network when we call an LLM?",
+      "expected_docs": [
+        "13-private-network-egress-control.md"
+      ],
+      "expected_decision_point": "F",
+      "expected_chunk_contains": [
+        "private",
+        "internet"
+      ],
+      "top_k_pass": 3,
+      "min_confidence": "high",
+      "note": "The question that most often decides whether a regulated buyer can approve an AI feature at all."
+    },
+    {
+      "id": 23,
+      "section": "anti_pattern",
+      "query": "Can a pod open an arbitrary internet connection?",
+      "expected_docs": [
+        "13-private-network-egress-control.md"
+      ],
+      "top_k_pass": 3,
+      "min_confidence": "high",
+      "note": "'Is X okay?' shape — default-allow egress is the named anti-pattern."
+    },
+    {
+      "id": 24,
+      "section": "direct",
+      "query": "Does the API gateway come before or after the load balancer?",
+      "expected_docs": [
+        "14-request-path-layer-ordering.md"
+      ],
+      "expected_decision_point": "A",
+      "expected_chunk_contains": [
+        "load balancer",
+        "gateway"
+      ],
+      "top_k_pass": 3,
+      "min_confidence": "high",
+      "note": "Ordering question the flat 16-card output cannot answer."
+    },
+    {
+      "id": 25,
+      "section": "anti_pattern",
+      "query": "Is it okay to feed analytics straight from our transactional database?",
+      "expected_docs": [
+        "14-request-path-layer-ordering.md"
+      ],
+      "top_k_pass": 3,
+      "min_confidence": "high",
+      "note": "Added after this query mis-routed to doc 13: the content lived in 14 but 14's Signals section carried no analytics terms, so routing could not reach it. Regression lock for signal coverage, not just for content existing."
+    },
+    {
+      "id": 26,
+      "section": "boundary",
+      "query": "Should we run Kubernetes and Cloud Run together for the same services?",
+      "expected_docs": [
+        "14-request-path-layer-ordering.md"
+      ],
+      "expected_decision_point": "B",
+      "top_k_pass": 3,
+      "min_confidence": "high",
+      "note": "Tests the mutual-exclusion framing — these are alternatives for one layer, not a stack."
+    },
+    {
+      "id": 27,
+      "section": "direct",
+      "query": "How do we prove segregation of duties for production deployments?",
+      "expected_docs": [
+        "12-secure-delivery-pipeline.md"
+      ],
+      "top_k_pass": 3,
+      "min_confidence": "high",
+      "note": "Audit-shaped question; the fixed rule set cannot anticipate it."
+    },
+    {
+      "id": 28,
+      "section": "cross_document",
+      "query": "Should we send telemetry to one backend or split it by signal?",
+      "expected_docs": [
+        "14-request-path-layer-ordering.md",
+        "15-observability-and-audit-logging.md"
+      ],
+      "top_k_pass": 5,
+      "min_confidence": "high",
+      "note": "THE RECONCILIATION-MECHANISM CASE. Documents 14 and 15 share one canonical rule ('one backend per signal class — never two backends for the same signal'), stated verbatim in both. Measured before this convention existed: the 13->14 pair, joined only by a prose cross-reference, returned document 13 ALONE for a spanning query — routing scores Signals + preamble, so a pointer inside a content chunk has no routing weight. Stating the rule in both is what makes a spanning query return both. If this case regresses to a single document, the corpus has gone back to splitting a rule across documents that cannot reach each other."
+    },
+    {
+      "id": 29,
+      "section": "direct",
+      "query": "Why does our distributed trace stop at the message bus?",
+      "expected_docs": [
+        "15-observability-and-audit-logging.md"
+      ],
+      "expected_decision_point": "E",
+      "top_k_pass": 3,
+      "min_confidence": "high",
+      "note": "Async trace propagation — the highest-value single item in the document, and the one usually discovered missing during an incident."
+    },
+    {
+      "id": 30,
+      "section": "anti_pattern",
+      "query": "Can an administrator delete our audit trail?",
+      "expected_docs": [
+        "15-observability-and-audit-logging.md"
+      ],
+      "top_k_pass": 3,
+      "min_confidence": "high",
+      "note": "'Is X okay?' shape against audit immutability."
+    },
+    {
+      "id": 31,
+      "section": "direct",
+      "query": "How do we alert without waking people up for things that do not matter?",
+      "expected_docs": [
+        "15-observability-and-audit-logging.md"
+      ],
+      "expected_decision_point": "F",
+      "top_k_pass": 3,
+      "min_confidence": "high",
+      "note": "Symptoms-not-causes and SLO burn rate."
+    },
+    {
+      "id": 32,
+      "section": "boundary",
+      "query": "Why did our metrics bill explode after we added user IDs to labels?",
+      "expected_docs": [
+        "15-observability-and-audit-logging.md"
+      ],
+      "expected_decision_point": "G",
+      "top_k_pass": 3,
+      "min_confidence": "high",
+      "note": "Cardinality — added during review of the source diagram, which does not mention it. One of the three 'silently breaks in production' conditions."
+    },
+    {
+      "id": 33,
+      "section": "direct",
+      "query": "What is the ice-cream cone anti-pattern in testing?",
+      "expected_docs": [
+        "16-testing-strategy-and-environments.md"
+      ],
+      "expected_decision_point": "A",
+      "top_k_pass": 3,
+      "min_confidence": "high",
+      "note": "Functional pyramid inverted — the net-new content doc 16 exists to hold."
+    },
+    {
+      "id": 34,
+      "section": "boundary",
+      "query": "What is the difference between load testing and soak testing?",
+      "expected_docs": [
+        "16-testing-strategy-and-environments.md"
+      ],
+      "expected_decision_point": "B",
+      "top_k_pass": 3,
+      "min_confidence": "high",
+      "note": "Tests that the four named performance-test types are distinguishable, not collapsed into one 'load testing' label."
+    },
+    {
+      "id": 35,
+      "section": "boundary",
+      "query": "Should we use synthetic test data or a masked production copy?",
+      "expected_docs": [
+        "16-testing-strategy-and-environments.md"
+      ],
+      "expected_decision_point": "D",
+      "top_k_pass": 3,
+      "min_confidence": "high",
+      "note": "Test-data strategy trade-off — doc 16's, not doc 12's (doc 12 owns only the masking RULE, not the strategy comparison)."
+    },
+    {
+      "id": 36,
+      "section": "anti_pattern",
+      "query": "Is a successful backup log enough proof we can recover from a disaster?",
+      "expected_docs": [
+        "16-testing-strategy-and-environments.md"
+      ],
+      "top_k_pass": 3,
+      "min_confidence": "high",
+      "note": "DR-as-evidence, not a log entry."
+    },
+    {
+      "id": 37,
+      "section": "cross_document",
+      "query": "Before promoting a release, what data should staging use and how prod-like must it be?",
+      "expected_docs": [
+        "12-secure-delivery-pipeline.md",
+        "16-testing-strategy-and-environments.md"
+      ],
+      "top_k_pass": 5,
+      "min_confidence": "high",
+      "note": "THE OWNERSHIP-BOUNDARY CASE. Doc 12 owns the environment ladder and the masking rule; doc 16 owns test-data strategy and taxonomy. Unlike the 14/15 case, this pair was deliberately NOT given a duplicated canonical-rule sentence — the two documents were scoped so neither needed to restate the other's content, and each states an explicit ownership note naming what it does and does not cover. This case verifies that split still lets a spanning query reach both. Rewritten when 17-multi-cloud-bridging.md joined the corpus: the original phrasing (\"how do we test in staging with the right kind of data before promoting to production\") sat right at the retrieval confidence threshold (MIN_CONFIDENT_RRF) and abstained once a seventh document diluted the routing score distribution, even after adding routing keywords to doc 12's Signals. The underlying capability was intact — both documents individually route correctly — so the fix was a clearer phrasing of the same ownership-boundary question, not tuning the global abstention threshold for one case."
+    },
+    {
+      "id": 38,
+      "section": "direct",
+      "query": "Why should we avoid splitting compute and data across two cloud providers?",
+      "expected_docs": [
+        "17-multi-cloud-bridging.md"
+      ],
+      "expected_decision_point": "A",
+      "top_k_pass": 3,
+      "min_confidence": "high",
+      "note": "Constraint-first framing — the recommendation before the mechanics."
+    },
+    {
+      "id": 39,
+      "section": "boundary",
+      "query": "What is the difference between a site-to-site VPN and a dedicated interconnect?",
+      "expected_docs": [
+        "17-multi-cloud-bridging.md"
+      ],
+      "expected_decision_point": "D",
+      "top_k_pass": 3,
+      "min_confidence": "high",
+      "note": "The three-tier bridging comparison, chosen by volume and sensitivity."
+    },
+    {
+      "id": 40,
+      "section": "anti_pattern",
+      "query": "How do we authenticate a GCP workload to Azure without storing a credential?",
+      "expected_docs": [
+        "17-multi-cloud-bridging.md"
+      ],
+      "top_k_pass": 5,
+      "min_confidence": "high",
+      "note": "Federation, never a stored secret — decision point E."
+    },
+    {
+      "id": 41,
+      "section": "anti_pattern",
+      "query": "Our cross-cloud VPN will not route between the two networks.",
+      "expected_docs": [
+        "17-multi-cloud-bridging.md"
+      ],
+      "top_k_pass": 3,
+      "min_confidence": "high",
+      "note": "Non-overlapping CIDR is a prerequisite, not a detail — the most common first-attempt failure."
+    },
+    {
+      "id": 42,
+      "section": "cross_document",
+      "query": "Should this connection be a private endpoint or a dedicated interconnect?",
+      "expected_docs": [
+        "13-private-network-egress-control.md",
+        "17-multi-cloud-bridging.md"
+      ],
+      "top_k_pass": 5,
+      "min_confidence": "high",
+      "note": "OWNERSHIP DISAMBIGUATION CASE. A private endpoint (doc 13) answers reachability WITHIN one cloud; a dedicated interconnect for bridging (doc 17) answers connecting TWO clouds that don't otherwise share a network. The query is genuinely ambiguous without knowing which situation the asker is in, so both documents returning together is correct — the reader needs to see both framings to pick the right one, not have retrieval silently guess."
+    }
   ]
 }

@@ -1,5 +1,7 @@
 # Search & Recommendation Engine
 
+**Status:** implemented — wired into `pickTradeoffs()` via the `searchRecommendation` signal.
+
 **Domain:** Product/content search and discovery — as a general capability distinct from LLM-based
 RAG semantic search, though hybrid search connects the two. Research date: August 2026.
 

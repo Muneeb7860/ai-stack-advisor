@@ -1,5 +1,7 @@
 # Cost Estimation Methodology
 
+**Status:** implemented — sources `pickCostEstimate()`'s directional monthly bands.
+
 **Domain:** Directional monthly cost estimation for a proposed stack — compute, database, and LLM
 API spend. Research date: August 2026. This document is the sourcing/methodology backing
 `pickCostEstimate(s, ctx)` in `index.html`, which renders as the "Directional monthly cost
@@ -13,6 +15,14 @@ cost estimator. This document (and its corresponding code) closes that gap — w
 honest design choice: **a range, not a point estimate**, because a static client-side tool with no
 backend and no live pricing API cannot know a user's actual traffic. A false-precision single
 dollar figure would be a worse answer than an honestly-bounded range with its assumptions stated.
+
+## Signals / triggers
+
+Cost questions: `how much will this cost`, `monthly cost`, `cost estimate`, `budget`, `cloud bill`,
+`what will we spend`, `pricing`, `cost per month`, `TCO`, `run rate`. Cost drivers: `LLM API cost`,
+`token cost`, `cost per request`, `compute cost`, `database cost`, `egress cost`, `idle cost`.
+Cost pressure: `cost-sensitive`, `budget conscious`, `reduce spend`, `too expensive`, `cheaper
+alternative`, `self-host to save money`, `break-even`, `when does self-hosting pay off`.
 
 ## Design principle
 

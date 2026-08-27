@@ -13,7 +13,7 @@ automatically. Do not "clean up" or "simplify" any branch below without checking
 index.html's actual current logic first.
 
 Source of truth: index.html's <script> block, functions stripNegations() through
-pickGovernance() (roughly lines 352–1180 as of this port, ~45 pickX functions across signal
+pickGovernance() (roughly lines 352–1180 as of this port, 47 pickX functions across signal
 detection, core stack, vendor-alternatives comparisons, AI-serving architecture, trade-offs,
 and cost/governance). Two independent implementations of the same logic (JS for the
 zero-backend v1 product, Python for the MCP tool) — not one importing the other, since v1 must
@@ -42,8 +42,238 @@ def strip_negations(text: str) -> str:
     )
 
 
+EXCLUSION_TERMS = {
+    "kubernetes": ["kubernetes", "k8s", "eks", "gke", "aks"],
+    "containers": ["docker", "container", "containers", "containerisation", "containerization"],
+    "microservices": ["microservice", "microservices"],
+    "messaging": ["kafka", "rabbitmq", "message queue", "messaging", "event bus", "pub/sub"],
+    "cache": ["cache", "caching", "redis", "memcached", "valkey"],
+    "database": ["database", "db", "postgres", "postgresql", "mysql", "mongodb", "mongo", "datastore"],
+    "cloud": ["cloud", "aws", "azure", "gcp", "google cloud", "huawei"],
+    "llm": ["llm", "llms", "large language model", "gpt", "claude", "openai", "genai", "generative ai"],
+    "rag": ["rag", "retrieval augmented", "retrieval-augmented", "vector database", "vector db", "embedding", "embeddings"],
+    "frontend": ["website", "web app", "web application", "web site", "frontend", "front-end", "ui", "react", "angular", "vue"],
+    "api": ["api", "apis", "rest api", "backend service", "web service", "endpoint"],
+    "serverless": ["serverless", "lambda"],
+    "mesh": ["service mesh", "istio", "linkerd"],
+    "iam": ["sso", "okta", "identity provider", "auth0"],
+    "observability": ["observability", "monitoring", "datadog", "splunk"],
+}
+
+_NEGATION_CLAUSE = re.compile(
+    r"\b(?:no|not|without|don't|doesn't|isn't|won't|never|excluding|except for|except)\b([^.,;!?]{0,60})",
+    re.I,
+)
+
+
+# A negator followed by one of these qualifies what comes next rather than prohibiting it.
+# "We need not only a website but also a mobile app" ASKS FOR a website; reading it as an
+# exclusion deleted the Frontend recommendation outright — worse than the over-recommendation
+# this mechanism exists to prevent. Same for "not just a database problem" and the quantity
+# forms "no more than 200ms" / "no fewer than three regions".
+NON_EXCLUSION_QUALIFIERS = (
+    "only", "just", "merely", "simply", "solely", "exclusively",
+    "more than", "less than", "fewer than", "later than", "earlier than", "greater than",
+)
+
+
+def detect_exclusions(text: str) -> dict:
+    """Mirrors index.html's detectExclusions(): keeps what strip_negations() throws away.
+
+    strip_negations() deletes the negated clause so "no compliance requirements" cannot fire a
+    positive compliance signal — necessary, but it also discarded the only place the user said
+    what they DON'T want, which is why "we must not use Kubernetes" still returned Kubernetes.
+    """
+    out = {}
+    for m in _NEGATION_CLAUSE.finditer(str(text or "").lower()):
+        clause = m.group(1) or ""
+        if clause.strip().startswith(NON_EXCLUSION_QUALIFIERS):
+            continue
+        for key, terms in EXCLUSION_TERMS.items():
+            if any(re.search(r"\b" + re.escape(term) + r"\b", clause) for term in terms):
+                out[key] = True
+    return out
+
+
+KNOWN_TERMS = {
+    "java": ["java", "spring boot"], "python": ["python", "django", "flask", "fastapi"], "go": ["golang", " go "],
+    "node": ["node.js", "nodejs", "express.js", "nestjs"], "dotnet": [".net", "c#", "asp.net"],
+    "ruby": ["ruby", "rails"], "php": ["php", "laravel"],
+    "postgres": ["postgres", "postgresql"], "mysql": ["mysql"], "sqlServer": ["sql server", "mssql"],
+    "oracleDb": ["oracle database", "oracle db"], "mongo": ["mongodb", "mongo"],
+    "docker": ["docker"], "kubernetes": ["kubernetes", "k8s"], "openshift": ["openshift"],
+    "react": ["react"], "angular": ["angular"], "vue": ["vue", "vue.js"],
+    "datadog": ["datadog"], "prometheus": ["prometheus", "grafana"], "splunk": ["splunk"],
+    "dynatrace": ["dynatrace"], "newrelic": ["new relic", "newrelic"], "elk": ["elk", "elastic stack", "elasticsearch"],
+    "terraform": ["terraform"], "githubActions": ["github actions"], "jenkins": ["jenkins"],
+    "gitlabCi": ["gitlab ci"], "circleci": ["circleci", "circle ci"], "azureDevops": ["azure devops"],
+    "pinecone": ["pinecone"], "weaviate": ["weaviate"], "qdrant": ["qdrant"],
+}
+
+EXPERIENCE_BEFORE = ["we use", "we are using", "we're using", "we run", "we have", "we deploy", "we host",
+    "our team knows", "our team uses", "team knows", "team uses", "experience with", "experienced with",
+    "familiar with", "already on", "already use", "already using", "already run", "currently use",
+    "currently using", "currently on", "our stack", "we know", "we standardise on", "we standardize on",
+    "skilled in", "proficient in", "migrating from", "shop uses"]
+EXPERIENCE_AFTER = ["experience", "expertise", "shop", "in production", "today", "already"]
+EXPERIENCE_DISCLAIMERS = ["never used", "never worked", "no experience", "not familiar", "unfamiliar",
+    "evaluating", "considering", "should we use", "thinking about", "looking at", "new to", "want to learn",
+    "have not used", "haven't used", "no one knows", "nobody knows", "would like to use", "plan to use",
+    "planning to use",
+    # Statements of NON-use. Without these, "We don't use Kubernetes today" read as ownership: the
+    # before-window "we don't use " does not contain "we use", so nothing disclaimed it, and the
+    # after-window " today" hit EXPERIENCE_AFTER. Same defect as BUG-7, one phrasing over.
+    "do not use", "don't use", "dont use", "no longer use", "no longer", "not using", "stopped using",
+    "moving off", "migrating off", "away from", "do not run", "don't run", "not run on", "ruled out"]
+
+
+def detect_known_tech(text: str, excluded: dict | None = None) -> dict:
+    """Mirrors index.html's detectKnownTech(). `xxxMentioned` means the user NAMED a technology;
+    this means they showed ownership of it. Conflating the two is what made "should we use
+    Kubernetes? we have never used it before" claim the team already knew Kubernetes."""
+    t = str(text or "").lower()
+    out = {}
+    for key, terms in KNOWN_TERMS.items():
+        for term in terms:
+            idx = t.find(term)
+            while idx != -1:
+                # Clip at sentence boundaries — without this, "We must not use Kubernetes. We
+                # run PostgreSQL in production today." reads the next sentence's "in production
+                # today" as Kubernetes ownership, on a sentence that excludes it.
+                before = re.split(r"[.;!?]", t[max(0, idx - 60):idx])[-1]
+                after = re.split(r"[.;!?]", t[idx + len(term): idx + len(term) + 40])[0]
+                disclaimed = any(d in before or d in after for d in EXPERIENCE_DISCLAIMERS)
+                if not disclaimed and (any(e in before for e in EXPERIENCE_BEFORE)
+                                       or any(e in after for e in EXPERIENCE_AFTER)):
+                    out[key] = True
+                    break
+                idx = t.find(term, idx + len(term))
+            if out.get(key):
+                break
+    # Exclusion wins — "we ruled out Kubernetes" satisfying both reads is a contradiction the rest
+    # of the engine has no way to resolve, so it is not representable.
+    for k in (excluded or {}):
+        out.pop(k, None)
+    return out
+
+
+_WORD_NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+                 "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10}
+
+_LATENCY_RE = re.compile(
+    r"(?:under|below|less than|within|at most|no more than|sub-?|<=?|max(?:imum)? of)\s*"
+    r"([0-9]+(?:\.[0-9]+)?|one|two|three|four|five|six|seven|eight|nine|ten)\s*"
+    r"(ms|millisecond|milliseconds|s|sec|secs|second|seconds|m|min|minute|minutes)\b")
+
+
+def detect_latency_target(text: str):
+    """Mirrors index.html's detectLatencyTarget(). detect_signals() had no numeric parsing at all,
+    so an explicit "in under three seconds" requirement was dropped entirely."""
+    best = None
+    for m in _LATENCY_RE.finditer(str(text or "").lower()):
+        raw = m.group(1)
+        n = _WORD_NUMBERS.get(raw)
+        if n is None:
+            try:
+                n = float(raw)
+            except ValueError:
+                continue
+        unit = m.group(2)
+        if unit == "ms" or unit.startswith("millisecond"):
+            ms = n
+        elif unit == "m" or unit.startswith("min"):
+            ms = n * 60000
+        else:
+            ms = n * 1000
+        if best is None or ms < best["ms"]:
+            best = {"ms": ms, "text": m.group(0).strip()}
+    return best
+
+
+_CONCURRENCY_RE = re.compile(
+    r"([0-9][0-9,.]*)\s*(k|m)?\s*(?:\+\s*)?(?:concurrent|simultaneous|parallel|peak|active)\s+"
+    r"(?:users|sessions|connections|requests|clients)")
+
+_TIMELINE_RE = re.compile(
+    r"([0-9]+|one|two|three|four|five|six|seven|eight|nine|ten|twelve)[\s-]*"
+    r"(week|weeks|month|months|quarter|quarters|year|years)\b")
+
+# A duration is only a DELIVERY window when something nearby says so. Without this check any
+# "<n> months" phrase became a ship date: "Retain audit logs for 12 months" was exported into the
+# ADR quality scenarios as "First production release ships inside <= 360 days" — a retention rule
+# turned into a commitment the user never made, inside a decision record.
+TIMELINE_CUES = ("timeline", "deadline", "deliver", "delivery", "launch", "ship", "release",
+                 "go live", "go-live", "mvp", "milestone", "time frame", "timeframe", "build it",
+                 "in production by", "due")
+TIMELINE_DISQUALIFIERS = ("retain", "retention", "archive", "history", "historical", "logs for",
+                          "keep", "stored for", "storage", "backlog", "experience", "warranty",
+                          "contract", "licen")
+
+
+def detect_concurrency_target(text: str):
+    """Mirrors index.html's detectConcurrencyTarget(). "500 concurrent users" parsed to nothing —
+    it does not even trip highScale, whose keywords are "high traffic"/"millions of users"."""
+    best = None
+    for m in _CONCURRENCY_RE.finditer(str(text or "").lower()):
+        try:
+            n = float(m.group(1).replace(",", ""))
+        except ValueError:
+            continue
+        if m.group(2) == "k":
+            n *= 1e3
+        elif m.group(2) == "m":
+            n *= 1e6
+        if best is None or n > best["count"]:
+            best = {"count": n, "text": m.group(0).strip()}
+    return best
+
+
+def detect_timeline(text: str):
+    """Mirrors index.html's detectTimeline(). Tightest stated window binds."""
+    best = None
+    t = str(text or "").lower()
+    for m in _TIMELINE_RE.finditer(t):
+        ctx = t[max(0, m.start() - 45): m.end() + 45]
+        if any(d in ctx for d in TIMELINE_DISQUALIFIERS):
+            continue
+        if not any(c in ctx for c in TIMELINE_CUES):
+            continue
+        raw = m.group(1)
+        n = _WORD_NUMBERS.get(raw, 12 if raw == "twelve" else None)
+        if n is None:
+            try:
+                n = float(raw)
+            except ValueError:
+                continue
+        unit = m.group(2)
+        if unit.startswith("week"):
+            days = n * 7
+        elif unit.startswith("month"):
+            days = n * 30
+        elif unit.startswith("quarter"):
+            days = n * 91
+        else:
+            days = n * 365
+        if best is None or days < best["days"]:
+            best = {"days": days, "text": m.group(0).strip()}
+    return best
+
+
+def excluded_pick(what: str) -> dict:
+    """A pick the user explicitly ruled out — kept as a real card so the report shows the
+    constraint was understood rather than silently producing a shorter stack."""
+    return {
+        "v": "Not recommended — you excluded " + what,
+        "conf": "high",
+        "excluded": True,
+        "why": "Your requirement explicitly ruled this out, so nothing is recommended for this "
+               "category. This is a stated constraint, not a heuristic default — if the exclusion "
+               "was picked up in error, rephrase the requirement and re-run.",
+    }
+
+
 def detect_signals(text: str) -> dict:
-    """Mirrors index.html's detectSignals() exactly (65+ signal dimensions as of the
+    """Mirrors index.html's detectSignals() exactly (100+ signal dimensions as of the
     expansion pass — see KICKOFF_BRIEF.md Section 0)."""
     raw = text.lower()
     t = strip_negations(text).lower()
@@ -57,6 +287,12 @@ def detect_signals(text: str) -> dict:
     strong_on_prem = has_raw(
         [
             "air-gapped", "air gapped", "airgapped", "cannot use any public cloud",
+            # index.html has these six and this port did not, so "we run our own servers
+            # in-house and cannot move to cloud" was on-prem in the browser and NOT on-prem here —
+            # one missing signal cascading into nine wrong picks, including recommending AWS to an
+            # air-gapped customer. Logged as an open item in PRD Section 12 until now.
+            "own server", "own servers", "in-house server", "in-house servers",
+            "in house server", "in house servers",
             "no public cloud", "private cloud only", "bare metal deployment",
         ]
     )
@@ -76,9 +312,20 @@ def detect_signals(text: str) -> dict:
         has_raw(["hybrid"]) and has_raw(["cloud"]) and not strong_on_prem
     )
 
+    _exclusions = detect_exclusions(text)
     return {
         "onPrem": strong_on_prem or soft_on_prem,
         "hybridConnectivity": hybrid_connectivity,
+        # Objects, not booleans — any consumer counting "active signals" must skip these.
+        "excluded": _exclusions,
+        "known": detect_known_tech(text, _exclusions),
+        "latencyTarget": detect_latency_target(text),
+        "concurrencyTarget": detect_concurrency_target(text),
+        "timeline": detect_timeline(text),
+        "brownfieldOmnichannel": has([
+            "omnichannel ai support", "omnichannel support", "omni-channel ai",
+            "multiple channels", "across channels", "web widget, whatsapp", "channel routing",
+        ]),
         "healthcare": has(["health", "hipaa", "patient", "clinical", "ehr", "medical"]),
         "finance": has(["fintech", "bank", "payment", "fraud", "pci", "transaction", "trading", "ledger", "finance"]),
         "ecommerce": has(["ecommerce", "e-commerce", "retail", "shopping", "product recommendation", "cart", "checkout"]),
@@ -157,6 +404,20 @@ def detect_signals(text: str) -> dict:
         "vanillaWebMentioned": has(["html5", "html/css", "vanilla javascript", "vanilla js"]) or (has(["html"]) and has(["css"])),
         "dockerMentioned": has(["docker"]),
         "kubernetesMentioned": has(["kubernetes", "k8s"]),
+        # Per-standard compliance flags — the generic `compliance` signal can't say WHICH regime.
+        "soc2Mentioned": has(["soc2", "soc 2"]),
+        "hipaaMentioned": has(["hipaa"]),
+        "pciMentioned": has(["pci", "pci dss", "pci-dss"]),
+        "govMentioned": has(["fedramp", "government", "defense", "public sector", "gov cloud", "govcloud"]),
+        "gdprMentioned": has(["gdpr"]),
+        "llmProviderMentioned": has(["anthropic", "claude", "openai", "gpt-4", "gpt4", "chatgpt",
+                                     "gemini", "llama", "mistral", "deepseek", "bedrock",
+                                     "azure openai", "vertex ai"]),
+        "redisMentioned": has(["redis", "memcached", "valkey"]),
+        "kafkaMentioned": has(["kafka", "rabbitmq", "message queue", "event bus"]),
+        "microservicesMentioned": has(["microservice", "microservices"]),
+        "monolithMentioned": has(["monolith", "modular monolith", "single deployable"]),
+        "serverlessMentioned": has(["serverless", "lambda", "cloud functions"]),
         "openshiftMentioned": has(["openshift"]),
         "pineconeMentioned": has(["pinecone"]),
         "weaviateMentioned": has(["weaviate"]),
@@ -198,6 +459,8 @@ def pick_cloud(s):
         return {"v": "On-premises / private infrastructure — no public cloud", "why": "An air-gapped or explicit no-public-cloud requirement rules out AWS/Azure/GCP entirely. You need a private data center, bare-metal, or air-gapped virtualization stack (VMware, OpenStack, or a vetted sovereign/government enclave) instead.", "conf": "high"}
     if s["awsShop"]:
         return {"v": "AWS", "why": "Explicit AWS usage detected — build on existing footprint (IAM, VPC, billing) rather than introducing a second cloud.", "conf": "high"}
+    if s["huaweiShop"]:
+        return {"v": "Huawei Cloud", "why": "Explicit Huawei Cloud usage detected — build on existing footprint rather than introducing a second cloud, particularly relevant for APAC/China-market deployments or markets where Huawei is an approved vendor under local data-residency rules.", "conf": "high"}
     if s["gcpShop"] or s["agentic"]:
         return {"v": "Google Cloud (GCP)", "why": "GCP mentioned, or agentic/data-heavy workload — GCP pairs well with Vertex AI, BigQuery, and Gemini models.", "conf": "high" if s["gcpShop"] else "medium"}
     if s["azureShop"] or s["enterprise"]:
@@ -210,6 +473,8 @@ def pick_cloud(s):
 def pick_gateway(s):
     if s["onPrem"]:
         return {"v": "Internal API gateway (Kong or Apigee Edge on-prem, or NGINX/Envoy) — no public CDN/edge service", "why": "Cloudflare and similar public edge services require internet egress, which an air-gapped environment doesn't have. Run your gateway entirely inside the isolated network boundary.", "conf": "high"}
+    if s["huaweiShop"]:
+        return {"v": "Huawei Cloud APIG (API Gateway) + ROMA Connect for integration/eventing", "why": "Explicit Huawei Cloud usage detected — APIG is Huawei's native API gateway; ROMA Connect adds enterprise integration (ESB-style) and eventing on top if you need to bridge multiple backend services.", "conf": "high"}
     picks = []
     hits = 0
     if s["security"] or s["compliance"] or s["highScale"]:
@@ -732,8 +997,74 @@ def pick_mesh(s):
     return {"v": "Not needed yet (revisit past ~10-15 services)", "why": "Service mesh adds operational complexity; skip until service count and cross-team traffic policy needs justify it.", "conf": "medium"}
 
 
+def pick_hybrid_connectivity(s, cloud):
+    if s["onPrem"]:
+        return {"v": "Not applicable — air-gapped means there is no cloud endpoint to build a dedicated link to", "why": "A dedicated private link (Direct Connect/ExpressRoute-class connectivity) exists to bridge on-prem infrastructure to a cloud provider. An air-gapped/no-public-cloud requirement means there is no cloud side to connect to in the first place.", "conf": "high", "needed": False}
+    if not s["hybridConnectivity"]:
+        return {"v": "Not required for this scenario", "why": "No hybrid (on-prem + cloud) or dedicated-link requirement detected — a standard internet-facing setup is fine until you specifically need a private, low-latency, high-bandwidth link between your own infrastructure and cloud VPCs.", "conf": "medium", "needed": False}
+
+    vendor = cloud.get("v") or ""
+    if "AWS" in vendor:
+        link = "AWS Direct Connect"
+        transit_hub = "AWS Transit Gateway"
+        note = "Terminate on a Transit Gateway if you need to fan the link out to multiple VPCs/accounts rather than a single VPC."
+    elif "Azure" in vendor:
+        link = "Azure ExpressRoute"
+        transit_hub = "Azure Virtual WAN"
+        note = "Use Azure Private Peering for VNet connectivity, Microsoft Peering if you also need PaaS/M365 endpoints over the same link."
+    elif "Google Cloud" in vendor:
+        link = "GCP Cloud Interconnect (Dedicated or Partner)"
+        transit_hub = "Network Connectivity Center"
+        note = "GCP's 99.99% SLA requires two attachments across two independent metros — a single attachment does not meet it."
+    elif "Huawei" in vendor:
+        link = "Huawei Cloud Direct Connect (DC)"
+        transit_hub = "Huawei Cloud Enterprise Router (ER)"
+        note = "The Enterprise Router aggregates routes across multiple VPCs the way Transit Gateway/Virtual WAN do for AWS/Azure."
+    else:
+        link = "your cloud provider's dedicated-interconnect service (AWS Direct Connect / Azure ExpressRoute / GCP Cloud Interconnect / Huawei Direct Connect)"
+        transit_hub = "the matching transit-hub service"
+        note = "Pick the specific service once the cloud provider is confirmed — they are not interchangeable at the provisioning level."
+
+    return {
+        "v": f"{link} + {transit_hub}, with a Site-to-Site VPN as an automatic failover path",
+        "why": f"Hybrid connectivity detected — {link} gives a dedicated, low-latency, high-bandwidth private link instead of routing on-prem-to-cloud traffic over the public internet. {note} Keep a Site-to-Site VPN (IPsec) on standby: cloud providers prioritize the dedicated link automatically by default routing preference, so the VPN only takes over if the dedicated link fails — advertise identical CIDR blocks on both so failover doesn't need a manual route change. For encryption in transit beyond the VPN's IPsec overlay, enable MACsec directly on the dedicated link if your circuit tier supports it (line-rate, no additional latency).",
+        "conf": "high",
+        "needed": True,
+    }
+
+
 def pick_cache(s):
-    return {"v": "Redis", "why": "De facto standard for caching, session storage, rate limiting, and lightweight pub/sub — recommended almost universally.", "conf": "high"}
+    # This ignored `s` entirely and returned Redis unconditionally, so a static site or a
+    # notebook-only ML script got a cache tier it has no use for. Redis is still right when a
+    # cache is warranted — the fix is requiring a reason, not changing the product.
+    reasons = []
+    if s["redisMentioned"]:
+        reasons.append("you already use Redis")
+    if s["highScale"]:
+        reasons.append("high traffic/volume")
+    if s["realtime"]:
+        reasons.append("real-time/low-latency paths")
+    if s["ecommerce"]:
+        reasons.append("e-commerce catalog and cart reads")
+    if s["liveMultiplayer"]:
+        reasons.append("live session/leaderboard state")
+    if s["chatbot"] or s["ragNeed"]:
+        reasons.append("repeated LLM/retrieval calls worth caching")
+    if s["enterprise"] or s["largeTeam"]:
+        reasons.append("session storage across multiple services")
+    if s["geospatial"]:
+        reasons.append("ephemeral live-location state")
+
+    if not reasons:
+        return {"v": "Not required yet", "conf": "medium", "needed": False,
+                "why": "Nothing in the requirement implies a caching tier — no high traffic, real-time "
+                       "path, shared session state, or repeated expensive lookup was detected. Adding "
+                       "Redis here would be infrastructure to run and pay for with no load to justify "
+                       "it. Revisit when you have a measured hot path; Redis is the default choice at "
+                       "that point."}
+    return {"v": "Redis", "conf": "high", "needed": True,
+            "why": "De facto standard for caching, session storage, rate limiting, and lightweight "
+                   "pub/sub. Recommended here because of " + ", ".join(reasons) + "."}
 
 
 def pick_database(s):
@@ -748,13 +1079,29 @@ def pick_database(s):
     if warehouse_need:
         picks.append("Cloud data warehouse (BigQuery / Snowflake / Redshift) as the analytics store")
         hits += 1
-    if s["structured"] or s["finance"] or (not s["unstructured"] and not warehouse_need):
-        picks.append("PostgreSQL (primary transactional store)")
-        if s["structured"] or s["finance"]:
+    # Team-skill RDBMS choice: a SINGLE relational store, not "Postgres AND MySQL AND Oracle"
+    # stacked as if all are primary at once — pick whichever specific one the team already knows
+    # (fixed check order, since a team realistically names one; Postgres stays the fallback).
+    # This whole block, and the `not mongoMentioned` guard below, existed only in index.html: a
+    # requirement naming an existing MongoDB estate got MongoDB alone in the browser and
+    # "PostgreSQL · MongoDB" from the backend.
+    rdbms_name, rdbms_skill_note = "PostgreSQL", ""
+    if s["mysqlMentioned"]:
+        rdbms_name, rdbms_skill_note = "MySQL", " — matches your team's existing MySQL experience"
+    elif s["sqlServerMentioned"]:
+        rdbms_name, rdbms_skill_note = "Microsoft SQL Server", " — matches your team's existing SQL Server experience"
+    elif s["oracleDbMentioned"]:
+        rdbms_name, rdbms_skill_note = "Oracle Database", " — matches your team's existing Oracle experience"
+    rdbms_skill_hit = s["mysqlMentioned"] or s["sqlServerMentioned"] or s["oracleDbMentioned"]
+
+    if (s["structured"] or s["finance"] or s["postgresMentioned"] or rdbms_skill_hit
+            or (not s["unstructured"] and not warehouse_need and not s["mongoMentioned"])):
+        picks.append(f"{rdbms_name} (primary transactional store){rdbms_skill_note}")
+        if s["structured"] or s["finance"] or s["postgresMentioned"] or rdbms_skill_hit:
             hits += 1
-    if s["unstructured"] or s["chatbot"] or s["ragNeed"]:
+    if s["unstructured"] or s["chatbot"] or s["ragNeed"] or s["mongoMentioned"]:
         picks.append("MongoDB (flexible schema for content, chat history, documents)")
-        if s["unstructured"]:
+        if s["unstructured"] or s["mongoMentioned"]:
             hits += 1
     if s["iot"] or (s["highScale"] and s["dataHeavy"]):
         picks.append("Cassandra (write-heavy, high-scale, multi-region time-series/event data)")
@@ -764,19 +1111,36 @@ def pick_database(s):
     why = (
         "Your workload reads as analytics/ETL/reporting-centric rather than transactional — a columnar cloud warehouse is built for exactly that (large scans, aggregations, BI-tool integration), which Postgres/Mongo/Cassandra are not optimized for. Add Postgres alongside it only if you also have an operational/transactional app component; add Cassandra alongside it if you also have high-volume write ingestion (e.g. IoT/event streams) feeding the warehouse."
         if warehouse_need
-        else "Postgres for relational/transactional integrity, MongoDB for flexible document data, Cassandra only when write volume and multi-region needs exceed what Postgres/Mongo comfortably handle."
+        else f"{rdbms_name} for relational/transactional integrity, MongoDB for flexible document data, Cassandra only when write volume and multi-region needs exceed what {rdbms_name}/Mongo comfortably handle."
     )
+    if s["postgresMentioned"] or s["mongoMentioned"] or rdbms_skill_hit:
+        why += " Included because your team already knows " + " and ".join(
+            [n for n in [s["postgresMentioned"] and "Postgres", s["mysqlMentioned"] and "MySQL",
+                         s["sqlServerMentioned"] and "SQL Server", s["oracleDbMentioned"] and "Oracle",
+                         s["mongoMentioned"] and "MongoDB"] if n]
+        ) + " — matching existing skills beats a theoretically-better choice on most timelines."
     if s["geospatial"]:
         why += " Geospatial note: enable the PostGIS extension on Postgres for indexed nearest-neighbor/radius queries (e.g. \"drivers within 2km\") — plain Postgres without PostGIS will do this with slow full-table scans. For a live, constantly-updating position feed specifically (a driver's current location, not trip history), treat that as ephemeral state in Redis (GEOADD/GEOSEARCH) rather than writing every position update to Postgres — same reasoning as the live-leaderboard pattern: high-frequency writes to a shared/near-shared key belong in an in-memory store, with Postgres holding the durable trip/ride record instead."
     return {"v": " · ".join(picks), "why": why, "conf": "high" if hits >= 1 else "medium"}
 
 
 def pick_containers(s):
+    if s["openshiftMentioned"]:
+        return {"v": "Docker + OpenShift (Red Hat's enterprise Kubernetes distribution)" + (", self-managed" if s["onPrem"] else ""), "why": "Your team already knows OpenShift — staying on it avoids retraining onto a different Kubernetes distribution for no real workload-driven reason, and OpenShift genuinely supports both on-prem and cloud deployment.", "conf": "high"}
     if s["onPrem"]:
         return {"v": "Docker + self-managed Kubernetes (kubeadm/Rancher/RKE2 on bare metal or VMware) — not EKS/GKE/AKS", "why": "Managed Kubernetes offerings are public-cloud services; an air-gapped/on-prem environment needs a self-managed distribution you can run entirely inside your network boundary.", "conf": "high"}
+    if s["huaweiShop"]:
+        return {"v": "Docker + Huawei Cloud CCE (Cloud Container Engine)" + (", CCE Turbo for high-throughput networking" if s["highScale"] else ""), "why": "Explicit Huawei Cloud usage detected — CCE is Huawei's managed Kubernetes offering, matching your existing cloud footprint rather than introducing a second vendor.", "conf": "high"}
     if s["startupMvp"]:
         return {"v": "Docker + managed serverless containers (Cloud Run / Fargate)", "why": "Keep container benefits without managing a Kubernetes control plane.", "conf": "high"}
-    return {"v": "Docker + Kubernetes (EKS/GKE/AKS matching chosen cloud)", "why": "Standard for portable, scalable container orchestration once team/scale justify it.", "conf": "high" if (s["enterprise"] or s["highScale"]) else "medium"}
+    why = "Standard for portable, scalable container orchestration once team/scale justify it."
+    conf = "high" if (s["enterprise"] or s["highScale"]) else "medium"
+    known = s.get("known") or {}
+    if known.get("docker") or known.get("kubernetes"):
+        names = " and ".join([n for n in [known.get("docker") and "Docker", known.get("kubernetes") and "Kubernetes"] if n])
+        why += f" Your team already knows {names} — this isn't introducing a new skillset."
+        conf = "high"
+    return {"v": "Docker + Kubernetes (EKS/GKE/AKS matching chosen cloud)", "why": why, "conf": conf}
 
 
 def pick_observability(s):
@@ -789,6 +1153,20 @@ def pick_observability(s):
         apm, why, conf = "Splunk (+ Datadog or Dynatrace for APM)", "Enterprises with heavy compliance/audit needs often standardize log management on Splunk alongside a dedicated APM tool.", "high"
     elif s["enterprise"] and s["highScale"]:
         apm, why, conf = "Dynatrace", "Strong automatic root-cause analysis (AI-assisted) valuable at large, complex enterprise scale.", "high"
+    elif s["prometheusMentioned"]:
+        apm, why, conf = "Grafana + Prometheus (OSS)", "Your team already runs Prometheus/Grafana — sticking with what they know beats introducing a new SaaS vendor and its onboarding cost.", "high"
+    elif s["datadogMentioned"]:
+        apm, why, conf = "Datadog", "Your team already has Datadog experience — matching existing familiarity over evaluating a new vendor.", "high"
+    elif s["splunkMentioned"]:
+        apm, why, conf = "Splunk (+ a dedicated APM tool for tracing/metrics)", "Your team already runs Splunk for log management — keep it and add a focused APM tool alongside rather than replacing an established platform.", "high"
+    elif s["dynatraceMentioned"]:
+        apm, why, conf = "Dynatrace", "Your team already has Dynatrace experience — matching existing familiarity over evaluating a new vendor.", "high"
+    elif s["newrelicMentioned"]:
+        apm, why, conf = "New Relic", "Your team already knows New Relic — sticking with it avoids a vendor migration with no workload-driven reason to switch.", "high"
+    elif s["elkMentioned"]:
+        apm, why, conf = "Elastic Stack (Elasticsearch + Kibana)", "Your team already runs the Elastic Stack — a solid self-hosted or Elastic Cloud log/observability platform, no need to introduce a second one.", "high"
+    elif s["huaweiShop"]:
+        apm, why, conf = "Huawei Cloud Eye (CES) + LTS (Log Tank Service)", "Explicit Huawei Cloud usage detected — Cloud Eye covers metrics/health monitoring and LTS covers centralized logging natively on Huawei Cloud, matching your existing footprint rather than adding an external SaaS vendor.", "high"
     elif s["startupMvp"]:
         apm, why, conf = "Grafana + Prometheus (OSS) or Datadog free tier", "Lower cost for a small team; upgrade to Datadog/Dynatrace as scale and budget grow.", "medium"
     return {"v": f"OpenTelemetry (instrumentation standard) + {apm}", "why": f"Instrument everything with OpenTelemetry (vendor-neutral) and ship to {apm.split(' ')[0]}. {why}", "conf": conf}
@@ -839,6 +1217,46 @@ def pick_mcp(s):
     return picks
 
 
+def pick_integration_guidance(s):
+    # Pattern #2 (omnichannel) is architecturally different from pattern #1 (chatbot-only), not
+    # a bigger version of it — the hard part isn't the model, it's a channel-routing/session-
+    # continuity layer sitting in front of one AI core. Branch the whole guidance set, not just
+    # patch individual fields, so the omnichannel case doesn't inherit chatbot-only assumptions
+    # (e.g. "one webhook route" is simply wrong once there are multiple channel adapters).
+    if s["brownfieldOmnichannel"]:
+        integration_path = (
+            {"v": "Internal channel-routing service — no public webhooks", "why": "An air-gapped/on-prem existing system has no public ingress for any channel adapter to call. The routing layer and every channel adapter it fronts (web widget, WhatsApp, email, voice/IVR) have to run inside the same network boundary — some channels (WhatsApp Business API, public voice carriers) fundamentally require internet reachability, so confirm which channels are actually in scope before committing to full air-gap for all of them."}
+            if s["onPrem"] else
+            {"v": "A channel-routing/orchestration layer in front of one shared AI core, with a distinct adapter per channel (web widget, WhatsApp Business API, email, voice/IVR)", "why": "This is the piece pattern #1 doesn't need: each channel has its own message format, delivery guarantees, and identity model (a phone number for WhatsApp, an email address, a session cookie for the widget) — the routing layer's job is normalizing all of that into one representation before it ever reaches the AI core, and translating the core's response back into each channel's native format."}
+        )
+        auth_note = "Each channel authenticates differently (WhatsApp verifies phone numbers, email has no real-time auth at all, your web widget can reuse existing session cookies) — resolve every channel's identity to the SAME internal user/session ID at the routing layer, before the AI core ever sees the request. The AI core should never need to know which channel a message arrived on to identify who's asking."
+        session_note = "This is the hardest part of pattern #2, worth calling out explicitly: session/conversation state must be keyed by the resolved internal user ID (not per-channel), so a conversation started on the web widget and continued over WhatsApp is the SAME conversation, not two. Store it centrally (one session store the routing layer and AI core both read/write), not per-channel-adapter — a per-channel session store is exactly how \"channel amnesia\" (the bot forgetting context when a user switches channels) happens in practice."
+        scope_note = (
+            "Scope what the AI core can see and do explicitly, same as pattern #1 — but also scope each CHANNEL ADAPTER's permissions independently (e.g. the email adapter shouldn't be able to trigger actions only the authenticated web-widget channel should allow), since channels carry different trust levels for the same underlying user."
+            if s["compliance"] else
+            "Give the routing layer its own scoped credentials against your existing backend, and treat each channel adapter as a separate trust boundary — a compromised WhatsApp webhook shouldn't have the same blast radius as a compromised authenticated web-widget session."
+        )
+        return {"integrationPath": integration_path, "authNote": auth_note, "sessionNote": session_note, "scopeNote": scope_note, "patternLabel": "omnichannel AI support", "patternAssumption": "This section assumes pattern #2 — omnichannel AI support across multiple channels sharing one AI core. Pattern #1 (single-channel chatbot) uses simpler, single-webhook guidance instead — you'll see that version if you pick that pattern. Event-driven notification/feedback engines and per-microservice-vs-centralized AI gateway patterns are real, different architectures — not built yet, flagged rather than force-fit into this guidance."}
+
+    integration_path = (
+        {"v": "Internal service call — no public webhook", "why": "An air-gapped/on-prem existing system has no public ingress to receive a webhook from; the chatbot service has to be deployed inside the same network boundary and called as an internal service (gRPC/REST over your private network), not integrated via an external callback URL."}
+        if s["onPrem"] else
+        {"v": "A new API route or webhook on your existing backend, calling out to the chatbot service", "why": "The chatbot doesn't need to live inside your existing application's codebase — a thin new route (e.g. POST /api/chat) that proxies to a separately-deployed chatbot service keeps the integration surface small and the two deployable independently. Avoids a large refactor of code that's already working."}
+    )
+    auth_note = (
+        "Pass your existing auth/session token through to the chatbot service on every request rather than issuing a separate credential — a second auth system is exactly the kind of surface-area growth that turns a small integration into a compliance review."
+        if (s["compliance"] or s["enterprise"]) else
+        "Reuse whatever session/auth mechanism your existing app already has — a chatbot-specific login system is unnecessary complexity for what's fundamentally a new feature on an existing account."
+    )
+    session_note = "Conversation history needs its own storage — a lightweight table/collection keyed by your existing user ID (or a signed anonymous session ID for logged-out visitors), separate from your main application data. It doesn't need to live in your primary database; a small dedicated store (even Redis with a TTL for short-lived sessions) is usually simpler than bolting new tables onto a schema you didn't design for this."
+    scope_note = (
+        "Scope what the chatbot can see and do explicitly — for a regulated existing system, the chatbot should read from a defined, reviewed subset of your data (via an API your team controls), never given direct database access. That boundary is also what makes the Guardrails section below enforceable."
+        if s["compliance"] else
+        "Give the chatbot service its own scoped API key/credentials against your existing backend — least-privilege, not the same credentials your main application uses internally."
+    )
+    return {"integrationPath": integration_path, "authNote": auth_note, "sessionNote": session_note, "scopeNote": scope_note, "patternLabel": "chatbot / conversational assistant", "patternAssumption": "This section assumes pattern #1 — a standalone chatbot bolted onto one existing application. Omnichannel AI support uses a different, channel-routing-focused version of this guidance instead — you'll see that version if you pick that pattern. Event-driven notification/feedback engines and per-microservice-vs-centralized AI gateway patterns are real, different architectures — not built yet, flagged rather than force-fit into this guidance."}
+
+
 RAG_TYPES = [
     "Naive RAG", "Retrieve-and-Rerank RAG", "Hybrid (keyword + vector) RAG", "Hierarchical / Multi-level RAG",
     "Graph RAG (knowledge-graph grounded)", "Agentic RAG (agent decides when/what to retrieve)", "Corrective RAG (CRAG, validates retrieved docs)",
@@ -885,13 +1303,47 @@ def pick_guardrails(s):
 
 
 def pick_cicd(s):
+    # Team-skill picks the actual CI platform name (a real, interchangeable choice) rather than
+    # always defaulting to GitHub Actions — same "matching skills beats a theoretically-better
+    # pick" rule as the rest of this feature. Checked in a fixed order since a team realistically
+    # names one primary CI tool; falls back to GitHub Actions absent any explicit match.
+    ci, ci_skill_hit = "GitHub Actions", False
+    if s["jenkinsMentioned"]:
+        ci, ci_skill_hit = "Jenkins", True
+    elif s["gitlabCiMentioned"]:
+        ci, ci_skill_hit = "GitLab CI", True
+    elif s["circleciMentioned"]:
+        ci, ci_skill_hit = "CircleCI", True
+    elif s["azureDevopsMentioned"]:
+        ci, ci_skill_hit = "Azure DevOps Pipelines", True
+    elif s["githubActionsMentioned"]:
+        ci_skill_hit = True
+
+    def skill_note(v):
+        # Only the tools the requirement shows OWNERSHIP of earn the "already knows" bonus.
+        k = s.get("known") or {}
+        known_ci = ci_skill_hit and (k.get("jenkins") or k.get("gitlabCi") or k.get("circleci")
+                                     or k.get("azureDevops") or k.get("githubActions"))
+        known = [n for n in [known_ci and ci, k.get("terraform") and "Terraform"] if n]
+        if not known:
+            return v
+        return {"v": v["v"],
+                "why": v["why"] + f" Bonus: your team already knows {' and '.join(known)}, so this "
+                                  "isn't just the balanced default — it matches existing skills too.",
+                "conf": "high" if v["conf"] == "high" else "medium"}
+
     if s["onPrem"]:
-        return {"v": "Self-hosted GitLab CE or Jenkins with self-hosted runners, deploying via Terraform to your private infrastructure", "why": "Cloud-hosted CI/CD (GitHub Actions cloud runners, Vercel) needs internet connectivity to reach your infrastructure — an air-gapped environment needs the entire pipeline, including runners, inside the network boundary.", "conf": "high"}
+        # Air-gapped runners must be self-hosted regardless — but still honor a named team-known
+        # tool over the generic "GitLab CE or Jenkins either-or" phrasing when one was stated.
+        on_prem_ci = "Jenkins" if s["jenkinsMentioned"] else "GitLab CE" if s["gitlabCiMentioned"] else "GitLab CE or Jenkins"
+        return {"v": f"Self-hosted {on_prem_ci} with self-hosted runners, deploying via Terraform to your private infrastructure", "why": "Cloud-hosted CI/CD (GitHub Actions cloud runners, Vercel) needs internet connectivity to reach your infrastructure — an air-gapped environment needs the entire pipeline, including runners, inside the network boundary.", "conf": "high"}
+    if s["huaweiShop"]:
+        return skill_note({"v": "Huawei Cloud CodeArts (Pipeline, Build, Deploy) → CCE, Resource Template Service (RTS) for infra-as-code", "why": "Explicit Huawei Cloud usage detected — CodeArts is Huawei's native CI/CD suite (covers what GitHub Actions/Jenkins + Terraform would do, in one integrated toolchain), matching your existing cloud footprint.", "conf": "high"})
     if s["startupMvp"]:
-        return {"v": "GitHub Actions → Vercel (frontend) + Cloud Run/Fargate (backend)", "why": "Fastest path to production for a small team, minimal infra to manage.", "conf": "high"}
+        return skill_note({"v": f"{ci} → Vercel (frontend) + Cloud Run/Fargate (backend)", "why": "Fastest path to production for a small team, minimal infra to manage.", "conf": "high"})
     if s["enterprise"]:
-        return {"v": "GitHub Actions/GitLab CI → ArgoCD (GitOps) → Kubernetes, Terraform for infra-as-code", "why": "GitOps gives auditable, repeatable deployments at enterprise scale with multiple environments/teams.", "conf": "high"}
-    return {"v": "GitHub Actions → Terraform + Kubernetes (or Vercel for frontend-only pieces)", "why": "Balanced CI/CD with infra-as-code as the team and service count grow.", "conf": "low"}
+        return skill_note({"v": f"{ci} → ArgoCD (GitOps) → Kubernetes, Terraform for infra-as-code", "why": "GitOps gives auditable, repeatable deployments at enterprise scale with multiple environments/teams.", "conf": "high"})
+    return skill_note({"v": f"{ci} → Terraform + Kubernetes (or Vercel for frontend-only pieces)", "why": "Balanced CI/CD with infra-as-code as the team and service count grow.", "conf": "low"})
 
 
 def pick_dns(s):
@@ -899,6 +1351,8 @@ def pick_dns(s):
         return {"v": "Internal DNS (BIND / Windows DNS / private zone) — no public DNS provider", "conf": "high"}
     if s["awsShop"]:
         return {"v": "Route 53 (AWS-native, integrates with ALB/CloudFront)", "conf": "high"}
+    if s["huaweiShop"]:
+        return {"v": "Huawei Cloud DNS (native, integrates with ELB and CDN)", "conf": "high"}
     return {"v": "Cloudflare DNS (fast propagation, built-in DDoS/WAF) — or Route 53 if fully AWS-native", "conf": "low"}
 
 
@@ -1299,6 +1753,23 @@ def pick_cost_estimate(s, ctx=None):
 
 
 def pick_concurrency(s):
+    # A stated numeric target is the binding constraint for this section, so it leads and is
+    # quoted verbatim. detect_signals() parsed no numbers at all before, so an explicit
+    # "in under three seconds" contributed nothing and the reader got generic latency advice.
+    lt = s.get("latencyTarget")
+    _lead = []
+    if lt:
+        if lt["ms"] >= 1000:
+            budget = (f"Budget it explicitly end-to-end: retrieval, model generation and any tool "
+                      f"calls all have to fit inside {lt['ms'] / 1000}s together, not each.")
+        else:
+            budget = (f"At {lt['ms']}ms end-to-end there is no room for a synchronous LLM call in the "
+                      f"request path — serve from cache/precomputed results, or return async and stream.")
+        _lead.append({"t": f"Meet your stated target: {lt['text']} end-to-end",
+                      "w": f'You specified "{lt["text"]}", so treat it as this section\'s acceptance '
+                           f"criterion rather than a general aspiration. {budget} Measure at P95 against "
+                           f"the full user-visible path, not per-component averages — component budgets "
+                           f"that each look fine routinely add up past the target."})
     items = [
         {"t": "Async, non-blocking I/O throughout the request path", "w": "Blocking calls (especially to LLMs or external APIs) are the most common throughput killer — async lets one instance serve many concurrent requests."},
         {"t": "Connection pooling for database and external API clients", "w": "Avoids connection-setup overhead becoming the bottleneck under concurrent load."},
@@ -1313,7 +1784,7 @@ def pick_concurrency(s):
         items.append({"t": "Stream LLM responses (SSE/WebSocket) instead of waiting for full completion", "w": "Improves perceived latency and lets clients start rendering before generation finishes — important under concurrent chat load."})
     if s["agentic"]:
         items.append({"t": "Circuit breakers and timeouts on every external tool call inside agent loops", "w": "One slow tool call in a multi-step agent workflow shouldn't be able to hang the whole request."})
-    return items
+    return _lead + items
 
 
 def pick_governance(s):
@@ -1349,6 +1820,91 @@ def pick_governance(s):
 
 
 # ---------- Top-level entry point ----------
+
+
+def apply_exclusions(rec: dict, s: dict) -> dict:
+    """Mirrors index.html's applyExclusions(): overwrite picks the user explicitly ruled out.
+
+    Applied at the one place every category is in scope rather than threading a guard through 47
+    pick functions — one auditable list, and a new category cannot silently miss the check.
+    """
+    ex = (s or {}).get("excluded") or {}
+
+    # Kubernetes is a DOWNGRADE, not a removal: ruling out Kubernetes is not ruling out containers.
+    if ex.get("kubernetes") and not ex.get("containers"):
+        rec["containers"] = {
+            "v": "Docker + managed serverless containers (Cloud Run / Fargate / Container Apps) — not Kubernetes",
+            "conf": "high", "excluded": True,
+            "why": "You ruled out Kubernetes, so this is the container story without a control plane "
+                   "to run: the same images on a managed serverless-container runtime. If you also "
+                   "want to avoid containers entirely, say so and this drops to plain VM/PaaS deployment."}
+    if ex.get("containers"):
+        rec["containers"] = excluded_pick("containers")
+    if ex.get("microservices"):
+        rec["architecture"] = {
+            "v": "Modular monolith (single deployable, module boundaries enforced in-code)",
+            "conf": "high", "excluded": True,
+            "why": "You ruled out microservices. A modular monolith keeps the bounded-context "
+                   "discipline — clear module seams, no cross-module database access — without the "
+                   "distributed-systems cost, and remains the migration path if you change your mind."}
+    if ex.get("messaging"):
+        rec["messaging"] = excluded_pick("messaging/streaming")
+    if ex.get("cache"):
+        rec["cache"] = excluded_pick("caching")
+    if ex.get("database"):
+        rec["database"] = excluded_pick("a database")
+    if ex.get("cloud"):
+        rec["cloud"] = excluded_pick("cloud hosting")
+    if ex.get("frontend"):
+        rec["frontend"] = excluded_pick("a web/mobile frontend")
+    if ex.get("mesh"):
+        rec["mesh"] = excluded_pick("a service mesh")
+    if ex.get("iam"):
+        rec["iam"] = excluded_pick("a managed identity provider")
+    if ex.get("observability"):
+        rec["observability"] = excluded_pick("an observability vendor")
+
+    # rag/llm carry different shapes from the {v, why, conf} cards.
+    if ex.get("rag"):
+        rec["rag"] = {"name": "Not recommended — you excluded RAG", "conf": "high", "excluded": True,
+                      "why": "You ruled out retrieval-augmented generation, so no retrieval pattern is recommended."}
+        rec["vector_db_placement"] = dict(rec.get("vector_db_placement") or {}, needed=False, excluded=True,
+                                          dbChoice="Not required — RAG excluded",
+                                          why="No vector database is needed because retrieval itself was ruled out.")
+    if ex.get("llm"):
+        rec["llm"] = [{"name": "Not recommended — you excluded LLMs", "tag": "excluded by requirement"}]
+
+    # Vendor comparisons are computed from the PRE-exclusion picks, so without this an excluded
+    # category still ships a live vendor recommendation — cloud="you excluded cloud hosting"
+    # alongside cloud_vendor={"v": "AWS"}. Mark them suppressed rather than deleting the key, so
+    # an MCP client sees WHY the comparison is absent instead of a missing field.
+    def _suppress(key):
+        if rec.get(key):
+            rec[key] = dict(rec[key], suppressed=True,
+                            why="Suppressed — this category was excluded by the requirement, so a "
+                                "vendor comparison for it would contradict the recommendation.")
+
+    if ex.get("cloud"):
+        _suppress("cloud_vendor")
+    if ex.get("containers") or ex.get("kubernetes"):
+        _suppress("orchestrator_vendor")
+    if ex.get("database"):
+        _suppress("database_vendor")
+    if ex.get("messaging"):
+        _suppress("messaging_vendor")
+    if ex.get("observability"):
+        _suppress("observability_vendor")
+    if ex.get("frontend"):
+        _suppress("frontend_vendor")
+    if ex.get("llm"):
+        _suppress("llm_provider_vendor")
+    if ex.get("rag") or ex.get("llm"):
+        _suppress("vector_db_vendor")
+    if ex.get("serverless"):
+        _suppress("compute_platform_vendor")
+    if ex.get("api"):
+        _suppress("gateway_vendor")
+    return rec
 
 
 def recommend_stack(requirement_text: str) -> dict:
@@ -1390,11 +1946,13 @@ def recommend_stack(requirement_text: str) -> dict:
         "frontend": fe,
         "cicd": cicd,
         "dns": pick_dns(s),
+        "hybrid_connectivity": pick_hybrid_connectivity(s, cloud),
         "docs": pick_docs(s),
         "llm": llm,
         "mcp_servers": pick_mcp(s),
         "rag": rag,
         "guardrails": pick_guardrails(s),
+        "integration_guidance": pick_integration_guidance(s),
         "cost_optimization": pick_cost_optimization(s),
         "cost_estimate": pick_cost_estimate(s, {"hosting": hosting}),
         "concurrency": pick_concurrency(s),
@@ -1422,5 +1980,7 @@ def recommend_stack(requirement_text: str) -> dict:
         "observability_vendor": pick_observability_vendor(s, obs),
         "frontend_vendor": pick_frontend_vendor(s, fe),
     }
+
+    apply_exclusions(recommendations, s)
 
     return {"signals": s, "recommendations": recommendations}

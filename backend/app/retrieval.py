@@ -146,21 +146,29 @@ logger = logging.getLogger(__name__)
 
 KB_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "docs", "use-case-knowledge-base")
 
-# The 11 domain/methodology docs — excludes 00-INDEX (meta, not retrievable content) and the
-# eval-set/prototype files in the same directory. Mirrors DOC_FILES in retrieval_prototype.py.
-DOC_FILES = [
-    "01-realtime-collaborative-editing.md",
-    "02-video-audio-conferencing.md",
-    "03-micro-frontend-architecture.md",
-    "04-event-driven-distributed-transactions.md",
-    "05-multi-tenant-saas.md",
-    "06-two-sided-marketplace.md",
-    "07-ml-feature-store-and-model-serving.md",
-    "08-search-and-recommendation-engine.md",
-    "09-cost-estimation-methodology.md",
-    "10-hexagonal-intraservice-code-organization.md",
-    "11-semantic-routing-guardrail-service.md",
-]
+# The corpus is DISCOVERED, not enumerated. It used to be a hardcoded list, which made the corpus
+# directory and the actual corpus two different things: adding a domain document to
+# docs/use-case-knowledge-base/ indexed nothing and failed silently — no error, no warning, just a
+# document that could never be retrieved. That is exactly what happened when documents 12-14 were
+# contributed, and it is the same duplicated-source-of-truth shape this project has been bitten by
+# elsewhere (see backend/tests/test_engine_differential.py).
+#
+# Numbered `NN-*.md` files from 01 upward are domain/methodology content. 00-INDEX is meta, and the
+# eval-set/prototype/JSON files in the same directory are tooling — both are excluded by the
+# pattern rather than by name, so a new document is indexed by existing and a new tooling file
+# cannot accidentally become corpus.
+DOC_PATTERN = re.compile(r"^(?!00-)\d{2}-.+\.md$")
+
+
+def _discover_doc_files() -> list[str]:
+    try:
+        names = os.listdir(KB_DIR)
+    except OSError:
+        return []
+    return sorted(n for n in names if DOC_PATTERN.match(n))
+
+
+DOC_FILES = _discover_doc_files()
 
 # Headers whose content is routing metadata, never citable answer content — see module
 # docstring. Matched case-insensitively against the chunk's header text.

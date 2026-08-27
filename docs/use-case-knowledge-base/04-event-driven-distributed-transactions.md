@@ -1,5 +1,7 @@
 # Event-Driven Distributed Transactions (Saga / CQRS)
 
+**Status:** implemented — wired into `pickTradeoffs()` via the `sagaWorkflow` signal.
+
 **Domain:** Multi-step workflows spanning separate services/databases with no single ACID
 transaction — the classic e-commerce checkout/order-fulfillment case (reserve inventory → charge
 payment → book shipping). Research date: August 2026.

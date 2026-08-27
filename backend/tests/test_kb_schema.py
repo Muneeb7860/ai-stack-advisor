@@ -4,10 +4,11 @@ Contract tests for stackKbData schema, technology catalog integrity, and zero-dr
 import json
 import re
 import shutil
-import subprocess
 from pathlib import Path
 
 import pytest
+
+from tests.node_harness import run_node_json
 
 INDEX_HTML = Path(__file__).resolve().parents[2] / "index.html"
 
@@ -160,9 +161,7 @@ def test_runtime_detect_signals_matches_signal_keywords():
 
     console.log(JSON.stringify(results));
     """
-    proc = subprocess.run(["node", "-e", node_harness], capture_output=True, text=True, timeout=30)
-    assert proc.returncode == 0, f"Node execution failed:\n{proc.stderr}"
-    results = json.loads(proc.stdout)
+    results = run_node_json(node_harness)
     for r in results:
         assert r["matches"] is True, f"Signal detection failed on: {r['text']}, detail: {r['sigs']}"
 
@@ -222,9 +221,7 @@ def test_runtime_custom_kb_overlay():
       hasCustom
     }}));
     """
-    proc = subprocess.run(["node", "-e", node_harness], capture_output=True, text=True, timeout=30)
-    assert proc.returncode == 0, f"Node execution failed:\n{proc.stderr}"
-    res = json.loads(proc.stdout)
+    res = run_node_json(node_harness)
     assert res["initialCount"] == 1
     assert res["mergedCount"] == 2
     assert res["hasCustom"] is True

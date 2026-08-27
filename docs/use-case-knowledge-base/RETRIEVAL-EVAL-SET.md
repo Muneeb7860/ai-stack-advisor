@@ -108,3 +108,38 @@ not something to discover the first time a user asks an out-of-scope question.
 
 Re-run this set any time a new document is added to the corpus (a new doc can start winning queries
 it shouldn't) or the embedding/retrieval model changes.
+
+---
+
+## Addendum — cases 22–27, and one reclassification (documents 12–14 pass)
+
+Six cases were added when `12-secure-delivery-pipeline.md`,
+`13-private-network-egress-control.md` and `14-request-path-layer-ordering.md` joined the corpus.
+
+| # | Section | Why it exists |
+|---|---|---|
+| 22 | direct | "Does our data leave the network when we call an LLM?" — the question that most often decides whether a regulated buyer can approve an AI feature at all. |
+| 23 | anti_pattern | "Can a pod open an arbitrary internet connection?" — the "is X okay?" shape, against default-allow egress. |
+| 24 | direct | Gateway-before-or-after-load-balancer: an ordering question the flat 16-card output cannot answer. |
+| 25 | anti_pattern | Analytics off the transactional database. **Added because it initially mis-routed** — see below. |
+| 26 | boundary | Kubernetes *and* serverless containers together — tests the mutual-exclusion framing. |
+| 27 | direct | Segregation of duties for production deploys — audit-shaped, unanticipatable by the rule set. |
+
+**Case 20 was reclassified from `negative_control` to `direct`.** Its original note read: *"Covered
+in docs/alternatives-research/04-devops-frontend-cicd-observability-frameworks.md, a different
+corpus not part of this eval set."* That was accurate when written and is no longer true — document
+12 covers pipeline security gates, GitOps promotion and progressive delivery directly, so retrieving
+for "How do we set up CI/CD for our Kubernetes deployments?" is now correct behaviour rather than a
+missing relevance threshold. The case was kept and re-pointed rather than deleted, so the corpus
+change is recorded where someone reading the eval set will actually see it.
+
+**Why case 25 is the most useful of the six.** The query first routed to document 13 instead of 14.
+The content answering it was in 14 all along — but 14's `Signals / triggers` section carried no
+analytics vocabulary, and per §2 of the ingestion guide, Signals are what the first-stage routing
+pass matches against. Content with no signal coverage is unreachable no matter how well written it
+is. The fix was to the Signals section, not to the prose, and case 25 locks that in.
+
+The same audit found `09-cost-estimation-methodology.md` and
+`10-hexagonal-intraservice-code-organization.md` had **no Signals section at all** — reachable only
+by accidental content overlap since they were written. Both now have one, verified to route
+correctly, with no change to any pre-existing case.

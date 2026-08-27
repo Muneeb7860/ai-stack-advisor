@@ -11,12 +11,12 @@ existing pattern used by Service Mesh/DNS/etc — the card always appears in the
 The canonical-graph NODE, by contrast, IS conditional (like rag/vectordb) — it
 only appears in Flow View / exports when there's a real hybrid-connectivity need.
 """
-import json
 import shutil
-import subprocess
 from pathlib import Path
 
 import pytest
+
+from tests.node_harness import run_node_json
 
 INDEX_HTML = Path(__file__).resolve().parents[2] / "index.html"
 NODE_AVAILABLE = shutil.which("node") is not None
@@ -78,9 +78,7 @@ def scenarios():
     source = INDEX_HTML.read_text(encoding="utf-8")
     script = _extract_main_script(source)
     node_script = _HARNESS % {"script": script}
-    proc = subprocess.run(["node", "-e", node_script], capture_output=True, text=True, timeout=30)
-    assert proc.returncode == 0, f"Node execution failed:\n{proc.stderr}"
-    return json.loads(proc.stdout)
+    return run_node_json(node_script)
 
 
 @requires_node

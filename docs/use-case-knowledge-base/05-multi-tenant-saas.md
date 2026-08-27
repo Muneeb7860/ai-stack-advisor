@@ -1,5 +1,7 @@
 # Multi-Tenant SaaS
 
+**Status:** implemented — wired into `pickTradeoffs()` via the `multiTenant` signal.
+
 **Domain:** One codebase and shared infrastructure serving many customer organizations
 ("tenants"), each with data and users that must never be visible to another tenant. Research date:
 August 2026.

@@ -41,13 +41,30 @@ uvicorn app.main:app --reload
 ## Running tests
 
 ```bash
-# needs the same live Postgres as above
-pytest tests/ -v
+# `python -m pytest`, not bare `pytest` — the suite imports `app.*`, which needs the backend/
+# directory on sys.path; bare `pytest` fails in conftest.py with ModuleNotFoundError.
+# No live Postgres needed: tests/conftest.py falls back to in-memory SQLite (see its docstring).
+python -m pytest tests/ -v
 ```
 
-100 tests currently (99 passing, 1 xfailed by design — see `test_retrieval_eval.py` below for
-the retrieval eval's own count and why it changed across the TF-IDF -> pure-embeddings ->
-hybrid-RRF history):
+Two environment-gated groups skip themselves rather than failing when their dependency is
+absent, so the counts differ by machine:
+
+| Environment | Result |
+|---|---|
+| Ollama running (`ollama serve` + `ollama pull nomic-embed-text`) | 158 passed, 1 xfailed |
+| No Ollama (and what CI runs) | 133 passed, 26 skipped |
+
+The 26 are the retrieval eval plus two grounding-context tests — they embed against the local
+Ollama daemon, so without it they would fail on missing infrastructure rather than on retrieval
+quality (see `tests/ollama_gate.py`). **CI therefore does not enforce retrieval quality** — run
+the suite locally against a live Ollama before changing `app/retrieval.py`. Node.js is the other
+gate: `test_architecture_contracts.py`'s runtime tests skip without it, which is why
+`.github/workflows/ci.yml` installs Node and verifies it on PATH.
+
+Per-file breakdown (counts as of the parity-gate commit; 1 xfailed by design — see
+`test_retrieval_eval.py` below for the retrieval eval's own count and why it changed across the
+TF-IDF -> pure-embeddings -> hybrid-RRF history):
 - `test_guided_synthesis.py` (7): validates `index.html`'s guided-mode wizard synthesis
   (`synthesizeRequirementText()`) via a Python mirror, verified byte-for-byte against the real
   JS before being trusted — 7 scenarios covering every wizard branch including the skip-logic

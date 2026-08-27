@@ -1,5 +1,7 @@
 # Hexagonal (Ports & Adapters) — Intra-Service Code Organization
 
+**Status:** implemented — `pickArchitecture()` appends its `hexagonalNote` to every branch.
+
 **Domain:** How a single service's codebase is internally organized around hexagonal/ports-and-
 adapters principles — one level deeper than the system-level "monolith vs. microservices, hexagonal
 internal structure" decision the tool already makes in `pickArchitecture()`. Research date:
@@ -14,6 +16,15 @@ what that looks like inside one service's folder structure. This gap surfaced di
 user's own prior-project repository blueprint shared during this session, which named multiple
 Java Spring Boot services with an implied hexagonal-core structure — this document makes that
 structure explicit instead of leaving it implicit in the system-level recommendation.
+
+## Signals / triggers
+
+Pattern names: `hexagonal architecture`, `ports and adapters`, `clean architecture`, `onion
+architecture`, `domain-driven design`, `DDD`. Code organisation: `folder structure`, `project
+layout`, `how should we structure the code`, `where does business logic go`, `package by feature`,
+`package by layer`, `separation of concerns`. Symptoms: `business logic in the controller`,
+`framework coupling`, `hard to test`, `database logic everywhere`, `swap the database`, `mock the
+repository`, `testable without a database`.
 
 ## The pattern
 

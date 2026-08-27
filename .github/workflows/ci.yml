@@ -1,0 +1,64 @@
+# Backend test suite — the enforcement layer for the invariants the repo already tests for.
+#
+# Until this existed, every test in backend/tests/ (the hexagonal-architecture contracts, the
+# JS<->Python rule-engine parity gate, the KB schema checks) only ran when someone remembered
+# to run pytest locally. That is how pickHybridConnectivity/pickIntegrationGuidance shipped in
+# index.html without their Python counterparts and stayed that way through several commits.
+#
+# Two deliberate environment choices, both of which change what actually gets enforced here:
+#
+#   Python 3.12 — matches backend/Dockerfile's `FROM python:3.12-slim`, so CI tests the
+#   interpreter production runs, not whatever a contributor has locally.
+#
+#   Node.js IS installed — test_architecture_contracts.py's runtime tests (the ones that
+#   actually execute index.html's canonical-graph builder and validate the Draw.io/SVG/Mermaid
+#   adapter output) self-skip via `shutil.which("node")`. Without Node here, the hexagon
+#   contract would appear green while its 7 strongest assertions silently never ran.
+#
+# Known coverage gap, stated rather than hidden: no Ollama daemon runs here, so the 26 tests
+# guarded by tests/ollama_gate.py (the retrieval eval + two grounding-context tests) SKIP.
+# Retrieval quality is not enforced by CI — run those locally against `ollama serve` before
+# changing app/retrieval.py. `-rs` below prints every skip with its reason so that gap stays
+# visible in the log instead of hiding inside a green check.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  backend-tests:
+    name: Backend suite (Python 3.12)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      # Required, not optional: without it the hexagon runtime tests skip themselves.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Verify Node is on PATH
+        # Fails loudly here rather than letting test_architecture_contracts.py's requires_node
+        # quietly drop its runtime assertions from the run.
+        run: node --version
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests
+        working-directory: backend
+        # No live Postgres: tests/conftest.py falls back to in-memory SQLite by design.
+        run: python -m pytest tests/ -v -rs

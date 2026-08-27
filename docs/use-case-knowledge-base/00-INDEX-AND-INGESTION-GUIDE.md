@@ -68,6 +68,48 @@ sourced tool is trying to avoid in the first place.
   claim from this corpus, it should be able to cite the source, matching the citation discipline
   already used in `market-analysis.md` and the `docs/alternatives-research/` files.
 
+## 2b. Two conventions that exist because retrieval broke without them
+
+### Canonical rules are stated verbatim in every document that touches them — never cross-referenced
+
+A prose cross-reference (`see 14-request-path-layer-ordering.md §E`) has **zero retrieval effect**.
+Routing scores documents on their `Signals / triggers` + preamble only (see `app/retrieval.py`'s
+two-stage design), so a pointer buried in a content chunk is read by humans and by nothing else.
+Measured directly: a query spanning `13-private-network-egress-control.md` and
+`14-request-path-layer-ordering.md` — the one pair joined by a cross-reference — returned **only
+document 13**, while topically-distinct pairs (12+13, 12+14) both returned two documents. The
+cross-reference did not pull its target in; it never could.
+
+The consequence is worse than a missing hit. If a principle is split across two documents and only
+one is retrieved, `/api/ask` answers with half a rule and no indication that the other half exists —
+which is how a corpus produces two contradictory answers to the same question depending on phrasing.
+
+So: where two documents share a rule, **both state the rule in full, verbatim**, and
+`backend/tests/test_kb_corpus.py` asserts the shared sentence is byte-identical across them. This is
+deliberate duplication with a gate on it, which is the same trade this project makes for the two
+rule engines (`test_engine_differential.py`) and the two provenance maps (`buildExplicitMap()`) —
+duplication is acceptable when something fails loudly the moment the copies diverge.
+
+Canonical rules currently registered (see `CANONICAL_RULES` in `test_kb_corpus.py`):
+
+| Rule | Stated in |
+|---|---|
+| One backend per signal class — never two backends for the same signal. | `14`, `15` |
+
+### `Status:` declares implemented vs. target design
+
+Every domain document carries a `**Status:**` line directly under its title, with one of:
+
+- `implemented` — the reasoning is live in `index.html`'s rule engine today.
+- `partial` — some of it is live; the line says which part is not.
+- `target design` — nothing of it is implemented; this is what the engine *should* reason about.
+
+This exists for the same reason the Sources sections list unsourced claims: a corpus that cannot
+distinguish what a system does from what its author thinks it should do will state aspirations as
+facts. `/api/ask` answering "yes, the tool handles that" about target design is a worse failure than
+not answering. The status is a parseable field rather than prose so the distinction can be enforced
+and, later, surfaced in a citation.
+
 ## 3. Domain index
 
 | # | File | Domain | Extends rule-engine coverage? |
@@ -83,8 +125,24 @@ sourced tool is trying to avoid in the first place.
 | 9 | `09-cost-estimation-methodology.md` | Directional monthly cost estimate methodology (compute/database/LLM API bands) — sourcing for `pickCostEstimate()` | Yes — new "Directional monthly cost estimate" block in the Cost section |
 | 10 | `10-hexagonal-intraservice-code-organization.md` | Ports & adapters folder structure within one service — one level deeper than the system-level hexagonal pick | Yes — `pickArchitecture()`'s `hexagonalNote` |
 | 11 | `11-semantic-routing-guardrail-service.md` | Dedicated AI-gateway pattern for LLM routing + centralized guardrails, distinct from the guardrails vendor comparison | Yes — new trade-off card |
+| 12 | `12-secure-delivery-pipeline.md` | CI security gates (secrets/SAST/SCA/image scan/sign+SBOM), GitOps promotion, progressive delivery, admission control | No — `pickCICD()` picks a CI product, nothing reasons about pipeline controls |
+| 13 | `13-private-network-egress-control.md` | Private endpoints vs. one audited egress path; single public entry; private model endpoints for regulated AI | No — `pickHybridConnectivity()` covers on-prem↔cloud links, not in-cloud network boundary |
+| 14 | `14-request-path-layer-ordering.md` | Layer order (DNS→edge→LB→gateway→platform), and which boxes are mutually exclusive alternatives | Partial — tiers exist in the canonical graph; ordering and exclusivity are not surfaced |
+| 15 | `15-observability-and-audit-logging.md` | Signal classes and one-backend-per-class, alerting on SLO burn rate, async trace propagation, and audit logging as a separate immutable pipeline | No — `pickObservability()` picks an APM vendor and reasons about nothing else |
+| 16 | `16-testing-strategy-and-environments.md` | Functional test pyramid, the four named performance-test types, three test-data strategies (masked/synthetic/subsetted), DR-as-evidence | No — `pickCICD()` reasons about deployment shape only; nothing reasons about test taxonomy or test data |
+| 17 | `17-multi-cloud-bridging.md` | Constraint-first framing for a split-provider architecture, three cross-cloud bridging mechanisms, workload identity federation, cache-locally/cross-async latency mitigation | No — `pickCloud()` is structurally single-answer; `pickHybridConnectivity()` covers on-prem↔one-cloud, not cloud↔cloud |
 
-Each of the 8 was chosen because the existing rule engine had **zero coverage** for it before this
+Documents 12–14 were contributed later, from reference architectures authored by the project owner
+for a BFSI architecture review (the source SVGs are committed at
+`diagrams/reference-architecture/`), joined later by document 15 from the same source. They are the first entries in this corpus that are **not**
+web-researched: their primary source is that author's own design work, and each one's Sources
+section says so explicitly and lists the specific claims that still need external citation before
+`/api/ask` repeats them as fact rather than as design guidance. They were added because they cover
+three questions the corpus could not answer at all — what has to happen inside a delivery pipeline
+for a regulated buyer to accept it, whether an LLM call leaves the network, and what order the
+layers actually go in.
+
+Each of the original 8 was chosen because the existing rule engine had **zero coverage** for it before this
 research pass — confirmed by testing representative requirement text against the live tool and
 finding no dedicated reasoning, only generic fallback branches. This list is not exhaustive of every
 possible architecture pattern; it's the set of gaps that surfaced from (a) the user's own prior-project
@@ -105,7 +163,7 @@ shared-schema multi-tenancy") is sourced in that document's Sources section.
 
 Everything above describes what the corpus *should* do once retrieved — it says nothing about
 whether retrieval actually works. `RETRIEVAL-EVAL-SET.md` (+ `eval_cases.json` +
-`test_retrieval_eval.py` in this same folder) is a 21-case eval set built specifically to catch
+`test_retrieval_eval.py` in this same folder) is a 27-case eval set built specifically to catch
 retrieval bugs before they reach a user: wrong-document matches, anti-pattern sections that don't
 surface for "is X okay?" phrasing, cross-document queries that only return one hit, and — just as
 important — out-of-scope queries that shouldn't return a confident match at all but do anyway

@@ -1,0 +1,30 @@
+{
+  "_comment": "Requirements exercised against BOTH rule engines by test_engine_differential.py. Add a case here whenever a bug is found in one engine — the corpus is the cheapest place to pin cross-engine behaviour. Each string should exercise a distinct branch family.",
+  "requirements": [
+    "A fintech payments platform, high traffic, PCI compliance, real-time fraud detection.",
+    "Early-stage startup, 3 engineers, MVP web app, budget conscious, serverless.",
+    "Government defense contractor, air-gapped, cannot use any public cloud, team of 20.",
+    "We run our own servers in-house and cannot move to cloud.",
+    "Internal knowledge assistant with RAG over Confluence, enterprise, SOC2, 6 engineers, 4 month timeline.",
+    "Live multiplayer quiz app with leaderboards for millions of users.",
+    "Nightly ETL batch jobs into a data lake with BI dashboards. No transactional app.",
+    "Healthcare telemedicine platform, HIPAA, patient records, video visits.",
+    "We use Python, Azure and PostgreSQL. Build us a web app.",
+    "Enterprise platform, large organization, high traffic. We must not use Kubernetes.",
+    "I only need a heart-disease model in a Jupyter Notebook. No website, no API, no database.",
+    "A simple static website. No sessions and no caching needed.",
+    "We need not only a website but also a mobile app for field technicians.",
+    "We don't use Kubernetes today.",
+    "We run Kubernetes and Datadog in production today for our enterprise platform.",
+    "Omnichannel AI support across web widget, WhatsApp and email for our existing billing app.",
+    "IoT fleet telemetry, 10k concurrent connections, time-series data, multi-region.",
+    "Hybrid on-prem and cloud with a dedicated link to AWS.",
+    "Huawei Cloud shop building an e-commerce recommendation engine.",
+    "A trading gateway with p95 below 200ms and 500 concurrent users.",
+    "Social feed with fan-out to followers at high scale.",
+    "We use OpenShift and Jenkins on-premises with Splunk for logging.",
+    "Agentic workflow automation for a regulated bank, needs tool use and audit logging.",
+    "Retain audit logs for 12 months and launch within 6 months.",
+    "A GCP shop with an existing MongoDB estate building a document search assistant."
+  ]
+}

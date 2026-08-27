@@ -7,13 +7,13 @@ HexagonalArchitectureTest.java: it reads index.html as text and asserts the core
 domain function stays pure, and that outbound adapters consume the canonical graph
 rather than re-deriving their own reduced topology.
 """
-import json
 import re
 import shutil
-import subprocess
 from pathlib import Path
 
 import pytest
+
+from tests.node_harness import run_node_json
 
 INDEX_HTML = Path(__file__).resolve().parents[2] / "index.html"
 
@@ -191,11 +191,7 @@ def js_runtime_result():
     source = _read_source()
     script = _extract_main_script(source)
     node_script = _NODE_HARNESS_TEMPLATE % {"script": script}
-    proc = subprocess.run(
-        ["node", "-e", node_script], capture_output=True, text=True, timeout=30
-    )
-    assert proc.returncode == 0, f"Node execution failed:\n{proc.stderr}"
-    return json.loads(proc.stdout)
+    return run_node_json(node_script)
 
 
 @requires_node
@@ -270,3 +266,23 @@ def test_runtime_mermaid_subgraphs_and_edges(js_runtime_result):
     for tier in ["client", "edge", "compute", "data", "ai", "ops"]:
         assert f"subgraph {tier}Tier" in mermaid, f"missing {tier}Tier subgraph"
     assert "-->" in mermaid, "expected at least one topological edge"
+
+
+def test_no_test_invokes_node_with_inline_script():
+    """Regression guard for the CI-only failure that adding .github/workflows/ci.yml surfaced.
+
+    `node -e <script>` passes the harness as a single argv entry, and Linux caps one entry at
+    MAX_ARG_STRLEN (128 KiB) — index.html's main <script> block is several times that, so every
+    JS-runtime test in this suite raised OSError [Errno 7] on ubuntu-latest while passing on
+    macOS, which has no such per-argument cap. Use tests/node_harness.run_node_json() instead;
+    it writes the script to a temp file, which has no size limit.
+    """
+    offenders = [
+        path.name
+        for path in sorted(Path(__file__).parent.glob("test_*.py"))
+        if re.search(r"""['"]node['"]\s*,\s*['"]-e['"]""", path.read_text(encoding="utf-8"))
+    ]
+    assert not offenders, (
+        f"{offenders} invoke node with an inline -e script, which fails on Linux for scripts "
+        "over 128 KiB — use tests/node_harness.run_node_json() instead."
+    )

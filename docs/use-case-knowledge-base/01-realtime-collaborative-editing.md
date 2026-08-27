@@ -1,5 +1,7 @@
 # Real-Time Collaborative Editing
 
+**Status:** implemented — wired into `pickMessaging()` via the `collabEditing` signal.
+
 **Domain:** Multi-user concurrent document/canvas editing — Google Docs, Figma, Notion, Linear-style
 products. Research date: August 2026.
 
