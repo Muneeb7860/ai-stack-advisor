@@ -331,6 +331,16 @@ def detect_signals(text: str) -> dict:
         "ecommerce": has(["ecommerce", "e-commerce", "retail", "shopping", "product recommendation", "cart", "checkout"]),
         "enterprise": has(["enterprise", "large organization", "corporate", "multi-region", "audit logging", "role-based access", "okta", "sso"]),
         "startupMvp": has(["startup", "mvp", "early-stage", "small team", "move fast", "budget conscious", "budget-conscious", "bootstrapped"]),
+        # Distinct from startupMvp: a startup still intends to acquire real users and may need to
+        # scale. A minimal/learning project explicitly does not — mirrors index.html's minimalProject.
+        "minimalProject": has([
+            "college project", "university project", "school project", "student project",
+            "personal project", "hobby project", "learning project", "side project",
+            "portfolio project", "coursework", "capstone", "final year project",
+            "class assignment", "course assignment", "toy project", "practice project",
+            "just for learning", "just to learn", "proof of concept", "weekend project",
+            "solo project", "learning exercise",
+        ]),
         "highScale": has(["high traffic", "high volume", "high transaction", "scale", "millions of users", "peak load", "sales event", "black friday"]),
         "realtime": has(["real-time", "real time", "low latency", "streaming", "live"]),
         "chatbot": has(["chatbot", "conversational", "customer support bot", "assistant", "virtual agent"]),
@@ -465,6 +475,8 @@ def pick_cloud(s):
         return {"v": "Google Cloud (GCP)", "why": "GCP mentioned, or agentic/data-heavy workload — GCP pairs well with Vertex AI, BigQuery, and Gemini models.", "conf": "high" if s["gcpShop"] else "medium"}
     if s["azureShop"] or s["enterprise"]:
         return {"v": "Microsoft Azure", "why": "Azure mentioned, or enterprise context with likely existing Microsoft 365/AD investment.", "conf": "high" if s["azureShop"] else "medium"}
+    if s["minimalProject"] and not s["highScale"] and not s["compliance"] and not s["finance"] and not s["healthcare"]:
+        return {"v": "No cloud provider needed — deploy to a free-tier PaaS (Vercel/Netlify/Render/Railway/Fly.io) or run it locally", "why": "Nothing about this project needs a cloud ACCOUNT, let alone a specific provider — that's infrastructure for handling scale, uptime SLAs, and multi-region traffic, none of which a learning/personal project has. A free-tier PaaS deploy gives you a public URL to share with zero cloud-provider setup, IAM, or billing account. Introduce AWS/Azure/GCP only if you outgrow the PaaS's free tier or need a managed service (e.g. a specific ML API) the PaaS doesn't offer.", "conf": "high"}
     if s["startupMvp"]:
         return {"v": "AWS (or GCP)", "why": "Broadest managed-service catalog and hiring pool for a small team moving fast; GCP is a fine alternative if the team is more data/ML-leaning.", "conf": "medium"}
     return {"v": "AWS", "why": "Default choice given broadest ecosystem maturity; revisit if there is an existing cloud commitment.", "conf": "low"}
@@ -528,6 +540,8 @@ IAM_BEST_PRACTICES = [
 def pick_iam(s):
     if s["onPrem"]:
         primary = {"id": "selfhosted", "v": "Self-hosted open-source IdP (Keycloak or FreeIPA)", "why": "None of the mainstream SaaS identity providers (Okta, Entra ID, Ping, OneLogin, JumpCloud) can run air-gapped — they are hosted cloud services by design. A self-hosted, open-source IdP inside your network boundary is the realistic option.", "conf": "high"}
+    elif s["minimalProject"] and not s["enterprise"] and not s["compliance"]:
+        primary = {"id": "builtin", "v": "Your framework's built-in auth (or a lightweight library — Auth.js/NextAuth, Passport, Devise) — no IAM vendor", "why": "A dedicated identity vendor (Okta, Entra ID) solves problems a learning/personal project doesn't have: multiple client apps sharing one login, enterprise SSO/SCIM provisioning, compliance audit trails. A framework auth library gives you real login/session security (hashed passwords, secure sessions) without an external account or per-user pricing. Move to a vendor if you add a second app that needs to share login, or a customer specifically demands enterprise SSO.", "conf": "high"}
     elif s["oktaMentioned"]:
         primary = {"id": "okta", "v": "Okta", "why": "Explicit Okta usage detected — build on existing footprint rather than migrating identity providers.", "conf": "high"}
     elif s["entraMentioned"] or (s["azureShop"] and not s["gcpShop"] and not s["awsShop"]):
@@ -931,13 +945,31 @@ def pick_languages(s):
         picks.append("Go for high-throughput, low-latency infrastructure services")
         if s["goMentioned"]:
             hits += 1
+    # Team-gravity signal: only fires on an explicit team-skill match, same style as java/python/go
+    # above. This whole block (node/dotnet/ruby/php) was missing from the Python port — found via
+    # test_engine_differential.py's rationale-drift ratchet when new corpus cases exercised it.
+    known = s.get("known") or {}
+    if s["nodeMentioned"]:
+        picks.append("Node.js (TypeScript) for services your team already knows" if known.get("node") else "Node.js (TypeScript)")
+        hits += 1
+    if s["dotnetMentioned"]:
+        picks.append(".NET (C#) for services your team already knows")
+        hits += 1
+    if s["rubyMentioned"]:
+        picks.append("Ruby on Rails for services your team already knows")
+        hits += 1
+    if s["phpMentioned"]:
+        picks.append("PHP (Laravel) for services your team already knows")
+        hits += 1
     if not picks:
         picks.append("Python (FastAPI) for AI-heavy services, Java (Spring Boot) or Go for core backend")
-    return {"v": " · ".join(picks), "why": "Split by workload: Java/Go for performance-critical transactional paths, Python for AI/ML and RAG pipelines where the ecosystem (LangChain, LlamaIndex, etc.) lives.", "conf": "high" if hits >= 1 else "medium" if picks else "low"}
+    return {"v": " · ".join(picks), "why": "Split by workload: Java/Go for performance-critical transactional paths, Python for AI/ML and RAG pipelines where the ecosystem (LangChain, LlamaIndex, etc.) lives. Any language your team already ships in is included even absent a workload-based reason to pick it — matching existing team skills beats a theoretically-better choice on most timelines.", "conf": "high" if hits >= 1 else "medium" if picks else "low"}
 
 
 def pick_architecture(s):
     hexagonal_note = " In code, hexagonal means: a domain/core layer with zero framework imports (no ORM decorators, no HTTP framework types leaking in), a ports layer of interfaces the domain defines (e.g. a repository interface), and an adapters layer of concrete implementations (the actual Postgres repository, the actual REST controller) that depend inward on the domain — never the reverse. The test that catches violations: your domain layer should compile/type-check with your web framework and database driver both uninstalled."
+    if s["minimalProject"] and not s["enterprise"] and not s["largeTeam"]:
+        return {"v": "A single simple app — no architecture pattern needed yet", "why": "Hexagonal layering and a modular-monolith split exist to keep future changes cheap in a codebase multiple people will maintain for years. A learning/personal project is one person, changed for weeks — organize by feature if that's comfortable, but introducing ports/adapters boilerplate here is solving a problem you don't have. Worth learning hexagonal architecture as a concept regardless — see the pattern above and the linked note — just not worth applying to this specific project.", "conf": "high"}
     if s["startupMvp"] or s["smallTeam"]:
         why = "Small teams move faster with one deployable unit; hexagonal internal layering keeps a future microservices split cheap."
         if s["enterprise"] or s["compliance"]:
@@ -973,6 +1005,8 @@ def pick_messaging(s):
         return {"v": "Redis Pub/Sub (or a managed realtime service — Ably/Pusher/PubNub) for room broadcast/fan-out — not Kafka", "why": "This is a low-latency broadcast-to-a-room problem (push live scores/state to however many players are in a session right now), not a durable-log problem — Kafka is built for replayable, ordered event history, which adds latency and operational cost this pattern doesn't need and doesn't use. Redis Pub/Sub (already in your stack for caching) or a managed realtime service handles many-subscriber fan-out with much lower latency. Add Kafka separately, later, only if you also want a durable analytics stream of every game event — that's a different, additive need, not a replacement for the broadcast layer.", "conf": "high"}
     if s["collabEditing"]:
         return {"v": "CRDT sync relay (Yjs + y-websocket/Hocuspocus self-hosted, or a managed provider — Liveblocks/PartyKit) — not Kafka, not a generic pub/sub broker", "why": "Concurrent multi-user document edits need conflict-free merge semantics, not just message delivery — a CRDT library (Yjs is the most mature; Automerge and Loro are newer Rust/WASM alternatives with strong JSON/history semantics) does the actual conflict resolution client-side, and the server is a \"dumb\" relay forwarding binary update packets plus periodic snapshot persistence. Presence/cursor data (who's online, cursor position) should ride a separate ephemeral, non-persisted broadcast channel (Yjs Awareness protocol) — never the durable document-update path or a transactional database, since it's high-frequency and disposable. Self-host (y-websocket/Hocuspocus) for control and no per-seat cost, or use a managed provider (Liveblocks, PartyKit) to skip building the relay/persistence layer yourself.", "conf": "high"}
+    if s["minimalProject"] and not s["highScale"] and not s["finance"]:
+        return {"v": "No message broker needed", "why": "A message broker (even a lightweight one like RabbitMQ) solves problems this project doesn't have yet — background job queues, cross-service async communication, decoupling producers from consumers. A learning/personal project with one process has no producer/consumer split to decouple. If you add a genuinely async task (e.g. sending an email after signup), start with your language's in-process background-job library before reaching for a separate broker.", "conf": "high"}
     picks = []
     hits = 0
     if s["highScale"] or s["realtime"] or s["finance"]:
@@ -1068,6 +1102,9 @@ def pick_cache(s):
 
 
 def pick_database(s):
+    if (s["minimalProject"] and not s["highScale"] and not s["compliance"] and not s["finance"]
+            and not s["mongoMentioned"] and not s["unstructured"]):
+        return {"v": "SQLite — a single file, zero setup or hosting", "why": "A learning/personal project with one user (or a handful) doesn't need a database SERVER at all — SQLite gives you real SQL, transactions, and a schema in a single file with no service to run, no connection string, no hosting cost. Move to PostgreSQL when you need concurrent writers from multiple server instances, which a single small deployment doesn't have.", "conf": "high"}
     if s["liveMultiplayer"]:
         return {"v": "Redis (in-memory, sorted sets) as the primary store for live session/leaderboard state · PostgreSQL or a NoSQL document store for post-session history only", "why": "Live leaderboard/game-room state is read and written by every participant multiple times per second — that's an in-memory-data-structure problem, not a transactional (Postgres) or flexible-document (Firestore-style NoSQL) problem. Redis sorted sets (ZADD/ZRANGE) give O(log N) rank updates and reads, which is what a real-time leaderboard actually needs. A document database used the \"obvious\" way here — one shared leaderboard document updated by every player — hits real per-document write-contention limits (roughly 1-10 sustained writes/sec/document is the safe range before Firestore-class stores need a distributed-counter sharding workaround) well before a live session's write rate. Once a session ends, write the final results to a normal persisted store (Postgres for relational history/analytics, or a NoSQL document store if the shape is simpler) — that's a completely different access pattern (low-frequency, durable) from the live path, so it's fine for it to use a completely different store.", "conf": "high"}
     if s["feedFanout"] and s["highScale"]:
@@ -1131,6 +1168,8 @@ def pick_containers(s):
         return {"v": "Docker + self-managed Kubernetes (kubeadm/Rancher/RKE2 on bare metal or VMware) — not EKS/GKE/AKS", "why": "Managed Kubernetes offerings are public-cloud services; an air-gapped/on-prem environment needs a self-managed distribution you can run entirely inside your network boundary.", "conf": "high"}
     if s["huaweiShop"]:
         return {"v": "Docker + Huawei Cloud CCE (Cloud Container Engine)" + (", CCE Turbo for high-throughput networking" if s["highScale"] else ""), "why": "Explicit Huawei Cloud usage detected — CCE is Huawei's managed Kubernetes offering, matching your existing cloud footprint rather than introducing a second vendor.", "conf": "high"}
+    if s["minimalProject"] and not s["highScale"] and not s["enterprise"]:
+        return {"v": "No orchestrator needed — run the app directly, or in a single Docker container if you want portability", "why": "Kubernetes exists to schedule and scale MANY container instances across MANY machines — a learning/personal project runs one instance on one machine, which is exactly the case an orchestrator adds operational overhead to without solving anything. A single Dockerfile (optional, mainly for \"works on my machine\" portability) is as far as containerization needs to go here.", "conf": "high"}
     if s["startupMvp"]:
         return {"v": "Docker + managed serverless containers (Cloud Run / Fargate)", "why": "Keep container benefits without managing a Kubernetes control plane.", "conf": "high"}
     why = "Standard for portable, scalable container orchestration once team/scale justify it."
@@ -1146,6 +1185,8 @@ def pick_containers(s):
 def pick_observability(s):
     if s["onPrem"]:
         return {"v": "OpenTelemetry (instrumentation standard) + self-hosted Grafana + Prometheus + Loki (or ELK/OpenSearch)", "why": "SaaS observability platforms (Datadog, Splunk Cloud, Dynatrace SaaS) require sending telemetry to the vendor's cloud, which an air-gapped network can't reach — self-hosted OSS observability is the only realistic option inside the boundary.", "conf": "high"}
+    if s["minimalProject"] and not s["enterprise"] and not s["highScale"]:
+        return {"v": "Console/platform logs — no observability vendor", "why": "Datadog and similar platforms exist to correlate metrics/logs/traces across many services under real production load — a single small deployment has neither the service count nor the traffic to need that. Your PaaS's built-in logs plus a free-tier error tracker (Sentry's free tier is genuinely usable at this scale) covers debugging a live issue. Add a real observability platform once you have multiple services or on-call obligations.", "conf": "high"}
     apm = "Datadog"
     why = "Best all-around breadth (APM, logs, infra, RUM) with fastest time-to-value."
     conf = "low"
@@ -1339,6 +1380,8 @@ def pick_cicd(s):
         return {"v": f"Self-hosted {on_prem_ci} with self-hosted runners, deploying via Terraform to your private infrastructure", "why": "Cloud-hosted CI/CD (GitHub Actions cloud runners, Vercel) needs internet connectivity to reach your infrastructure — an air-gapped environment needs the entire pipeline, including runners, inside the network boundary.", "conf": "high"}
     if s["huaweiShop"]:
         return skill_note({"v": "Huawei Cloud CodeArts (Pipeline, Build, Deploy) → CCE, Resource Template Service (RTS) for infra-as-code", "why": "Explicit Huawei Cloud usage detected — CodeArts is Huawei's native CI/CD suite (covers what GitHub Actions/Jenkins + Terraform would do, in one integrated toolchain), matching your existing cloud footprint.", "conf": "high"})
+    if s["minimalProject"] and not s["enterprise"]:
+        return {"v": "Your PaaS's auto-deploy on git push — no separate CI/CD pipeline, no Terraform", "why": "Terraform-driven infrastructure-as-code and a multi-stage deploy pipeline exist to make infrastructure changes reviewable and repeatable across environments — a single free-tier PaaS deployment has no infrastructure to manage and typically no second environment. Pushing to your main branch and letting the platform auto-deploy is the entire pipeline you need; add a GitHub Actions step to run tests before deploy once you have tests worth gating on.", "conf": "high"}
     if s["startupMvp"]:
         return skill_note({"v": f"{ci} → Vercel (frontend) + Cloud Run/Fargate (backend)", "why": "Fastest path to production for a small team, minimal infra to manage.", "conf": "high"})
     if s["enterprise"]:

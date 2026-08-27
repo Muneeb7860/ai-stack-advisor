@@ -1439,6 +1439,16 @@ function detectSignals(text){
     ecommerce: has(['ecommerce','e-commerce','retail','shopping','product recommendation','cart','checkout']),
     enterprise: has(['enterprise','large organization','corporate','multi-region','audit logging','role-based access','okta','sso']),
     startupMvp: has(['startup','mvp','early-stage','small team','move fast','budget conscious','budget-conscious','bootstrapped']),
+    // Distinct from startupMvp: a startup still intends to acquire real users and may need to
+    // scale. A minimal/learning project explicitly does not — the honest floor is "the simplest
+    // thing that runs," not "the simplest thing that could later become a startup." Without this,
+    // "a college project — a simple to-do list" detected zero signals and fell through every
+    // pickX() branch to its enterprise-ish default: AWS + Kubernetes + Okta + Datadog + RabbitMQ.
+    minimalProject: has(['college project','university project','school project','student project',
+      'personal project','hobby project','learning project','side project','portfolio project',
+      'coursework','capstone','final year project','class assignment','course assignment',
+      'toy project','practice project','just for learning','just to learn','proof of concept',
+      'weekend project','solo project','learning exercise']),
     highScale: has(['high traffic','high volume','high transaction','scale','millions of users','peak load','sales event','black friday']),
     realtime: has(['real-time','real time','low latency','streaming','live']),
     chatbot: has(['chatbot','conversational','customer support bot','assistant','virtual agent']),
@@ -1585,6 +1595,11 @@ function pickCloud(s){
   if(s.huaweiShop) return {v:'Huawei Cloud', why:'Explicit Huawei Cloud usage detected — build on existing footprint rather than introducing a second cloud, particularly relevant for APAC/China-market deployments or markets where Huawei is an approved vendor under local data-residency rules.', conf:'high'};
   if(s.gcpShop || s.agentic) return {v:'Google Cloud (GCP)', why:'GCP mentioned, or agentic/data-heavy workload — GCP pairs well with Vertex AI, BigQuery, and Gemini models.', conf: s.gcpShop ? 'high' : 'medium'};
   if(s.azureShop || s.enterprise) return {v:'Microsoft Azure', why:'Azure mentioned, or enterprise context with likely existing Microsoft 365/AD investment.', conf: s.azureShop ? 'high' : 'medium'};
+  // Guarded on !highScale/!compliance so a genuine scale or regulatory need still wins even inside
+  // a learning project — the floor is for the common case, not an override of a real constraint.
+  if(s.minimalProject && !s.highScale && !s.compliance && !s.finance && !s.healthcare){
+    return {v:'No cloud provider needed — deploy to a free-tier PaaS (Vercel/Netlify/Render/Railway/Fly.io) or run it locally', why:'Nothing about this project needs a cloud ACCOUNT, let alone a specific provider — that\'s infrastructure for handling scale, uptime SLAs, and multi-region traffic, none of which a learning/personal project has. A free-tier PaaS deploy gives you a public URL to share with zero cloud-provider setup, IAM, or billing account. Introduce AWS/Azure/GCP only if you outgrow the PaaS\'s free tier or need a managed service (e.g. a specific ML API) the PaaS doesn\'t offer.', conf:'high'};
+  }
   if(s.startupMvp) return {v:'AWS (or GCP)', why:'Broadest managed-service catalog and hiring pool for a small team moving fast; GCP is a fine alternative if the team is more data/ML-leaning.', conf:'medium'};
   return {v:'AWS', why:'Default choice given broadest ecosystem maturity; revisit if there is an existing cloud commitment.', conf:'low'};
 }
@@ -1649,6 +1664,8 @@ function pickIAM(s){
   let primary;
   if(s.onPrem){
     primary = {id:'selfhosted', v:'Self-hosted open-source IdP (Keycloak or FreeIPA)', why:'None of the mainstream SaaS identity providers (Okta, Entra ID, Ping, OneLogin, JumpCloud) can run air-gapped — they are hosted cloud services by design. A self-hosted, open-source IdP inside your network boundary is the realistic option.', conf:'high'};
+  } else if(s.minimalProject && !s.enterprise && !s.compliance){
+    primary = {id:'builtin', v:'Your framework\'s built-in auth (or a lightweight library — Auth.js/NextAuth, Passport, Devise) — no IAM vendor', why:'A dedicated identity vendor (Okta, Entra ID) solves problems a learning/personal project doesn\'t have: multiple client apps sharing one login, enterprise SSO/SCIM provisioning, compliance audit trails. A framework auth library gives you real login/session security (hashed passwords, secure sessions) without an external account or per-user pricing. Move to a vendor if you add a second app that needs to share login, or a customer specifically demands enterprise SSO.', conf:'high'};
   } else if(s.oktaMentioned){
     primary = {id:'okta', v:'Okta', why:'Explicit Okta usage detected — build on existing footprint rather than migrating identity providers.', conf:'high'};
   } else if(s.entraMentioned || (s.azureShop && !s.gcpShop && !s.awsShop)){
@@ -2019,6 +2036,7 @@ function pickArchitecture(s){
   // distinct from the system-level monolith-vs-microservices pick above it; see
   // docs/use-case-knowledge-base/10-hexagonal-intraservice-code-organization.md for the full pattern.
   const hexagonalNote = ' In code, hexagonal means: a domain/core layer with zero framework imports (no ORM decorators, no HTTP framework types leaking in), a ports layer of interfaces the domain defines (e.g. a repository interface), and an adapters layer of concrete implementations (the actual Postgres repository, the actual REST controller) that depend inward on the domain — never the reverse. The test that catches violations: your domain layer should compile/type-check with your web framework and database driver both uninstalled.';
+  if(s.minimalProject && !s.enterprise && !s.largeTeam) return {v:'A single simple app — no architecture pattern needed yet', why:'Hexagonal layering and a modular-monolith split exist to keep future changes cheap in a codebase multiple people will maintain for years. A learning/personal project is one person, changed for weeks — organize by feature if that\'s comfortable, but introducing ports/adapters boilerplate here is solving a problem you don\'t have. Worth learning hexagonal architecture as a concept regardless — see the pattern above and the linked note — just not worth applying to this specific project.', conf:'high'};
   if(s.startupMvp || s.smallTeam) return {v:'Modular monolith (hexagonal internal structure), split into microservices later', why:'Small teams move faster with one deployable unit; hexagonal internal layering keeps a future microservices split cheap.' + (s.enterprise||s.compliance ? ' Compliance/enterprise requirements are met through governance practices (audit logging, strict domain boundaries, IAM) inside this monolith, not by splitting into services your team is too small to operate.' : '') + hexagonalNote, conf:'high'};
   if(s.enterprise || s.largeTeam) return {v:'Microservices with Hexagonal (Ports & Adapters) architecture', why:'Enterprise scale and multiple teams benefit from independent deployability and clean domain boundaries isolated from infrastructure concerns.' + hexagonalNote, conf:'high'};
   return {v:'Microservices, hexagonal per bounded context', why:'Balances scalability with maintainability for a mid-size team and domain.' + hexagonalNote, conf:'low'};
@@ -2062,6 +2080,9 @@ function pickMessaging(s){
   // just because "real-time" is also true here.
   if(s.collabEditing){
     return {v:'CRDT sync relay (Yjs + y-websocket/Hocuspocus self-hosted, or a managed provider — Liveblocks/PartyKit) — not Kafka, not a generic pub/sub broker', why:'Concurrent multi-user document edits need conflict-free merge semantics, not just message delivery — a CRDT library (Yjs is the most mature; Automerge and Loro are newer Rust/WASM alternatives with strong JSON/history semantics) does the actual conflict resolution client-side, and the server is a "dumb" relay forwarding binary update packets plus periodic snapshot persistence. Presence/cursor data (who\'s online, cursor position) should ride a separate ephemeral, non-persisted broadcast channel (Yjs Awareness protocol) — never the durable document-update path or a transactional database, since it\'s high-frequency and disposable. Self-host (y-websocket/Hocuspocus) for control and no per-seat cost, or use a managed provider (Liveblocks, PartyKit) to skip building the relay/persistence layer yourself.', conf:'high'};
+  }
+  if(s.minimalProject && !s.highScale && !s.finance){
+    return {v:'No message broker needed', why:'A message broker (even a lightweight one like RabbitMQ) solves problems this project doesn\'t have yet — background job queues, cross-service async communication, decoupling producers from consumers. A learning/personal project with one process has no producer/consumer split to decouple. If you add a genuinely async task (e.g. sending an email after signup), start with your language\'s in-process background-job library before reaching for a separate broker.', conf:'high'};
   }
   const picks=[]; let hits=0;
   if(s.highScale || s.realtime || s.finance){ picks.push('Kafka (durable, high-throughput event streaming)'); hits++; }
@@ -2130,6 +2151,9 @@ function pickCache(s){
         'Recommended here because of ' + reasons.join(', ') + '.'};
 }
 function pickDatabase(s){
+  if(s.minimalProject && !s.highScale && !s.compliance && !s.finance && !s.mongoMentioned && !s.unstructured){
+    return {v:'SQLite — a single file, zero setup or hosting', why:'A learning/personal project with one user (or a handful) doesn\'t need a database SERVER at all — SQLite gives you real SQL, transactions, and a schema in a single file with no service to run, no connection string, no hosting cost. Move to PostgreSQL when you need concurrent writers from multiple server instances, which a single small deployment doesn\'t have.', conf:'high'};
+  }
   // Live-multiplayer/leaderboard state is an ephemeral, extremely-high-write-frequency pattern —
   // it isn't a transactional-integrity problem (rules out Postgres as primary) and it isn't a
   // flexible-document-schema problem either (rules out a plain NoSQL document store like Firestore
@@ -2192,6 +2216,9 @@ function pickContainers(s){
   if(s.openshiftMentioned) return {v:'Docker + OpenShift (Red Hat\'s enterprise Kubernetes distribution)' + (s.onPrem ? ', self-managed' : ''), why:'Your team already knows OpenShift — staying on it avoids retraining onto a different Kubernetes distribution for no real workload-driven reason, and OpenShift genuinely supports both on-prem and cloud deployment.', conf:'high'};
   if(s.onPrem) return {v:'Docker + self-managed Kubernetes (kubeadm/Rancher/RKE2 on bare metal or VMware) — not EKS/GKE/AKS', why:'Managed Kubernetes offerings are public-cloud services; an air-gapped/on-prem environment needs a self-managed distribution you can run entirely inside your network boundary.', conf:'high'};
   if(s.huaweiShop) return {v:'Docker + Huawei Cloud CCE (Cloud Container Engine)' + (s.highScale ? ', CCE Turbo for high-throughput networking' : ''), why:'Explicit Huawei Cloud usage detected — CCE is Huawei\'s managed Kubernetes offering, matching your existing cloud footprint rather than introducing a second vendor.', conf:'high'};
+  if(s.minimalProject && !s.highScale && !s.enterprise){
+    return {v:'No orchestrator needed — run the app directly, or in a single Docker container if you want portability', why:'Kubernetes exists to schedule and scale MANY container instances across MANY machines — a learning/personal project runs one instance on one machine, which is exactly the case an orchestrator adds operational overhead to without solving anything. A single Dockerfile (optional, mainly for "works on my machine" portability) is as far as containerization needs to go here.', conf:'high'};
+  }
   if(s.startupMvp) return {v:'Docker + managed serverless containers (Cloud Run / Fargate)', why:'Keep container benefits without managing a Kubernetes control plane.', conf:'high'};
   let why = 'Standard for portable, scalable container orchestration once team/scale justify it.';
   let conf = (s.enterprise||s.highScale)?'high':'medium';
@@ -2203,6 +2230,9 @@ function pickContainers(s){
 }
 function pickObservability(s){
   if(s.onPrem) return {v:'OpenTelemetry (instrumentation standard) + self-hosted Grafana + Prometheus + Loki (or ELK/OpenSearch)', why:'SaaS observability platforms (Datadog, Splunk Cloud, Dynatrace SaaS) require sending telemetry to the vendor\'s cloud, which an air-gapped network can\'t reach — self-hosted OSS observability is the only realistic option inside the boundary.', conf:'high'};
+  if(s.minimalProject && !s.enterprise && !s.highScale){
+    return {v:'Console/platform logs — no observability vendor', why:'Datadog and similar platforms exist to correlate metrics/logs/traces across many services under real production load — a single small deployment has neither the service count nor the traffic to need that. Your PaaS\'s built-in logs plus a free-tier error tracker (Sentry\'s free tier is genuinely usable at this scale) covers debugging a live issue. Add a real observability platform once you have multiple services or on-call obligations.', conf:'high'};
+  }
   let apm = 'Datadog';
   let why = 'Best all-around breadth (APM, logs, infra, RUM) with fastest time-to-value.';
   let conf = 'low';
@@ -2385,6 +2415,9 @@ function pickCICD(s){
     return {v:`Self-hosted ${onPremCi} with self-hosted runners, deploying via Terraform to your private infrastructure`, why:'Cloud-hosted CI/CD (GitHub Actions cloud runners, Vercel) needs internet connectivity to reach your infrastructure — an air-gapped environment needs the entire pipeline, including runners, inside the network boundary.', conf:'high'};
   }
   if(s.huaweiShop) return skillNote({v:'Huawei Cloud CodeArts (Pipeline, Build, Deploy) → CCE, Resource Template Service (RTS) for infra-as-code', why:'Explicit Huawei Cloud usage detected — CodeArts is Huawei\'s native CI/CD suite (covers what GitHub Actions/Jenkins + Terraform would do, in one integrated toolchain), matching your existing cloud footprint.', conf:'high'});
+  if(s.minimalProject && !s.enterprise){
+    return {v:'Your PaaS\'s auto-deploy on git push — no separate CI/CD pipeline, no Terraform', why:'Terraform-driven infrastructure-as-code and a multi-stage deploy pipeline exist to make infrastructure changes reviewable and repeatable across environments — a single free-tier PaaS deployment has no infrastructure to manage and typically no second environment. Pushing to your main branch and letting the platform auto-deploy is the entire pipeline you need; add a GitHub Actions step to run tests before deploy once you have tests worth gating on.', conf:'high'};
+  }
   if(s.startupMvp) return skillNote({v:`${ci} → Vercel (frontend) + Cloud Run/Fargate (backend)`, why:'Fastest path to production for a small team, minimal infra to manage.', conf:'high'});
   if(s.enterprise) return skillNote({v:`${ci} → ArgoCD (GitOps) → Kubernetes, Terraform for infra-as-code`, why:'GitOps gives auditable, repeatable deployments at enterprise scale with multiple environments/teams.', conf:'high'});
   return skillNote({v:`${ci} → Terraform + Kubernetes (or Vercel for frontend-only pieces)`, why:'Balanced CI/CD with infra-as-code as the team and service count grow.', conf:'low'});

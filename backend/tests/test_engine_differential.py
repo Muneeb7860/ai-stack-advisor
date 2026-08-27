@@ -55,7 +55,12 @@ KEYMAP = {
 # fell to 28 when the missing pick branches were ported — the test refuses to pass silently on an
 # improvement, so the gain gets locked in rather than leaving slack for future drift.
 # `v`, `conf`, signals and the keyword tables are all gated at zero.
-KNOWN_RATIONALE_DRIFT = 28
+#
+# Dropped 28 -> 3 when pick_languages() turned out to be missing its entire node/dotnet/ruby/php
+# team-skill block (found by this ratchet, when new minimalProject corpus cases exercised the
+# path and exposed it). The remaining 3 are containers/database team-skill-note wording drift,
+# unrelated to that fix — left as the tracked number rather than chased further here.
+KNOWN_RATIONALE_DRIFT = 3
 
 _STUBS = r"""
 const fs = require('fs');
