@@ -1,5 +1,7 @@
 # Micro-Frontend Architecture
 
+**Status:** implemented — wired into `pickTradeoffs()` via the `microFrontend` signal.
+
 **Domain:** Multiple independently-deployable frontend apps composed into one product, usually
 owned by separate teams — e.g. a customer app, admin app, rider app under one design system.
 Research date: August 2026.

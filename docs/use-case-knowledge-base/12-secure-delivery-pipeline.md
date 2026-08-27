@@ -1,5 +1,7 @@
 # Secure Delivery Pipeline — CI security gates, GitOps promotion, progressive delivery
 
+**Status:** target design — `pickCICD()` picks a CI product; no reasoning about pipeline controls exists.
+
 **Domain:** How code reaches production safely in a regulated environment — the security gates that
 run on every pull request, the GitOps promotion model, and the progressive-delivery mechanics that
 make a production release reversible. This is a *different diagram from runtime topology*: runtime

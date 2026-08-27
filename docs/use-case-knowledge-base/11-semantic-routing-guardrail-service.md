@@ -1,5 +1,7 @@
 # Semantic-Routing / AI-Guardrail Service
 
+**Status:** implemented — wired into `pickTradeoffs()` via the `routingGuardrailService` signal.
+
 **Domain:** A dedicated service sitting in front of LLM calls to route requests to the right model
 by cost/quality/task and/or enforce guardrails centrally — the architectural *pattern*, distinct
 from the tool's existing Guardrails vendor comparison (which products to use inside it). Research

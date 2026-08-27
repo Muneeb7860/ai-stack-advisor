@@ -84,3 +84,70 @@ def test_eval_set_expectations_reference_documents_that_exist():
     on_disk = _domain_docs_on_disk()
     dangling = sorted({doc for c in cases for doc in c.get("expected_docs", []) if doc not in on_disk})
     assert not dangling, f"eval cases expect documents that do not exist: {dangling}"
+
+
+# --------------------------------------------------------------------------- corpus conventions
+# A rule split across two documents is a rule /api/ask can answer half of. Measured: a query
+# spanning documents 13 and 14 — the one pair joined by a prose cross-reference — returned only
+# document 13, because routing scores Signals + preamble only and a pointer inside a content chunk
+# has no routing weight at all. So a shared rule is stated verbatim in every document that touches
+# it, and this asserts the copies have not drifted. Same trade as the two rule engines: duplication
+# is fine when something fails the moment the copies diverge.
+CANONICAL_RULES = {
+    "one backend per signal class — never two backends for the same signal": [
+        "14-request-path-layer-ordering.md",
+        "15-observability-and-audit-logging.md",
+    ],
+}
+
+VALID_STATUSES = ("implemented", "partial", "target design")
+
+
+def test_canonical_rules_are_stated_verbatim_in_every_document_that_shares_them():
+    for rule, docs in CANONICAL_RULES.items():
+        for name in docs:
+            text = (CORPUS_DIR / name).read_text(encoding="utf-8").lower()
+            assert rule.lower() in text, (
+                f"{name} is registered as sharing a canonical rule but does not state it verbatim: "
+                f"{rule!r}. A cross-reference is not a substitute — routing cannot follow one."
+            )
+
+
+def test_canonical_rules_are_not_replaced_by_a_cross_reference():
+    """The specific regression: doc 13 used to point at doc 14 §E instead of stating the rule, and
+    a spanning query returned 13 alone. Pointers of that shape are the thing being prevented."""
+    for name in {d for docs in CANONICAL_RULES.values() for d in docs}:
+        text = (CORPUS_DIR / name).read_text(encoding="utf-8")
+        assert not re.search(r"is covered in `\d\d-[a-z-]+\.md`", text), (
+            f"{name} defers a rule to another document by prose reference — state it verbatim "
+            "instead, or drop it entirely if the other document owns it"
+        )
+
+
+def test_every_document_declares_implemented_versus_target_design():
+    """A corpus that cannot tell what the engine DOES from what its author thinks it SHOULD do will
+    state aspirations as facts. /api/ask answering 'yes, the tool handles that' about target design
+    is a worse failure than not answering — so the distinction is a parseable field, not prose."""
+    bad = {}
+    for name in DOC_FILES:
+        m = re.search(r"^\*\*Status:\*\*\s*([a-z ]+?)\s*—", (CORPUS_DIR / name).read_text(encoding="utf-8"), re.M)
+        if not m:
+            bad[name] = "no **Status:** line under the title"
+        elif m.group(1).strip() not in VALID_STATUSES:
+            bad[name] = f"status {m.group(1).strip()!r} not in {VALID_STATUSES}"
+    assert not bad, f"Status field problems: {bad}"
+
+
+def test_target_design_documents_say_so_in_their_implementation_section():
+    """The Status line and the 'As implemented' prose must agree — two places to state the same
+    thing is two places to be wrong, so they are checked against each other."""
+    for name in DOC_FILES:
+        text = (CORPUS_DIR / name).read_text(encoding="utf-8")
+        m = re.search(r"^\*\*Status:\*\*\s*([a-z ]+?)\s*—", text, re.M)
+        if not m or m.group(1).strip() != "target design":
+            continue
+        section = text.split("## As implemented")[-1][:400].lower()
+        assert "not yet implemented" in section or "nothing of this document is implemented" in section, (
+            f"{name} declares Status 'target design' but its 'As implemented' section does not say so"
+        )
+

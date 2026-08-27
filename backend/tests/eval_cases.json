@@ -3,7 +3,7 @@
     "description": "Machine-readable retrieval eval set for docs/use-case-knowledge-base/. See RETRIEVAL-EVAL-SET.md for full rationale per case. Built ahead of /api/refine's existence so it's ready to run the moment retrieval is wired up. Cases 22-27 cover documents 12-14, contributed from the project owner's own reference architectures; case 20 was reclassified from negative_control to direct when doc 12 made its out-of-scope premise false.",
     "corpus_dir": "docs/use-case-knowledge-base/",
     "status": "cases_only_not_yet_run",
-    "total_cases": 27
+    "total_cases": 32
   },
   "cases": [
     {
@@ -345,6 +345,65 @@
       "top_k_pass": 3,
       "min_confidence": "high",
       "note": "Audit-shaped question; the fixed rule set cannot anticipate it."
+    },
+    {
+      "id": 28,
+      "section": "cross_document",
+      "query": "Should we send telemetry to one backend or split it by signal?",
+      "expected_docs": [
+        "14-request-path-layer-ordering.md",
+        "15-observability-and-audit-logging.md"
+      ],
+      "top_k_pass": 5,
+      "min_confidence": "high",
+      "note": "THE RECONCILIATION-MECHANISM CASE. Documents 14 and 15 share one canonical rule ('one backend per signal class — never two backends for the same signal'), stated verbatim in both. Measured before this convention existed: the 13->14 pair, joined only by a prose cross-reference, returned document 13 ALONE for a spanning query — routing scores Signals + preamble, so a pointer inside a content chunk has no routing weight. Stating the rule in both is what makes a spanning query return both. If this case regresses to a single document, the corpus has gone back to splitting a rule across documents that cannot reach each other."
+    },
+    {
+      "id": 29,
+      "section": "direct",
+      "query": "Why does our distributed trace stop at the message bus?",
+      "expected_docs": [
+        "15-observability-and-audit-logging.md"
+      ],
+      "expected_decision_point": "E",
+      "top_k_pass": 3,
+      "min_confidence": "high",
+      "note": "Async trace propagation — the highest-value single item in the document, and the one usually discovered missing during an incident."
+    },
+    {
+      "id": 30,
+      "section": "anti_pattern",
+      "query": "Can an administrator delete our audit trail?",
+      "expected_docs": [
+        "15-observability-and-audit-logging.md"
+      ],
+      "top_k_pass": 3,
+      "min_confidence": "high",
+      "note": "'Is X okay?' shape against audit immutability."
+    },
+    {
+      "id": 31,
+      "section": "direct",
+      "query": "How do we alert without waking people up for things that do not matter?",
+      "expected_docs": [
+        "15-observability-and-audit-logging.md"
+      ],
+      "expected_decision_point": "F",
+      "top_k_pass": 3,
+      "min_confidence": "high",
+      "note": "Symptoms-not-causes and SLO burn rate."
+    },
+    {
+      "id": 32,
+      "section": "boundary",
+      "query": "Why did our metrics bill explode after we added user IDs to labels?",
+      "expected_docs": [
+        "15-observability-and-audit-logging.md"
+      ],
+      "expected_decision_point": "G",
+      "top_k_pass": 3,
+      "min_confidence": "high",
+      "note": "Cardinality — added during review of the source diagram, which does not mention it. One of the three 'silently breaks in production' conditions."
     }
   ]
 }

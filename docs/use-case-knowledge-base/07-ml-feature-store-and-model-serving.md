@@ -1,5 +1,7 @@
 # ML Feature Stores & Model Serving (Traditional ML, not LLM/RAG)
 
+**Status:** implemented — wired into `pickTradeoffs()` via the `mlFeatureStore` signal.
+
 **Domain:** Custom/traditional ML models — recommendation, fraud-scoring, ranking, forecasting —
 as distinct from LLM-application architecture, which the rule engine already covers extensively
 (`pickLLM`, `pickRAG`, `pickVectorDBPlacement`, etc). Research date: August 2026.

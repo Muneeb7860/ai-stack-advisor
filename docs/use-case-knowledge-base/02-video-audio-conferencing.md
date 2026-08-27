@@ -1,5 +1,7 @@
 # Video / Audio Conferencing
 
+**Status:** implemented — wired into `pickCompute()` via the `videoConferencing` signal.
+
 **Domain:** Real-time video/voice calls, group meetings, webinars, voice channels — Zoom/Google
 Meet/Discord-style products. Research date: August 2026.
 

@@ -1,5 +1,7 @@
 # Private Network Topology & Egress Control — private endpoints vs. the one audited exit
 
+**Status:** target design — `pickHybridConnectivity()` covers on-prem↔cloud links, not the in-cloud network boundary.
+
 **Domain:** How a workload reaches its dependencies without putting traffic on the public internet,
 and how the traffic that genuinely must leave is constrained to a single auditable path. The
 governing distinction is that **"outbound" is two different things**: managed cloud services reached
@@ -84,9 +86,6 @@ Each service owns its own database instance or schema, reached over the private 
 network topology does not soften the ownership rule — a private link makes another service's
 database *reachable*, not *shared*. Reachability is a network property; ownership is a design one,
 and the first does not grant the second.
-
-(The related read-path layering rule is covered in `14-request-path-layer-ordering.md` §E — stated
-once there rather than in both documents, so the two do not compete for the same query.)
 
 ### F. Private model endpoints are what make regulated AI features approvable
 

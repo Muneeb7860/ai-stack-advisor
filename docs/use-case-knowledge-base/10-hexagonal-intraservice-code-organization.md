@@ -1,5 +1,7 @@
 # Hexagonal (Ports & Adapters) — Intra-Service Code Organization
 
+**Status:** implemented — `pickArchitecture()` appends its `hexagonalNote` to every branch.
+
 **Domain:** How a single service's codebase is internally organized around hexagonal/ports-and-
 adapters principles — one level deeper than the system-level "monolith vs. microservices, hexagonal
 internal structure" decision the tool already makes in `pickArchitecture()`. Research date:

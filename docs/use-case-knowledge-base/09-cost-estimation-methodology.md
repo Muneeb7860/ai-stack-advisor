@@ -1,5 +1,7 @@
 # Cost Estimation Methodology
 
+**Status:** implemented — sources `pickCostEstimate()`'s directional monthly bands.
+
 **Domain:** Directional monthly cost estimation for a proposed stack — compute, database, and LLM
 API spend. Research date: August 2026. This document is the sourcing/methodology backing
 `pickCostEstimate(s, ctx)` in `index.html`, which renders as the "Directional monthly cost

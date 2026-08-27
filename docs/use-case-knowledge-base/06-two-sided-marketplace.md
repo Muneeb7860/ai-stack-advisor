@@ -1,5 +1,7 @@
 # Two-Sided Marketplace
 
+**Status:** implemented — wired into `pickTradeoffs()` via the `marketplace` signal.
+
 **Domain:** Platforms matching buyers/sellers or supply/demand with payments flowing between them —
 Airbnb/Uber/Etsy-style products. Research date: August 2026.
 

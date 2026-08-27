@@ -68,6 +68,48 @@ sourced tool is trying to avoid in the first place.
   claim from this corpus, it should be able to cite the source, matching the citation discipline
   already used in `market-analysis.md` and the `docs/alternatives-research/` files.
 
+## 2b. Two conventions that exist because retrieval broke without them
+
+### Canonical rules are stated verbatim in every document that touches them — never cross-referenced
+
+A prose cross-reference (`see 14-request-path-layer-ordering.md §E`) has **zero retrieval effect**.
+Routing scores documents on their `Signals / triggers` + preamble only (see `app/retrieval.py`'s
+two-stage design), so a pointer buried in a content chunk is read by humans and by nothing else.
+Measured directly: a query spanning `13-private-network-egress-control.md` and
+`14-request-path-layer-ordering.md` — the one pair joined by a cross-reference — returned **only
+document 13**, while topically-distinct pairs (12+13, 12+14) both returned two documents. The
+cross-reference did not pull its target in; it never could.
+
+The consequence is worse than a missing hit. If a principle is split across two documents and only
+one is retrieved, `/api/ask` answers with half a rule and no indication that the other half exists —
+which is how a corpus produces two contradictory answers to the same question depending on phrasing.
+
+So: where two documents share a rule, **both state the rule in full, verbatim**, and
+`backend/tests/test_kb_corpus.py` asserts the shared sentence is byte-identical across them. This is
+deliberate duplication with a gate on it, which is the same trade this project makes for the two
+rule engines (`test_engine_differential.py`) and the two provenance maps (`buildExplicitMap()`) —
+duplication is acceptable when something fails loudly the moment the copies diverge.
+
+Canonical rules currently registered (see `CANONICAL_RULES` in `test_kb_corpus.py`):
+
+| Rule | Stated in |
+|---|---|
+| One backend per signal class — never two backends for the same signal. | `14`, `15` |
+
+### `Status:` declares implemented vs. target design
+
+Every domain document carries a `**Status:**` line directly under its title, with one of:
+
+- `implemented` — the reasoning is live in `index.html`'s rule engine today.
+- `partial` — some of it is live; the line says which part is not.
+- `target design` — nothing of it is implemented; this is what the engine *should* reason about.
+
+This exists for the same reason the Sources sections list unsourced claims: a corpus that cannot
+distinguish what a system does from what its author thinks it should do will state aspirations as
+facts. `/api/ask` answering "yes, the tool handles that" about target design is a worse failure than
+not answering. The status is a parseable field rather than prose so the distinction can be enforced
+and, later, surfaced in a citation.
+
 ## 3. Domain index
 
 | # | File | Domain | Extends rule-engine coverage? |
@@ -86,10 +128,11 @@ sourced tool is trying to avoid in the first place.
 | 12 | `12-secure-delivery-pipeline.md` | CI security gates (secrets/SAST/SCA/image scan/sign+SBOM), GitOps promotion, progressive delivery, admission control | No — `pickCICD()` picks a CI product, nothing reasons about pipeline controls |
 | 13 | `13-private-network-egress-control.md` | Private endpoints vs. one audited egress path; single public entry; private model endpoints for regulated AI | No — `pickHybridConnectivity()` covers on-prem↔cloud links, not in-cloud network boundary |
 | 14 | `14-request-path-layer-ordering.md` | Layer order (DNS→edge→LB→gateway→platform), and which boxes are mutually exclusive alternatives | Partial — tiers exist in the canonical graph; ordering and exclusivity are not surfaced |
+| 15 | `15-observability-and-audit-logging.md` | Signal classes and one-backend-per-class, alerting on SLO burn rate, async trace propagation, and audit logging as a separate immutable pipeline | No — `pickObservability()` picks an APM vendor and reasons about nothing else |
 
 Documents 12–14 were contributed later, from reference architectures authored by the project owner
 for a BFSI architecture review (the source SVGs are committed at
-`diagrams/reference-architecture/`). They are the first entries in this corpus that are **not**
+`diagrams/reference-architecture/`), joined later by document 15 from the same source. They are the first entries in this corpus that are **not**
 web-researched: their primary source is that author's own design work, and each one's Sources
 section says so explicitly and lists the specific claims that still need external citation before
 `/api/ask` repeats them as fact rather than as design guidance. They were added because they cover

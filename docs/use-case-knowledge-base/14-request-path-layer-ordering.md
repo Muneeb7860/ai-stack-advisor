@@ -1,5 +1,7 @@
 # Request-Path Layer Ordering — what sits where, and which boxes are alternatives
 
+**Status:** partial — the canonical graph assigns tiers, but ordering and mutual exclusion are never surfaced to the reader.
+
 **Domain:** The order of the layers a request passes through from client to data, and — the part
 that is most often got wrong — which apparently-sequential boxes are actually *alternatives for one
 layer*. Source: `diagrams/reference-architecture/architecture-layers.svg`.
@@ -98,9 +100,12 @@ reporting load to the serving path.
 Security and secrets, observability, delivery, and governance apply at every layer. Drawing them as
 a step in the request path is a category error — they are a column beside the flow, not a box in it.
 
-Two anti-duplication rules belong here: instrument once with a vendor-neutral standard and ship to
-*one* backend rather than several in parallel; and treat policy as code inherited across
-environments rather than reimplemented per environment.
+Two anti-duplication rules belong here. On telemetry: instrument once with a vendor-neutral
+standard, then — **one backend per signal class — never two backends for the same signal.** That is
+the principle; routing different signal *classes* (application traces, infrastructure metrics, logs,
+security analytics) to products suited to each is a refinement of it, not an exception to it, and
+`15-observability-and-audit-logging.md` §C works that through. On policy: treat it as code inherited
+across environments rather than reimplemented per environment.
 
 ## Anti-patterns
 
