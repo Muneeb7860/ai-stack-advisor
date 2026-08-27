@@ -287,6 +287,12 @@ def detect_signals(text: str) -> dict:
     strong_on_prem = has_raw(
         [
             "air-gapped", "air gapped", "airgapped", "cannot use any public cloud",
+            # index.html has these six and this port did not, so "we run our own servers
+            # in-house and cannot move to cloud" was on-prem in the browser and NOT on-prem here —
+            # one missing signal cascading into nine wrong picks, including recommending AWS to an
+            # air-gapped customer. Logged as an open item in PRD Section 12 until now.
+            "own server", "own servers", "in-house server", "in-house servers",
+            "in house server", "in house servers",
             "no public cloud", "private cloud only", "bare metal deployment",
         ]
     )
@@ -453,6 +459,8 @@ def pick_cloud(s):
         return {"v": "On-premises / private infrastructure — no public cloud", "why": "An air-gapped or explicit no-public-cloud requirement rules out AWS/Azure/GCP entirely. You need a private data center, bare-metal, or air-gapped virtualization stack (VMware, OpenStack, or a vetted sovereign/government enclave) instead.", "conf": "high"}
     if s["awsShop"]:
         return {"v": "AWS", "why": "Explicit AWS usage detected — build on existing footprint (IAM, VPC, billing) rather than introducing a second cloud.", "conf": "high"}
+    if s["huaweiShop"]:
+        return {"v": "Huawei Cloud", "why": "Explicit Huawei Cloud usage detected — build on existing footprint rather than introducing a second cloud, particularly relevant for APAC/China-market deployments or markets where Huawei is an approved vendor under local data-residency rules.", "conf": "high"}
     if s["gcpShop"] or s["agentic"]:
         return {"v": "Google Cloud (GCP)", "why": "GCP mentioned, or agentic/data-heavy workload — GCP pairs well with Vertex AI, BigQuery, and Gemini models.", "conf": "high" if s["gcpShop"] else "medium"}
     if s["azureShop"] or s["enterprise"]:
@@ -465,6 +473,8 @@ def pick_cloud(s):
 def pick_gateway(s):
     if s["onPrem"]:
         return {"v": "Internal API gateway (Kong or Apigee Edge on-prem, or NGINX/Envoy) — no public CDN/edge service", "why": "Cloudflare and similar public edge services require internet egress, which an air-gapped environment doesn't have. Run your gateway entirely inside the isolated network boundary.", "conf": "high"}
+    if s["huaweiShop"]:
+        return {"v": "Huawei Cloud APIG (API Gateway) + ROMA Connect for integration/eventing", "why": "Explicit Huawei Cloud usage detected — APIG is Huawei's native API gateway; ROMA Connect adds enterprise integration (ESB-style) and eventing on top if you need to bridge multiple backend services.", "conf": "high"}
     picks = []
     hits = 0
     if s["security"] or s["compliance"] or s["highScale"]:
@@ -1069,13 +1079,29 @@ def pick_database(s):
     if warehouse_need:
         picks.append("Cloud data warehouse (BigQuery / Snowflake / Redshift) as the analytics store")
         hits += 1
-    if s["structured"] or s["finance"] or (not s["unstructured"] and not warehouse_need):
-        picks.append("PostgreSQL (primary transactional store)")
-        if s["structured"] or s["finance"]:
+    # Team-skill RDBMS choice: a SINGLE relational store, not "Postgres AND MySQL AND Oracle"
+    # stacked as if all are primary at once — pick whichever specific one the team already knows
+    # (fixed check order, since a team realistically names one; Postgres stays the fallback).
+    # This whole block, and the `not mongoMentioned` guard below, existed only in index.html: a
+    # requirement naming an existing MongoDB estate got MongoDB alone in the browser and
+    # "PostgreSQL · MongoDB" from the backend.
+    rdbms_name, rdbms_skill_note = "PostgreSQL", ""
+    if s["mysqlMentioned"]:
+        rdbms_name, rdbms_skill_note = "MySQL", " — matches your team's existing MySQL experience"
+    elif s["sqlServerMentioned"]:
+        rdbms_name, rdbms_skill_note = "Microsoft SQL Server", " — matches your team's existing SQL Server experience"
+    elif s["oracleDbMentioned"]:
+        rdbms_name, rdbms_skill_note = "Oracle Database", " — matches your team's existing Oracle experience"
+    rdbms_skill_hit = s["mysqlMentioned"] or s["sqlServerMentioned"] or s["oracleDbMentioned"]
+
+    if (s["structured"] or s["finance"] or s["postgresMentioned"] or rdbms_skill_hit
+            or (not s["unstructured"] and not warehouse_need and not s["mongoMentioned"])):
+        picks.append(f"{rdbms_name} (primary transactional store){rdbms_skill_note}")
+        if s["structured"] or s["finance"] or s["postgresMentioned"] or rdbms_skill_hit:
             hits += 1
-    if s["unstructured"] or s["chatbot"] or s["ragNeed"]:
+    if s["unstructured"] or s["chatbot"] or s["ragNeed"] or s["mongoMentioned"]:
         picks.append("MongoDB (flexible schema for content, chat history, documents)")
-        if s["unstructured"]:
+        if s["unstructured"] or s["mongoMentioned"]:
             hits += 1
     if s["iot"] or (s["highScale"] and s["dataHeavy"]):
         picks.append("Cassandra (write-heavy, high-scale, multi-region time-series/event data)")
@@ -1085,19 +1111,36 @@ def pick_database(s):
     why = (
         "Your workload reads as analytics/ETL/reporting-centric rather than transactional — a columnar cloud warehouse is built for exactly that (large scans, aggregations, BI-tool integration), which Postgres/Mongo/Cassandra are not optimized for. Add Postgres alongside it only if you also have an operational/transactional app component; add Cassandra alongside it if you also have high-volume write ingestion (e.g. IoT/event streams) feeding the warehouse."
         if warehouse_need
-        else "Postgres for relational/transactional integrity, MongoDB for flexible document data, Cassandra only when write volume and multi-region needs exceed what Postgres/Mongo comfortably handle."
+        else f"{rdbms_name} for relational/transactional integrity, MongoDB for flexible document data, Cassandra only when write volume and multi-region needs exceed what {rdbms_name}/Mongo comfortably handle."
     )
+    if s["postgresMentioned"] or s["mongoMentioned"] or rdbms_skill_hit:
+        why += " Included because your team already knows " + " and ".join(
+            [n for n in [s["postgresMentioned"] and "Postgres", s["mysqlMentioned"] and "MySQL",
+                         s["sqlServerMentioned"] and "SQL Server", s["oracleDbMentioned"] and "Oracle",
+                         s["mongoMentioned"] and "MongoDB"] if n]
+        ) + " — matching existing skills beats a theoretically-better choice on most timelines."
     if s["geospatial"]:
         why += " Geospatial note: enable the PostGIS extension on Postgres for indexed nearest-neighbor/radius queries (e.g. \"drivers within 2km\") — plain Postgres without PostGIS will do this with slow full-table scans. For a live, constantly-updating position feed specifically (a driver's current location, not trip history), treat that as ephemeral state in Redis (GEOADD/GEOSEARCH) rather than writing every position update to Postgres — same reasoning as the live-leaderboard pattern: high-frequency writes to a shared/near-shared key belong in an in-memory store, with Postgres holding the durable trip/ride record instead."
     return {"v": " · ".join(picks), "why": why, "conf": "high" if hits >= 1 else "medium"}
 
 
 def pick_containers(s):
+    if s["openshiftMentioned"]:
+        return {"v": "Docker + OpenShift (Red Hat's enterprise Kubernetes distribution)" + (", self-managed" if s["onPrem"] else ""), "why": "Your team already knows OpenShift — staying on it avoids retraining onto a different Kubernetes distribution for no real workload-driven reason, and OpenShift genuinely supports both on-prem and cloud deployment.", "conf": "high"}
     if s["onPrem"]:
         return {"v": "Docker + self-managed Kubernetes (kubeadm/Rancher/RKE2 on bare metal or VMware) — not EKS/GKE/AKS", "why": "Managed Kubernetes offerings are public-cloud services; an air-gapped/on-prem environment needs a self-managed distribution you can run entirely inside your network boundary.", "conf": "high"}
+    if s["huaweiShop"]:
+        return {"v": "Docker + Huawei Cloud CCE (Cloud Container Engine)" + (", CCE Turbo for high-throughput networking" if s["highScale"] else ""), "why": "Explicit Huawei Cloud usage detected — CCE is Huawei's managed Kubernetes offering, matching your existing cloud footprint rather than introducing a second vendor.", "conf": "high"}
     if s["startupMvp"]:
         return {"v": "Docker + managed serverless containers (Cloud Run / Fargate)", "why": "Keep container benefits without managing a Kubernetes control plane.", "conf": "high"}
-    return {"v": "Docker + Kubernetes (EKS/GKE/AKS matching chosen cloud)", "why": "Standard for portable, scalable container orchestration once team/scale justify it.", "conf": "high" if (s["enterprise"] or s["highScale"]) else "medium"}
+    why = "Standard for portable, scalable container orchestration once team/scale justify it."
+    conf = "high" if (s["enterprise"] or s["highScale"]) else "medium"
+    known = s.get("known") or {}
+    if known.get("docker") or known.get("kubernetes"):
+        names = " and ".join([n for n in [known.get("docker") and "Docker", known.get("kubernetes") and "Kubernetes"] if n])
+        why += f" Your team already knows {names} — this isn't introducing a new skillset."
+        conf = "high"
+    return {"v": "Docker + Kubernetes (EKS/GKE/AKS matching chosen cloud)", "why": why, "conf": conf}
 
 
 def pick_observability(s):
@@ -1110,6 +1153,20 @@ def pick_observability(s):
         apm, why, conf = "Splunk (+ Datadog or Dynatrace for APM)", "Enterprises with heavy compliance/audit needs often standardize log management on Splunk alongside a dedicated APM tool.", "high"
     elif s["enterprise"] and s["highScale"]:
         apm, why, conf = "Dynatrace", "Strong automatic root-cause analysis (AI-assisted) valuable at large, complex enterprise scale.", "high"
+    elif s["prometheusMentioned"]:
+        apm, why, conf = "Grafana + Prometheus (OSS)", "Your team already runs Prometheus/Grafana — sticking with what they know beats introducing a new SaaS vendor and its onboarding cost.", "high"
+    elif s["datadogMentioned"]:
+        apm, why, conf = "Datadog", "Your team already has Datadog experience — matching existing familiarity over evaluating a new vendor.", "high"
+    elif s["splunkMentioned"]:
+        apm, why, conf = "Splunk (+ a dedicated APM tool for tracing/metrics)", "Your team already runs Splunk for log management — keep it and add a focused APM tool alongside rather than replacing an established platform.", "high"
+    elif s["dynatraceMentioned"]:
+        apm, why, conf = "Dynatrace", "Your team already has Dynatrace experience — matching existing familiarity over evaluating a new vendor.", "high"
+    elif s["newrelicMentioned"]:
+        apm, why, conf = "New Relic", "Your team already knows New Relic — sticking with it avoids a vendor migration with no workload-driven reason to switch.", "high"
+    elif s["elkMentioned"]:
+        apm, why, conf = "Elastic Stack (Elasticsearch + Kibana)", "Your team already runs the Elastic Stack — a solid self-hosted or Elastic Cloud log/observability platform, no need to introduce a second one.", "high"
+    elif s["huaweiShop"]:
+        apm, why, conf = "Huawei Cloud Eye (CES) + LTS (Log Tank Service)", "Explicit Huawei Cloud usage detected — Cloud Eye covers metrics/health monitoring and LTS covers centralized logging natively on Huawei Cloud, matching your existing footprint rather than adding an external SaaS vendor.", "high"
     elif s["startupMvp"]:
         apm, why, conf = "Grafana + Prometheus (OSS) or Datadog free tier", "Lower cost for a small team; upgrade to Datadog/Dynatrace as scale and budget grow.", "medium"
     return {"v": f"OpenTelemetry (instrumentation standard) + {apm}", "why": f"Instrument everything with OpenTelemetry (vendor-neutral) and ship to {apm.split(' ')[0]}. {why}", "conf": conf}
@@ -1246,13 +1303,47 @@ def pick_guardrails(s):
 
 
 def pick_cicd(s):
+    # Team-skill picks the actual CI platform name (a real, interchangeable choice) rather than
+    # always defaulting to GitHub Actions — same "matching skills beats a theoretically-better
+    # pick" rule as the rest of this feature. Checked in a fixed order since a team realistically
+    # names one primary CI tool; falls back to GitHub Actions absent any explicit match.
+    ci, ci_skill_hit = "GitHub Actions", False
+    if s["jenkinsMentioned"]:
+        ci, ci_skill_hit = "Jenkins", True
+    elif s["gitlabCiMentioned"]:
+        ci, ci_skill_hit = "GitLab CI", True
+    elif s["circleciMentioned"]:
+        ci, ci_skill_hit = "CircleCI", True
+    elif s["azureDevopsMentioned"]:
+        ci, ci_skill_hit = "Azure DevOps Pipelines", True
+    elif s["githubActionsMentioned"]:
+        ci_skill_hit = True
+
+    def skill_note(v):
+        # Only the tools the requirement shows OWNERSHIP of earn the "already knows" bonus.
+        k = s.get("known") or {}
+        known_ci = ci_skill_hit and (k.get("jenkins") or k.get("gitlabCi") or k.get("circleci")
+                                     or k.get("azureDevops") or k.get("githubActions"))
+        known = [n for n in [known_ci and ci, k.get("terraform") and "Terraform"] if n]
+        if not known:
+            return v
+        return {"v": v["v"],
+                "why": v["why"] + f" Bonus: your team already knows {' and '.join(known)}, so this "
+                                  "isn't just the balanced default — it matches existing skills too.",
+                "conf": "high" if v["conf"] == "high" else "medium"}
+
     if s["onPrem"]:
-        return {"v": "Self-hosted GitLab CE or Jenkins with self-hosted runners, deploying via Terraform to your private infrastructure", "why": "Cloud-hosted CI/CD (GitHub Actions cloud runners, Vercel) needs internet connectivity to reach your infrastructure — an air-gapped environment needs the entire pipeline, including runners, inside the network boundary.", "conf": "high"}
+        # Air-gapped runners must be self-hosted regardless — but still honor a named team-known
+        # tool over the generic "GitLab CE or Jenkins either-or" phrasing when one was stated.
+        on_prem_ci = "Jenkins" if s["jenkinsMentioned"] else "GitLab CE" if s["gitlabCiMentioned"] else "GitLab CE or Jenkins"
+        return {"v": f"Self-hosted {on_prem_ci} with self-hosted runners, deploying via Terraform to your private infrastructure", "why": "Cloud-hosted CI/CD (GitHub Actions cloud runners, Vercel) needs internet connectivity to reach your infrastructure — an air-gapped environment needs the entire pipeline, including runners, inside the network boundary.", "conf": "high"}
+    if s["huaweiShop"]:
+        return skill_note({"v": "Huawei Cloud CodeArts (Pipeline, Build, Deploy) → CCE, Resource Template Service (RTS) for infra-as-code", "why": "Explicit Huawei Cloud usage detected — CodeArts is Huawei's native CI/CD suite (covers what GitHub Actions/Jenkins + Terraform would do, in one integrated toolchain), matching your existing cloud footprint.", "conf": "high"})
     if s["startupMvp"]:
-        return {"v": "GitHub Actions → Vercel (frontend) + Cloud Run/Fargate (backend)", "why": "Fastest path to production for a small team, minimal infra to manage.", "conf": "high"}
+        return skill_note({"v": f"{ci} → Vercel (frontend) + Cloud Run/Fargate (backend)", "why": "Fastest path to production for a small team, minimal infra to manage.", "conf": "high"})
     if s["enterprise"]:
-        return {"v": "GitHub Actions/GitLab CI → ArgoCD (GitOps) → Kubernetes, Terraform for infra-as-code", "why": "GitOps gives auditable, repeatable deployments at enterprise scale with multiple environments/teams.", "conf": "high"}
-    return {"v": "GitHub Actions → Terraform + Kubernetes (or Vercel for frontend-only pieces)", "why": "Balanced CI/CD with infra-as-code as the team and service count grow.", "conf": "low"}
+        return skill_note({"v": f"{ci} → ArgoCD (GitOps) → Kubernetes, Terraform for infra-as-code", "why": "GitOps gives auditable, repeatable deployments at enterprise scale with multiple environments/teams.", "conf": "high"})
+    return skill_note({"v": f"{ci} → Terraform + Kubernetes (or Vercel for frontend-only pieces)", "why": "Balanced CI/CD with infra-as-code as the team and service count grow.", "conf": "low"})
 
 
 def pick_dns(s):
@@ -1260,6 +1351,8 @@ def pick_dns(s):
         return {"v": "Internal DNS (BIND / Windows DNS / private zone) — no public DNS provider", "conf": "high"}
     if s["awsShop"]:
         return {"v": "Route 53 (AWS-native, integrates with ALB/CloudFront)", "conf": "high"}
+    if s["huaweiShop"]:
+        return {"v": "Huawei Cloud DNS (native, integrates with ELB and CDN)", "conf": "high"}
     return {"v": "Cloudflare DNS (fast propagation, built-in DDoS/WAF) — or Route 53 if fully AWS-native", "conf": "low"}
 
 
