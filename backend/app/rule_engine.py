@@ -66,6 +66,17 @@ _NEGATION_CLAUSE = re.compile(
 )
 
 
+# A negator followed by one of these qualifies what comes next rather than prohibiting it.
+# "We need not only a website but also a mobile app" ASKS FOR a website; reading it as an
+# exclusion deleted the Frontend recommendation outright — worse than the over-recommendation
+# this mechanism exists to prevent. Same for "not just a database problem" and the quantity
+# forms "no more than 200ms" / "no fewer than three regions".
+NON_EXCLUSION_QUALIFIERS = (
+    "only", "just", "merely", "simply", "solely", "exclusively",
+    "more than", "less than", "fewer than", "later than", "earlier than", "greater than",
+)
+
+
 def detect_exclusions(text: str) -> dict:
     """Mirrors index.html's detectExclusions(): keeps what strip_negations() throws away.
 
@@ -76,6 +87,8 @@ def detect_exclusions(text: str) -> dict:
     out = {}
     for m in _NEGATION_CLAUSE.finditer(str(text or "").lower()):
         clause = m.group(1) or ""
+        if clause.strip().startswith(NON_EXCLUSION_QUALIFIERS):
+            continue
         for key, terms in EXCLUSION_TERMS.items():
             if any(re.search(r"\b" + re.escape(term) + r"\b", clause) for term in terms):
                 out[key] = True
@@ -106,10 +119,15 @@ EXPERIENCE_AFTER = ["experience", "expertise", "shop", "in production", "today",
 EXPERIENCE_DISCLAIMERS = ["never used", "never worked", "no experience", "not familiar", "unfamiliar",
     "evaluating", "considering", "should we use", "thinking about", "looking at", "new to", "want to learn",
     "have not used", "haven't used", "no one knows", "nobody knows", "would like to use", "plan to use",
-    "planning to use"]
+    "planning to use",
+    # Statements of NON-use. Without these, "We don't use Kubernetes today" read as ownership: the
+    # before-window "we don't use " does not contain "we use", so nothing disclaimed it, and the
+    # after-window " today" hit EXPERIENCE_AFTER. Same defect as BUG-7, one phrasing over.
+    "do not use", "don't use", "dont use", "no longer use", "no longer", "not using", "stopped using",
+    "moving off", "migrating off", "away from", "do not run", "don't run", "not run on", "ruled out"]
 
 
-def detect_known_tech(text: str) -> dict:
+def detect_known_tech(text: str, excluded: dict | None = None) -> dict:
     """Mirrors index.html's detectKnownTech(). `xxxMentioned` means the user NAMED a technology;
     this means they showed ownership of it. Conflating the two is what made "should we use
     Kubernetes? we have never used it before" claim the team already knew Kubernetes."""
@@ -132,6 +150,10 @@ def detect_known_tech(text: str) -> dict:
                 idx = t.find(term, idx + len(term))
             if out.get(key):
                 break
+    # Exclusion wins — "we ruled out Kubernetes" satisfying both reads is a contradiction the rest
+    # of the engine has no way to resolve, so it is not representable.
+    for k in (excluded or {}):
+        out.pop(k, None)
     return out
 
 
@@ -176,6 +198,17 @@ _TIMELINE_RE = re.compile(
     r"([0-9]+|one|two|three|four|five|six|seven|eight|nine|ten|twelve)[\s-]*"
     r"(week|weeks|month|months|quarter|quarters|year|years)\b")
 
+# A duration is only a DELIVERY window when something nearby says so. Without this check any
+# "<n> months" phrase became a ship date: "Retain audit logs for 12 months" was exported into the
+# ADR quality scenarios as "First production release ships inside <= 360 days" — a retention rule
+# turned into a commitment the user never made, inside a decision record.
+TIMELINE_CUES = ("timeline", "deadline", "deliver", "delivery", "launch", "ship", "release",
+                 "go live", "go-live", "mvp", "milestone", "time frame", "timeframe", "build it",
+                 "in production by", "due")
+TIMELINE_DISQUALIFIERS = ("retain", "retention", "archive", "history", "historical", "logs for",
+                          "keep", "stored for", "storage", "backlog", "experience", "warranty",
+                          "contract", "licen")
+
 
 def detect_concurrency_target(text: str):
     """Mirrors index.html's detectConcurrencyTarget(). "500 concurrent users" parsed to nothing —
@@ -198,7 +231,13 @@ def detect_concurrency_target(text: str):
 def detect_timeline(text: str):
     """Mirrors index.html's detectTimeline(). Tightest stated window binds."""
     best = None
-    for m in _TIMELINE_RE.finditer(str(text or "").lower()):
+    t = str(text or "").lower()
+    for m in _TIMELINE_RE.finditer(t):
+        ctx = t[max(0, m.start() - 45): m.end() + 45]
+        if any(d in ctx for d in TIMELINE_DISQUALIFIERS):
+            continue
+        if not any(c in ctx for c in TIMELINE_CUES):
+            continue
         raw = m.group(1)
         n = _WORD_NUMBERS.get(raw, 12 if raw == "twelve" else None)
         if n is None:
@@ -267,12 +306,13 @@ def detect_signals(text: str) -> dict:
         has_raw(["hybrid"]) and has_raw(["cloud"]) and not strong_on_prem
     )
 
+    _exclusions = detect_exclusions(text)
     return {
         "onPrem": strong_on_prem or soft_on_prem,
         "hybridConnectivity": hybrid_connectivity,
         # Objects, not booleans — any consumer counting "active signals" must skip these.
-        "excluded": detect_exclusions(text),
-        "known": detect_known_tech(text),
+        "excluded": _exclusions,
+        "known": detect_known_tech(text, _exclusions),
         "latencyTarget": detect_latency_target(text),
         "concurrencyTarget": detect_concurrency_target(text),
         "timeline": detect_timeline(text),
@@ -1740,6 +1780,37 @@ def apply_exclusions(rec: dict, s: dict) -> dict:
                                           why="No vector database is needed because retrieval itself was ruled out.")
     if ex.get("llm"):
         rec["llm"] = [{"name": "Not recommended — you excluded LLMs", "tag": "excluded by requirement"}]
+
+    # Vendor comparisons are computed from the PRE-exclusion picks, so without this an excluded
+    # category still ships a live vendor recommendation — cloud="you excluded cloud hosting"
+    # alongside cloud_vendor={"v": "AWS"}. Mark them suppressed rather than deleting the key, so
+    # an MCP client sees WHY the comparison is absent instead of a missing field.
+    def _suppress(key):
+        if rec.get(key):
+            rec[key] = dict(rec[key], suppressed=True,
+                            why="Suppressed — this category was excluded by the requirement, so a "
+                                "vendor comparison for it would contradict the recommendation.")
+
+    if ex.get("cloud"):
+        _suppress("cloud_vendor")
+    if ex.get("containers") or ex.get("kubernetes"):
+        _suppress("orchestrator_vendor")
+    if ex.get("database"):
+        _suppress("database_vendor")
+    if ex.get("messaging"):
+        _suppress("messaging_vendor")
+    if ex.get("observability"):
+        _suppress("observability_vendor")
+    if ex.get("frontend"):
+        _suppress("frontend_vendor")
+    if ex.get("llm"):
+        _suppress("llm_provider_vendor")
+    if ex.get("rag") or ex.get("llm"):
+        _suppress("vector_db_vendor")
+    if ex.get("serverless"):
+        _suppress("compute_platform_vendor")
+    if ex.get("api"):
+        _suppress("gateway_vendor")
     return rec
 
 

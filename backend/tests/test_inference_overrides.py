@@ -167,13 +167,28 @@ def test_rationale_only_changes_are_reported_not_swallowed():
 
 
 @requires_node
-def test_overrides_reset_when_the_requirement_changes():
-    """An override is a decision about one sentence — silently carrying it to a different
-    requirement would apply it to text the user never judged."""
-    html = INDEX_HTML.read_text(encoding="utf-8")
-    assert re.search(
-        r"if \(text !== lastRequirementText\) signalOverrides = \{ excluded: \{\}, known: \{\} \};", html
-    ), "analyze() must clear overrides when the requirement text changes"
+def test_overrides_reset_when_the_requirement_changes_and_survive_a_re_run():
+    """An override is a decision about one sentence: carrying it to a DIFFERENT requirement would
+    apply it to text the user never judged, but re-running the SAME text must not silently discard
+    a decision they did make. Asserted behaviourally through setAnalysis(), the single funnel every
+    analysis path now goes through."""
+    out = _js("""
+      global.confirm = () => true;
+      runAnalyze("Enterprise platform, large organization, high traffic. We must not use Kubernetes.");
+      toggleInference('excluded', 'kubernetes');
+      const afterOverride = Object.keys(__inferenceState().signalOverrides.excluded).length;
+
+      runAnalyze("Enterprise platform, large organization, high traffic. We must not use Kubernetes.");
+      const afterSameTextRerun = Object.keys(__inferenceState().signalOverrides.excluded).length;
+
+      runAnalyze("A completely different requirement: a mobile app for field technicians.");
+      const afterNewText = Object.keys(__inferenceState().signalOverrides.excluded).length;
+
+      console.log(JSON.stringify({afterOverride, afterSameTextRerun, afterNewText}));
+    """)
+    assert out["afterOverride"] == 1
+    assert out["afterSameTextRerun"] == 1, "re-running the same text must not discard the override"
+    assert out["afterNewText"] == 0, "a different requirement must start from the raw inferences"
 
 
 @requires_node

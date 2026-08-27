@@ -1205,6 +1205,16 @@ const EXCLUSION_TERMS = {
   observability: ['observability','monitoring','datadog','splunk'],
 };
 
+// A negator followed by one of these does NOT prohibit what comes next — it qualifies it.
+// "We need not only a website but also a mobile app" ASKS FOR a website; reading it as an
+// exclusion deleted the Frontend card outright, which is worse than the over-recommendation
+// this whole mechanism exists to prevent. Same for "not just a database problem" and the
+// quantity forms "no more than 200ms" / "no fewer than three regions".
+const NON_EXCLUSION_QUALIFIERS = [
+  'only', 'just', 'merely', 'simply', 'solely', 'exclusively',
+  'more than', 'less than', 'fewer than', 'later than', 'earlier than', 'greater than',
+];
+
 function detectExclusions(text){
   const t = String(text || '').toLowerCase();
   // Same clause shape stripNegations() removes, but capturing the clause instead of dropping it.
@@ -1213,6 +1223,8 @@ function detectExclusions(text){
   let m;
   while ((m = NEG.exec(t)) !== null){
     const clause = m[1] || '';
+    const lead = clause.trim();
+    if (NON_EXCLUSION_QUALIFIERS.some(q => lead.startsWith(q))) continue;
     for (const key in EXCLUSION_TERMS){
       if (EXCLUSION_TERMS[key].some(term => new RegExp('\\b' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b').test(clause))){
         out[key] = true;
@@ -1281,9 +1293,14 @@ const EXPERIENCE_AFTER = ['experience','expertise','shop','in production','today
 // Kubernetes" cannot read as ownership just because "we have" appears before it.
 const EXPERIENCE_DISCLAIMERS = ['never used','never worked','no experience','not familiar','unfamiliar',
   'evaluating','considering','should we use','thinking about','looking at','new to','want to learn',
-  'have not used',"haven't used",'no one knows','nobody knows','would like to use','plan to use','planning to use'];
+  'have not used',"haven't used",'no one knows','nobody knows','would like to use','plan to use','planning to use',
+  // Statements of NON-use. Without these, "We don't use Kubernetes today" read as ownership:
+  // the before-window "we don't use " does not contain "we use", so nothing disclaimed it, and
+  // the after-window " today" hit EXPERIENCE_AFTER. Same defect as BUG-7, one phrasing over.
+  'do not use',"don't use",'dont use','no longer use','no longer','not using','stopped using',
+  'moving off','migrating off','away from','do not run',"don't run",'not run on','ruled out'];
 
-function detectKnownTech(text){
+function detectKnownTech(text, excluded){
   const t = String(text || '').toLowerCase();
   const out = {};
   for (const key in KNOWN_TERMS){
@@ -1307,6 +1324,10 @@ function detectKnownTech(text){
       if (out[key]) break;
     }
   }
+  // Exclusion wins. The two detectors share a key namespace only where a technology is also a
+  // whole category (kubernetes, today), and "we ruled out Kubernetes" satisfying both reads is a
+  // contradiction the rest of the engine has no way to resolve — so it is not representable.
+  if (excluded) for (const k in excluded) delete out[k];
   return out;
 }
 
@@ -1329,11 +1350,24 @@ function detectConcurrencyTarget(text){
   return best;
 }
 
+// A duration is only a DELIVERY window when something nearby says so. Without this check any
+// "<n> months" phrase became a ship date: "Retain audit logs for 12 months" was exported into the
+// ADR quality scenarios as "First production release ships inside ≤ 360 days" — a compliance
+// retention rule turned into a commitment the user never made, inside a decision record.
+const TIMELINE_CUES = ['timeline','deadline','deliver','delivery','launch','ship','release',
+  'go live','go-live','mvp','milestone','time frame','timeframe','build it','in production by','due'];
+// Durations that are explicitly about keeping data or counting tenure, not shipping software.
+const TIMELINE_DISQUALIFIERS = ['retain','retention','archive','history','historical','logs for',
+  'keep','stored for','storage','backlog','experience','warranty','contract','licen'];
+
 function detectTimeline(text){
   const t = String(text || '').toLowerCase();
-  const RE = /([0-9]+|one|two|three|four|five|six|seven|eight|nine|ten|twelve)[\s-]*(week|weeks|month|months|quarter|quarters|year|years)\b(?:[^.,;!?]{0,20}(?:timeline|deadline|delivery|to launch|to ship|to deliver))?/g;
+  const RE = /([0-9]+|one|two|three|four|five|six|seven|eight|nine|ten|twelve)[\s-]*(week|weeks|month|months|quarter|quarters|year|years)\b/g;
   let best = null, m;
   while ((m = RE.exec(t)) !== null){
+    const ctx = t.slice(Math.max(0, m.index - 45), m.index + m[0].length + 45);
+    if (TIMELINE_DISQUALIFIERS.some(d => ctx.includes(d))) continue;
+    if (!TIMELINE_CUES.some(c => ctx.includes(c))) continue;
     const raw = m[1];
     const n = _WORD_NUMBERS[raw] !== undefined ? _WORD_NUMBERS[raw] : (raw === 'twelve' ? 12 : parseFloat(raw));
     if (!isFinite(n)) continue;
@@ -1385,15 +1419,16 @@ function detectSignals(text){
   // needing a private/dedicated link between them (Direct Connect/ExpressRoute/Cloud Interconnect-
   // class connectivity), not just "run everything inside the boundary."
   const hybridConnectivity = dedicatedLinkTerms || (hasRaw(['hybrid']) && hasRaw(['cloud']) && !strongOnPrem);
+  const _exclusions = detectExclusions(text);
   return {
     onPrem: strongOnPrem || softOnPrem,
     hybridConnectivity,
     // What the user ruled OUT (see detectExclusions). An object, not a boolean — every consumer
     // that counts "active signals" must skip it, which is why it is named distinctly.
-    excluded: detectExclusions(text),
+    excluded: _exclusions,
     // Technologies the user named AND showed ownership of (see detectKnownTech). Distinct from
     // the `xxxMentioned` flags, which mean only "named" — never claim skill from those.
-    known: detectKnownTech(text),
+    known: detectKnownTech(text, _exclusions),
     // Explicit numeric latency/response-time target, e.g. "under 3 seconds", "sub-200ms",
     // "p95 below 500ms". null when the requirement states no number (see detectLatencyTarget).
     latencyTarget: detectLatencyTarget(text),
@@ -1666,6 +1701,15 @@ function confLabelStr(c){ return ({high:'High confidence', medium:'Medium confid
 // flow tight (one Stack section, one AI/LLM section, etc.) while keeping the full comparison one
 // click away per category. IAM Options stays the one dedicated deep-dive section (it earned that
 // treatment first); everything else added during the alternatives-research wiring pass folds in here.
+// Vendor comparisons are computed BEFORE applyExclusions runs (they depend on the picks), so an
+// excluded category would otherwise still render a full "See alternatives" table with a starred
+// best bet — the Cloud card reading "you excluded cloud hosting" directly above a star on AWS.
+// applyExclusions marks the matching pick suppressed and this drops the toggle entirely.
+function altToggle(vendors, pick, note){
+  if (pick && pick.suppressed) return '';
+  return renderAltToggle(vendors, pick && pick.primaryId, note);
+}
+
 function renderAltToggle(vendors, primaryId, note){
   if(!vendors || !vendors.length) return '';
   return `<details class="alt-toggle">
@@ -2937,6 +2981,22 @@ function applyExclusions(rec, s){
   if (ex.llm){
     rec.llm = [{name:'Not recommended — you excluded LLMs', tag:'excluded by requirement'}];
   }
+
+  // Suppress the matching vendor comparison. These were computed from the pre-exclusion picks, so
+  // leaving them alone puts a starred "best bet" underneath a card that says the category was
+  // ruled out. Kubernetes counts here too: that branch is a downgrade rather than a removal, but
+  // the orchestrator table would still star Kubernetes against a card that says "not Kubernetes".
+  const suppress = (k) => { if (rec[k]) rec[k] = Object.assign({}, rec[k], {suppressed: true}); };
+  if (ex.cloud)                        suppress('cloudVendorPick');
+  if (ex.containers || ex.kubernetes)  suppress('orchestratorPick');
+  if (ex.database)                     suppress('dbVendorPick');
+  if (ex.messaging)                    suppress('msgVendorPick');
+  if (ex.observability)                suppress('obsVendorPick');
+  if (ex.frontend)                     suppress('feVendorPick');
+  if (ex.llm)                          suppress('llmProviderPick');
+  if (ex.rag || ex.llm)                suppress('vectorDbVendorPick');
+  if (ex.serverless)                   suppress('computePlatformPick');
+  if (ex.api)                          suppress('gatewayVendorPick');
   return rec;
 }
 
@@ -3037,20 +3097,20 @@ function renderRecommendations(s, rec){
   // categories with no vendor-comparison data researched (Backend Language(s), Architecture Style,
   // Service Mesh, DNS) or where the deep-dive already has its own dedicated section (IAM Options).
   const stackCards = [
-    ['Cloud Provider', cloud.v, cloud.why, cloud.conf, 'Enterprise Architect', renderAltToggle(CLOUD_VENDORS, cloudVendorPick.primaryId, CLOUD_NOTE), getCardBasis('cloud', cloud.conf)],
-    ['API Gateway / Edge', gw.v, gw.why, gw.conf, 'Solution Architect', renderAltToggle(GATEWAY_VENDORS, gatewayVendorPick.primaryId, GATEWAY_NOTE), getCardBasis('gateway', gw.conf)],
+    ['Cloud Provider', cloud.v, cloud.why, cloud.conf, 'Enterprise Architect', altToggle(CLOUD_VENDORS, cloudVendorPick, CLOUD_NOTE), getCardBasis('cloud', cloud.conf)],
+    ['API Gateway / Edge', gw.v, gw.why, gw.conf, 'Solution Architect', altToggle(GATEWAY_VENDORS, gatewayVendorPick, GATEWAY_NOTE), getCardBasis('gateway', gw.conf)],
     ['Identity & Access (IAM)', iam.v, iam.why, iam.conf, 'Enterprise Architect', '', getCardBasis('iam', iam.conf)],
     ['Backend Language(s)', lang.v, lang.why, lang.conf, 'Application Architect', '', getCardBasis('languages', lang.conf)],
     ['Architecture Style', arch.v, arch.why, arch.conf, 'Solution Architect', '', getCardBasis('architecture', arch.conf)],
-    ['Compute Model', compute.v, compute.why, compute.conf, 'Solution Architect', renderAltToggle(COMPUTE_VENDORS, computePlatformPick.primaryId, COMPUTE_NOTE), getCardBasis('compute', compute.conf)],
-    ['Messaging / Streaming', msg.v, msg.why, msg.conf, 'Application Architect', renderAltToggle(MESSAGING_VENDORS, msgVendorPick.primaryId, MESSAGING_NOTE), getCardBasis('messaging', msg.conf)],
+    ['Compute Model', compute.v, compute.why, compute.conf, 'Solution Architect', altToggle(COMPUTE_VENDORS, computePlatformPick, COMPUTE_NOTE), getCardBasis('compute', compute.conf)],
+    ['Messaging / Streaming', msg.v, msg.why, msg.conf, 'Application Architect', altToggle(MESSAGING_VENDORS, msgVendorPick, MESSAGING_NOTE), getCardBasis('messaging', msg.conf)],
     ['Service Mesh', mesh.v, mesh.why, mesh.conf, 'Enterprise Architect', '', getCardBasis('mesh', mesh.conf)],
     ['Caching', cache.v, cache.why, cache.conf, 'SDE', renderAltToggle(CACHE_VENDORS, 'redis', CACHE_NOTE), getCardBasis('cache', cache.conf)],
-    ['Primary Database(s)', db.v, db.why, db.conf, 'Application Architect', renderAltToggle(DATABASE_VENDORS, dbVendorPick.primaryId, DATABASE_NOTE), getCardBasis('database', db.conf)],
-    ['Containers / Orchestration', containers.v, containers.why, containers.conf, 'SDE', renderAltToggle(ORCHESTRATOR_VENDORS, orchestratorPick.primaryId, ORCHESTRATOR_NOTE), getCardBasis('containers', containers.conf)],
-    ['Observability', obs.v, obs.why, obs.conf, 'SDE / TPM', renderAltToggle(OBSERVABILITY_VENDORS, obsVendorPick.primaryId, OBSERVABILITY_NOTE), getCardBasis('observability', obs.conf)],
-    ['Frontend', fe.v, fe.why, fe.conf, 'Application Architect', renderAltToggle(FRONTEND_VENDORS, feVendorPick.primaryId, FRONTEND_NOTE), getCardBasis('frontend', fe.conf)],
-    ['CI/CD & Deployment', cicd.v, cicd.why, cicd.conf, 'SDE', renderAltToggle(CICD_VENDORS, cicdVendorPick.primaryId, CICD_NOTE), getCardBasis('cicd', cicd.conf)],
+    ['Primary Database(s)', db.v, db.why, db.conf, 'Application Architect', altToggle(DATABASE_VENDORS, dbVendorPick, DATABASE_NOTE), getCardBasis('database', db.conf)],
+    ['Containers / Orchestration', containers.v, containers.why, containers.conf, 'SDE', altToggle(ORCHESTRATOR_VENDORS, orchestratorPick, ORCHESTRATOR_NOTE), getCardBasis('containers', containers.conf)],
+    ['Observability', obs.v, obs.why, obs.conf, 'SDE / TPM', altToggle(OBSERVABILITY_VENDORS, obsVendorPick, OBSERVABILITY_NOTE), getCardBasis('observability', obs.conf)],
+    ['Frontend', fe.v, fe.why, fe.conf, 'Application Architect', altToggle(FRONTEND_VENDORS, feVendorPick, FRONTEND_NOTE), getCardBasis('frontend', fe.conf)],
+    ['CI/CD & Deployment', cicd.v, cicd.why, cicd.conf, 'SDE', altToggle(CICD_VENDORS, cicdVendorPick, CICD_NOTE), getCardBasis('cicd', cicd.conf)],
     ['DNS', dns.v, 'DNS routing and edge protection for your domain.', dns.conf, 'Solution Architect', '', getCardBasis('dns', dns.conf)],
     ['Hybrid Connectivity', hybridConnectivity.v, hybridConnectivity.why, hybridConnectivity.conf, 'Enterprise Architect', '', getCardBasis('hybridconnectivity', hybridConnectivity.conf)],
   ];
@@ -3100,6 +3160,11 @@ function renderRecommendations(s, rec){
   // report never quietly hides a reading it made; clicking it again restores the inference.
   // Rendered from the RAW signals so suppressed ones remain listed and restorable.
   const rawForChips = (typeof lastRawSignals !== 'undefined' && lastRawSignals) || s;
+  // The read-only shared view renders straight from a stored analysis and never populates
+  // lastRawSignals, so toggleInference() has nothing to recompute from. Rendering the chips as
+  // buttons there advertised a control that silently did nothing on every click — so on that view
+  // they render as plain labels that say why instead.
+  const canOverride = (typeof lastRawSignals !== 'undefined') && !!lastRawSignals && rawForChips === lastRawSignals;
   const renderChipRow = (kind, label, title) => {
     const all = Object.keys(rawForChips[kind] || {});
     const overridden = Object.keys((typeof signalOverrides !== 'undefined' ? signalOverrides[kind] : {}) || {})
@@ -3111,6 +3176,10 @@ function renderRecommendations(s, rec){
         <span class="sig" style="opacity:.75;">${label}</span>
         ${keys.map(k => {
           const off = (typeof signalOverrides !== 'undefined') && signalOverrides[kind][k] === false;
+          if (!canOverride){
+            return `<span class="sig" style="${off ? 'text-decoration:line-through;opacity:.5;' : ''}"
+              title="Shown for transparency. Overriding an inference is only available on an analysis you ran yourself, not on a shared read-only report.">${k}</span>`;
+          }
           return `<span class="sig" role="button" tabindex="0" style="cursor:pointer;${off ? 'text-decoration:line-through;opacity:.5;' : ''}"
             title="${off ? 'Switched off by you — click to re-apply this inference' : 'Detected from your text — click to switch this inference off'}"
             onclick="toggleInference('${kind}','${k}')"
@@ -3123,9 +3192,11 @@ function renderRecommendations(s, rec){
     renderChipRow('known', 'assumed your team runs:', 'Detected from ownership phrasing in your requirement. Click any chip to drop that assumption.') +
     ((Object.keys(rawForChips.excluded || {}).length || Object.keys(rawForChips.known || {}).length) ? `
       <div class="why" style="margin-top:6px; opacity:.7; font-size:12px;">
-        These two rows are keyword inferences, not things you typed verbatim — click any chip to
-        override it. You'll be shown exactly which recommendations that one change alters before it
-        is applied.
+        These two rows are keyword inferences, not things you typed verbatim${canOverride
+          ? ` — click any chip to override it. You'll be shown exactly which recommendations that
+            one change alters before it is applied.`
+          : `. They are shown so you can judge the report against them; overriding is only available
+            on an analysis you run yourself.`}
       </div>` : '');
   const signalsHtml = `<div class="results-hero">
       <div class="rh-eyebrow">${activeSignals.length} signal${activeSignals.length===1?'':'s'} detected${excludedList.length?` · ${excludedList.length} exclusion${excludedList.length===1?'':'s'}`:''}</div>
@@ -3231,7 +3302,7 @@ function renderRecommendations(s, rec){
   sec('llm', 'LLM', 'AI / LLM Recommendation',
     `<div class="card"><div class="llm-picks">${llm.map(p=>`<div class="llm-row"><div class="name">${p.name}</div><div class="tag">${p.tag}</div></div>`).join('')}</div>
       <div class="why" style="margin-top:10px;">Size guidance: use 4B–12B open-weight models for high-volume/low-complexity tasks (classification, routing, extraction); 12B–30B for cost-efficient RAG generation and summarization; frontier-tier models (Claude Sonnet/Opus, GPT-4o/o-series, Gemini Pro) for complex reasoning, agentic tool-use, and user-facing conversations where quality matters most.</div>
-      ${renderAltToggle(LLM_PROVIDER_VENDORS, llmProviderPick.primaryId, LLM_PROVIDER_NOTE)}
+      ${altToggle(LLM_PROVIDER_VENDORS, llmProviderPick, LLM_PROVIDER_NOTE)}
     </div>`);
 
   // Unconditional call, same as every other sec() — visibleSections decides whether
@@ -3298,14 +3369,14 @@ function renderRecommendations(s, rec){
 
   sec('vectordb', 'Vector DB', 'Where the Vector DB Fits',
     `<div class="card"><div class="rag-pick"><div class="name">${vectorDb.needed ? 'Required: ' + vectorDb.dbChoice : 'Not required for this use case'}</div><div class="why">${vectorDb.why}</div>${vectorDb.needed?`<div class="when" style="margin-top:8px;"><b>Where it sits in the pipeline:</b> ${vectorDb.where}</div>`:''}</div>
-      ${vectorDb.needed ? renderAltToggle(VECTORDB_VENDORS, vectorDbVendorPick.primaryId, VECTORDB_NOTE) : ''}
+      ${vectorDb.needed ? altToggle(VECTORDB_VENDORS, vectorDbVendorPick, VECTORDB_NOTE) : ''}
     </div>`);
 
   sec('guardrails', 'Guardrails', 'Guardrails',
     `<div class="card"><div class="guardrail-list">${guardrails.map(g=>`<span class="g-chip">${g}</span>`).join('')}</div>
       <div class="subhead">Where in the pipeline — not input/output only</div>
       ${guardrailPipeline.stages.map(st=>`<div class="opt-item"><div class="t">${st.stage}</div><div class="w">${st.desc}</div></div>`).join('')}
-      ${renderAltToggle(GUARDRAILS_VENDORS, guardrailsVendorPick.primaryId, GUARDRAILS_NOTE)}
+      ${altToggle(GUARDRAILS_VENDORS, guardrailsVendorPick, GUARDRAILS_NOTE)}
       <div class="assumption">${guardrailPipeline.verdict}</div>
     </div>`);
 
@@ -3468,11 +3539,7 @@ function toggleInference(kind, key){
     return;
   }
 
-  const s = applySignalOverrides(lastRawSignals);
-  const rec = computeRecommendations(s);
-  lastSignals = s; lastRecommendations = rec;
-  renderRecommendations(s, rec);
-  if (typeof attachRefineUI === 'function') attachRefineUI();
+  setAnalysis(lastRequirementText, lastRawSignals, { resetOverrides: false });
 }
 
 // Read-only test seam. index.html has no module system, and a top-level `let` is unreachable
@@ -3483,22 +3550,46 @@ function __inferenceState(){
   return { signalOverrides, lastRawSignals, lastSignals, lastRecommendations };
 }
 
+// Every path that puts a NEW analysis on screen goes through here.
+//
+// There are three of them — free text, diagram upload, and an inference override — and they used
+// to each set the module state by hand. They drifted: the diagram path never set lastRawSignals or
+// cleared signalOverrides (so the inference chips described the PREVIOUS requirement, and clicking
+// one replaced the diagram report with a text-derived one), and the override path never called
+// resetRefineSession (so /api/refine and /api/ask kept grounding on the superseded analysis id).
+// Both are the same mistake — state added to one path and not the others — so there is now one
+// place to add state to.
+function setAnalysis(text, rawSignals, opts){
+  // Default: clear overrides only when the REQUIREMENT changed. An override is a judgement about
+  // one requirement, and carrying it to a different one would apply a decision the user never made
+  // to text they never saw it applied to — but re-running the same text should not silently
+  // discard a decision they did make. Callers pass resetOverrides explicitly to force either way.
+  const resetOverrides = (opts && typeof opts.resetOverrides === 'boolean')
+    ? opts.resetOverrides
+    : (text !== lastRequirementText);
+  if (resetOverrides) signalOverrides = { excluded: {}, known: {} };
+
+  lastRequirementText = text;
+  lastRawSignals = rawSignals;
+  const s = applySignalOverrides(rawSignals);
+  const rec = computeRecommendations(s);
+  lastSignals = s; lastRecommendations = rec;
+
+  // The cached analysis_id/refine history describe the recommendations that were on screen a
+  // moment ago. They are stale for ANY change, including an override — not just a new requirement.
+  if (typeof resetRefineSession === 'function') resetRefineSession();
+  renderRecommendations(s, rec);
+  if (typeof attachRefineUI === 'function') attachRefineUI();
+
+  const header = document.getElementById('resultsHeader');
+  if (header) header.style.display = 'flex'; // decision #12 — Share button, hidden on the read-only shared view
+  return { s, rec };
+}
+
 function analyze(){
   const text = document.getElementById('input').value.trim();
   if(!text){ alert('Please describe your business/product requirements first.'); return; }
-  // A different requirement means the inferences are re-derived — carrying overrides across would
-  // apply a decision made about one sentence to a different one.
-  if (text !== lastRequirementText) signalOverrides = { excluded: {}, known: {} };
-  const raw = detectSignals(text);
-  lastRawSignals = raw;
-  const s = applySignalOverrides(raw);
-  const rec = computeRecommendations(s);
-  lastRequirementText = text; lastSignals = s; lastRecommendations = rec;
-  if (typeof resetRefineSession === 'function') resetRefineSession(); // forget any previous analysis_id/refine cache
-  renderRecommendations(s, rec);
-  if (typeof attachRefineUI === 'function') attachRefineUI();
-  const header = document.getElementById('resultsHeader');
-  if (header) header.style.display = 'flex'; // decision #12 — Share button, hidden on the read-only shared view
+  setAnalysis(text, detectSignals(text));
 }
 function setView(v){
   currentView = v;
@@ -6207,15 +6298,7 @@ function analyzeDiagramEntities() {
   const synthesizedText = 'Existing architecture diagram components: ' + activeEntities.join(', ') + '. Evaluate stack modernization and AI additions.';
   document.getElementById('input').value = synthesizedText;
   
-  const s = detectSignals(synthesizedText);
-  const rec = computeRecommendations(s);
-  lastRequirementText = synthesizedText; lastSignals = s; lastRecommendations = rec;
-  if (typeof resetRefineSession === 'function') resetRefineSession();
-  renderRecommendations(s, rec);
-  if (typeof attachRefineUI === 'function') attachRefineUI();
-  
-  const header = document.getElementById('resultsHeader');
-  if (header) header.style.display = 'flex';
+  setAnalysis(synthesizedText, detectSignals(synthesizedText));
   
   // Smooth scroll to results
   document.getElementById('resultsShell').scrollIntoView({ behavior: 'smooth' });
