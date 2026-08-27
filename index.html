@@ -902,7 +902,7 @@
 </div>
 
 <!-- ================= Diagram Upload screen (Wave 1) ================= -->
-<div class="wrap" id="screenUpload" style="display:none; max-width:760px; margin:0 auto; padding:8px 0 20px;">
+<div class="wrap" id="screenUpload" style="max-width:760px; margin:0 auto; padding:8px 0 20px;">
   <div class="intro-col">
     <header>
       <h1>Upload Architecture Diagram</h1>
@@ -1174,6 +1174,147 @@ function clearAll(){
 function stripNegations(text){
   return text.replace(/\b(no|not|without|don't|doesn't|isn't|won't|never|excluding|except for|except)\b[^.,;!?]{0,60}/gi, ' ');
 }
+
+// stripNegations() deletes the negated clause so a phrase like "no compliance requirements"
+// can't fire a positive `compliance` signal. That prevents a false POSITIVE, but it also threw
+// away the only place the user said what they DON'T want — which is why "we must not use
+// Kubernetes" used to return Kubernetes anyway (it's the default for enterprise/high-scale, and
+// nothing recorded the prohibition). detectExclusions() reads the same clauses stripNegations()
+// removes and keeps what was named in them, so an exclusion is a first-class input rather than
+// an absence of signal.
+//
+// Deliberately conservative: only terms that map to a category this engine actually recommends
+// are listed, so "not just a prototype" or "no rush" record nothing. Exclusions are surfaced in
+// the UI (see the Excluded chips in analyze()) precisely because a keyword heuristic will
+// occasionally over-match — the user can see what was inferred instead of it acting invisibly.
+const EXCLUSION_TERMS = {
+  kubernetes:    ['kubernetes','k8s','eks','gke','aks'],
+  containers:    ['docker','container','containers','containerisation','containerization'],
+  microservices: ['microservice','microservices'],
+  messaging:     ['kafka','rabbitmq','message queue','messaging','event bus','pub/sub'],
+  cache:         ['cache','caching','redis','memcached','valkey'],
+  database:      ['database','db','postgres','postgresql','mysql','mongodb','mongo','datastore'],
+  cloud:         ['cloud','aws','azure','gcp','google cloud','huawei'],
+  llm:           ['llm','llms','large language model','gpt','claude','openai','genai','generative ai'],
+  rag:           ['rag','retrieval augmented','retrieval-augmented','vector database','vector db','embedding','embeddings'],
+  frontend:      ['website','web app','web application','web site','frontend','front-end','ui','react','angular','vue'],
+  api:           ['api','apis','rest api','backend service','web service','endpoint'],
+  serverless:    ['serverless','lambda'],
+  mesh:          ['service mesh','istio','linkerd'],
+  iam:           ['sso','okta','identity provider','auth0'],
+  observability: ['observability','monitoring','datadog','splunk'],
+};
+
+function detectExclusions(text){
+  const t = String(text || '').toLowerCase();
+  // Same clause shape stripNegations() removes, but capturing the clause instead of dropping it.
+  const NEG = /\b(?:no|not|without|don't|doesn't|isn't|won't|never|excluding|except for|except)\b([^.,;!?]{0,60})/gi;
+  const out = {};
+  let m;
+  while ((m = NEG.exec(t)) !== null){
+    const clause = m[1] || '';
+    for (const key in EXCLUSION_TERMS){
+      if (EXCLUSION_TERMS[key].some(term => new RegExp('\\b' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b').test(clause))){
+        out[key] = true;
+      }
+    }
+  }
+  return out;
+}
+
+// detectSignals() had no numeric parsing of any kind, so "the complete RAG answer must come
+// back in under three seconds" contributed exactly nothing — the requirement's single hardest
+// number was dropped and the report substituted generic latency copy. This captures the target
+// as a real value so downstream cards and exports can state the user's number instead of a
+// stock one.
+const _WORD_NUMBERS = {one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9, ten:10};
+
+function detectLatencyTarget(text){
+  const t = String(text || '').toLowerCase();
+  // "200ms", "under 3 s", "sub-500 milliseconds", "within three seconds", "p95 < 1.5s"
+  const RE = /(?:under|below|less than|within|at most|no more than|sub-?|<=?|max(?:imum)? of)\s*([0-9]+(?:\.[0-9]+)?|one|two|three|four|five|six|seven|eight|nine|ten)\s*(ms|millisecond|milliseconds|s|sec|secs|second|seconds|m|min|minute|minutes)\b/g;
+  let best = null, m;
+  while ((m = RE.exec(t)) !== null){
+    const rawNum = m[1];
+    const n = _WORD_NUMBERS[rawNum] !== undefined ? _WORD_NUMBERS[rawNum] : parseFloat(rawNum);
+    if (!isFinite(n)) continue;
+    const unit = m[2];
+    let ms;
+    if (unit === 'ms' || unit.startsWith('millisecond')) ms = n;
+    else if (unit === 'm' || unit.startsWith('min')) ms = n * 60000;
+    else ms = n * 1000;
+    // Keep the tightest stated target — it is the binding constraint.
+    if (best === null || ms < best.ms) best = {ms, text: m[0].trim()};
+  }
+  return best;
+}
+
+// `xxxMentioned` answers "did the user name this technology?" — which is the right input for
+// marking a card as user-stated, and the WRONG input for claiming the team has experience with
+// it. The engine conflated the two, so "should we use Kubernetes? we have never used it before"
+// produced "Your team already knows Kubernetes" and bumped that card to high confidence.
+//
+// detectKnownTech() is the experience-aware companion (and the mirror image of
+// detectExclusions): a technology counts as KNOWN only when an ownership/experience phrase sits
+// next to the mention, and never when a disclaimer or evaluation phrase does.
+const KNOWN_TERMS = {
+  java:['java','spring boot'], python:['python','django','flask','fastapi'], go:['golang',' go '],
+  node:['node.js','nodejs','express.js','nestjs'], dotnet:['.net','c#','asp.net'], ruby:['ruby','rails'], php:['php','laravel'],
+  postgres:['postgres','postgresql'], mysql:['mysql'], sqlServer:['sql server','mssql'], oracleDb:['oracle database','oracle db'],
+  mongo:['mongodb','mongo'],
+  docker:['docker'], kubernetes:['kubernetes','k8s'], openshift:['openshift'],
+  react:['react'], angular:['angular'], vue:['vue','vue.js'],
+  datadog:['datadog'], prometheus:['prometheus','grafana'], splunk:['splunk'], dynatrace:['dynatrace'],
+  newrelic:['new relic','newrelic'], elk:['elk','elastic stack','elasticsearch'],
+  terraform:['terraform'], githubActions:['github actions'], jenkins:['jenkins'], gitlabCi:['gitlab ci'],
+  circleci:['circleci','circle ci'], azureDevops:['azure devops'],
+  pinecone:['pinecone'], weaviate:['weaviate'], qdrant:['qdrant'],
+};
+
+// Ownership/experience, i.e. "this is ours today".
+const EXPERIENCE_BEFORE = ['we use','we are using',"we're using",'we run','we have','we deploy','we host',
+  'our team knows','our team uses','team knows','team uses','experience with','experienced with','familiar with',
+  'already on','already use','already using','already run','currently use','currently using','currently on',
+  'our stack','we know','we standardise on','we standardize on','skilled in','proficient in','migrating from','shop uses'];
+const EXPERIENCE_AFTER = ['experience','expertise','shop','in production','today','already'];
+// Evaluation/absence — these must BEAT a nearby experience phrase, so "we have never used
+// Kubernetes" cannot read as ownership just because "we have" appears before it.
+const EXPERIENCE_DISCLAIMERS = ['never used','never worked','no experience','not familiar','unfamiliar',
+  'evaluating','considering','should we use','thinking about','looking at','new to','want to learn',
+  'have not used',"haven't used",'no one knows','nobody knows','would like to use','plan to use','planning to use'];
+
+function detectKnownTech(text){
+  const t = String(text || '').toLowerCase();
+  const out = {};
+  for (const key in KNOWN_TERMS){
+    for (const term of KNOWN_TERMS[key]){
+      let idx = t.indexOf(term);
+      while (idx !== -1){
+        const before = t.slice(Math.max(0, idx - 60), idx);
+        const after = t.slice(idx + term.length, idx + term.length + 40);
+        const disclaimed = EXPERIENCE_DISCLAIMERS.some(d => before.includes(d) || after.includes(d));
+        if (!disclaimed){
+          if (EXPERIENCE_BEFORE.some(e => before.includes(e)) || EXPERIENCE_AFTER.some(e => after.includes(e))){
+            out[key] = true;
+            break;
+          }
+        }
+        idx = t.indexOf(term, idx + term.length);
+      }
+      if (out[key]) break;
+    }
+  }
+  return out;
+}
+
+// A pick the user explicitly ruled out. Kept as a real card (not hidden) so the report shows
+// the constraint was understood rather than silently producing a shorter stack.
+function excludedPick(what){
+  return {v: 'Not recommended — you excluded ' + what, conf: 'high', excluded: true,
+    why: 'Your requirement explicitly ruled this out, so nothing is recommended for this category. ' +
+         'This is a stated constraint, not a heuristic default — if the exclusion was picked up in error, ' +
+         'rephrase the requirement and re-run.'};
+}
 function detectSignals(text){
   const raw = text.toLowerCase(); // used only for phrases that are themselves phrased with "no"/"cannot" — the negation IS the requirement
   const t = stripNegations(text).toLowerCase();
@@ -1205,6 +1346,15 @@ function detectSignals(text){
   return {
     onPrem: strongOnPrem || softOnPrem,
     hybridConnectivity,
+    // What the user ruled OUT (see detectExclusions). An object, not a boolean — every consumer
+    // that counts "active signals" must skip it, which is why it is named distinctly.
+    excluded: detectExclusions(text),
+    // Technologies the user named AND showed ownership of (see detectKnownTech). Distinct from
+    // the `xxxMentioned` flags, which mean only "named" — never claim skill from those.
+    known: detectKnownTech(text),
+    // Explicit numeric latency/response-time target, e.g. "under 3 seconds", "sub-200ms",
+    // "p95 below 500ms". null when the requirement states no number (see detectLatencyTarget).
+    latencyTarget: detectLatencyTarget(text),
     healthcare: has(['health','hipaa','patient','clinical','ehr','medical']),
     finance: has(['fintech','bank','payment','fraud','pci','transaction','trading','ledger','finance']),
     ecommerce: has(['ecommerce','e-commerce','retail','shopping','product recommendation','cart','checkout']),
@@ -1288,6 +1438,13 @@ function detectSignals(text){
     vanillaWebMentioned: has(['html5','html/css','vanilla javascript','vanilla js']) || (has(['html']) && has(['css'])),
     dockerMentioned: has(['docker']),
     kubernetesMentioned: has(['kubernetes','k8s']),
+    // "Named by the user" signals for categories that had none, so the provenance map below can
+    // key on an actual statement instead of a proxy like team size or traffic volume.
+    redisMentioned: has(['redis','memcached','valkey']),
+    kafkaMentioned: has(['kafka','rabbitmq','message queue','event bus']),
+    microservicesMentioned: has(['microservice','microservices']),
+    monolithMentioned: has(['monolith','modular monolith','single deployable']),
+    serverlessMentioned: has(['serverless','lambda','cloud functions']),
     openshiftMentioned: has(['openshift']),
     pineconeMentioned: has(['pinecone']),
     weaviateMentioned: has(['weaviate']),
@@ -1751,7 +1908,7 @@ function pickLanguages(s){
   // fires on an explicit team-skill match, same style as java/python/go above — this is the
   // single largest predictor of delivery per the source playbook, so it's worth its own
   // language entries rather than folding into an existing one.
-  if(s.nodeMentioned){ picks.push('Node.js (TypeScript) for services your team already knows'); hits++; }
+  if(s.nodeMentioned){ picks.push(s.known.node ? 'Node.js (TypeScript) for services your team already knows' : 'Node.js (TypeScript)'); hits++; }
   if(s.dotnetMentioned){ picks.push('.NET (C#) for services your team already knows'); hits++; }
   if(s.rubyMentioned){ picks.push('Ruby on Rails for services your team already knows'); hits++; }
   if(s.phpMentioned){ picks.push('PHP (Laravel) for services your team already knows'); hits++; }
@@ -1851,7 +2008,30 @@ function pickHybridConnectivity(s, cloud){
   };
 }
 function pickCache(s){
-  return {v:'Redis', why:'De facto standard for caching, session storage, rate limiting, and lightweight pub/sub — recommended almost universally.', conf:'high'};
+  // This function used to ignore `s` entirely and return Redis unconditionally, so a static
+  // brochure site or a notebook-only ML script got a cache tier it has no use for. Redis is
+  // still the right answer when a cache is actually warranted — the fix is requiring a reason,
+  // not changing the product.
+  const reasons = [];
+  if (s.redisMentioned) reasons.push('you already use Redis');
+  if (s.highScale) reasons.push('high traffic/volume');
+  if (s.realtime) reasons.push('real-time/low-latency paths');
+  if (s.ecommerce) reasons.push('e-commerce catalog and cart reads');
+  if (s.liveMultiplayer) reasons.push('live session/leaderboard state');
+  if (s.chatbot || s.ragNeed) reasons.push('repeated LLM/retrieval calls worth caching');
+  if (s.enterprise || s.largeTeam) reasons.push('session storage across multiple services');
+  if (s.geospatial) reasons.push('ephemeral live-location state');
+
+  if (!reasons.length){
+    return {v:'Not required yet', conf:'medium', needed:false,
+      why:'Nothing in the requirement implies a caching tier — no high traffic, real-time path, ' +
+          'shared session state, or repeated expensive lookup was detected. Adding Redis here would ' +
+          'be infrastructure to run and pay for with no load to justify it. Revisit when you have a ' +
+          'measured hot path; Redis is the default choice at that point.'};
+  }
+  return {v:'Redis', conf:'high', needed:true,
+    why:'De facto standard for caching, session storage, rate limiting, and lightweight pub/sub. ' +
+        'Recommended here because of ' + reasons.join(', ') + '.'};
 }
 function pickDatabase(s){
   // Live-multiplayer/leaderboard state is an ephemeral, extremely-high-write-frequency pattern —
@@ -1896,7 +2076,7 @@ function pickDatabase(s){
   let why = warehouseNeed
     ? 'Your workload reads as analytics/ETL/reporting-centric rather than transactional — a columnar cloud warehouse is built for exactly that (large scans, aggregations, BI-tool integration), which Postgres/Mongo/Cassandra are not optimized for. Add Postgres alongside it only if you also have an operational/transactional app component; add Cassandra alongside it if you also have high-volume write ingestion (e.g. IoT/event streams) feeding the warehouse.'
     : `${rdbmsName} for relational/transactional integrity, MongoDB for flexible document data, Cassandra only when write volume and multi-region needs exceed what ${rdbmsName}/Mongo comfortably handle.`;
-  if(s.postgresMentioned || s.mongoMentioned || rdbmsSkillHit){ why += ' Included because your team already knows ' + [s.postgresMentioned&&'Postgres', s.mysqlMentioned&&'MySQL', s.sqlServerMentioned&&'SQL Server', s.oracleDbMentioned&&'Oracle', s.mongoMentioned&&'MongoDB'].filter(Boolean).join(' and ') + ' — matching existing skills beats a theoretically-better choice on most timelines.'; }
+  if(s.known.postgres || s.known.mongo || s.known.mysql || s.known.sqlServer || s.known.oracleDb){ why += ' Included because your team already knows ' + [s.known.postgres&&'Postgres', s.known.mysql&&'MySQL', s.known.sqlServer&&'SQL Server', s.known.oracleDb&&'Oracle', s.known.mongo&&'MongoDB'].filter(Boolean).join(' and ') + ' — matching existing skills beats a theoretically-better choice on most timelines.'; }
   // Geospatial (location tracking, nearby-matching, live maps) doesn't automatically change the
   // primary-store pick — Postgres with the PostGIS extension handles geospatial indexing/queries
   // (nearest-neighbor, radius search) well and is usually still right — but it's worth calling out
@@ -1919,7 +2099,10 @@ function pickContainers(s){
   if(s.startupMvp) return {v:'Docker + managed serverless containers (Cloud Run / Fargate)', why:'Keep container benefits without managing a Kubernetes control plane.', conf:'high'};
   let why = 'Standard for portable, scalable container orchestration once team/scale justify it.';
   let conf = (s.enterprise||s.highScale)?'high':'medium';
-  if(s.dockerMentioned || s.kubernetesMentioned){ why += ' Your team already knows ' + [s.dockerMentioned&&'Docker', s.kubernetesMentioned&&'Kubernetes'].filter(Boolean).join(' and ') + ' — this isn\'t introducing a new skillset.'; conf='high'; }
+  // Gated on s.known (ownership phrasing), NOT on *Mentioned (bare naming) — merely asking
+  // "should we use Kubernetes?" is not evidence the team has ever run it, and this used to claim
+  // exactly that and raise the card to high confidence off the back of it.
+  if(s.known.docker || s.known.kubernetes){ why += ' Your team already knows ' + [s.known.docker&&'Docker', s.known.kubernetes&&'Kubernetes'].filter(Boolean).join(' and ') + ' — this isn\'t introducing a new skillset.'; conf='high'; }
   return {v:'Docker + Kubernetes (EKS/GKE/AKS matching chosen cloud)', why, conf};
 }
 function pickObservability(s){
@@ -1959,7 +2142,7 @@ function pickFrontend(s){
   }
   if(s.mobile){ picks.push('Flutter (single codebase for iOS + Android)'); hits++; }
   if(picks.length===0) picks.push('React');
-  if(s.reactMentioned||s.angularMentioned||s.vueMentioned){ why += ' Your team already knows ' + [s.reactMentioned&&'React', s.angularMentioned&&'Angular', s.vueMentioned&&'Vue'].filter(Boolean).join('/') + ' — that beats the generic default above.'; }
+  if(s.known.react||s.known.angular||s.known.vue){ why += ' Your team already knows ' + [s.known.react&&'React', s.known.angular&&'Angular', s.known.vue&&'Vue'].filter(Boolean).join('/') + ' — that beats the generic default above.'; }
   else if(s.vanillaWebMentioned){ why += ' Your team already knows core HTML/CSS/JavaScript fundamentals, which transfer directly to whichever framework above — that\'s a real head start, just not itself a reason to pick one framework over another.'; }
   return {v:picks.join(' + '), why, conf: hits>=1?'high':'low'};
 }
@@ -2093,7 +2276,9 @@ function pickCICD(s){
   else if(s.azureDevopsMentioned){ ci = 'Azure DevOps Pipelines'; ciSkillHit = true; }
   else if(s.githubActionsMentioned){ ciSkillHit = true; }
   const skillNote = (v) => {
-    const known = [ciSkillHit && ci, s.terraformMentioned && 'Terraform'].filter(Boolean);
+    // Only the tools the requirement shows OWNERSHIP of earn the "already knows" bonus.
+    const knownCi = ciSkillHit && (s.known.jenkins || s.known.gitlabCi || s.known.circleci || s.known.azureDevops || s.known.githubActions);
+    const known = [knownCi && ci, s.known.terraform && 'Terraform'].filter(Boolean);
     if(!known.length) return v;
     return {v: v.v, why: v.why + ` Bonus: your team already knows ${known.join(' and ')}, so this isn't just the balanced default — it matches existing skills too.`, conf: v.conf==='high'?'high':'medium'};
   };
@@ -2602,6 +2787,18 @@ function pickCostEstimate(s, ctx){
 }
 function pickConcurrency(s){
   const items = [];
+  // A stated numeric target is the binding constraint for this whole section, so it leads — and
+  // it is quoted back verbatim. Previously detectSignals() parsed no numbers at all, so "the
+  // complete answer must come back in under three seconds" contributed nothing and the reader got
+  // generic latency advice that never referenced their own number.
+  if (s.latencyTarget){
+    const lt = s.latencyTarget;
+    const budget = lt.ms >= 1000
+      ? `Budget it explicitly end-to-end: retrieval, model generation and any tool calls all have to fit inside ${lt.ms/1000}s together, not each.`
+      : `At ${lt.ms}ms end-to-end there is no room for a synchronous LLM call in the request path — serve from cache/precomputed results, or return async and stream.`;
+    items.push({t:`Meet your stated target: ${lt.text} end-to-end`,
+      w:`You specified "${lt.text}", so treat it as this section's acceptance criterion rather than a general aspiration. ${budget} Measure at P95 against the full user-visible path, not per-component averages — component budgets that each look fine routinely add up past the target.`});
+  }
   items.push({t:'Async, non-blocking I/O throughout the request path', w:'Blocking calls (especially to LLMs or external APIs) are the most common throughput killer — async lets one instance serve many concurrent requests.'});
   items.push({t:'Connection pooling for database and external API clients', w:'Avoids connection-setup overhead becoming the bottleneck under concurrent load.'});
   if(s.realtime || s.highScale) items.push({t:'Horizontal autoscaling tuned on custom metrics (queue depth, P95 latency) rather than CPU alone', w:'CPU-based autoscaling reacts too late for bursty or latency-sensitive AI workloads.'});
@@ -2641,6 +2838,56 @@ function pickGovernance(s){
 // Pure computation half of the old analyze() — split out so the ?shared=SLUG read-only view
 // (fetches an already-computed {signals, recommendations} pair from the backend) can skip
 // straight to renderRecommendations() below without re-deriving anything from free text.
+// Overwrites picks the user explicitly ruled out (see detectExclusions). Done here, at the one
+// place every category is already in scope, rather than threading an exclusion check through 45
+// pickX() functions — one auditable list beats 45 scattered guards, and a new category cannot
+// silently miss the check.
+//
+// Mutates in place: the caller's object literal holds the same references it is about to return.
+function applyExclusions(rec, s){
+  const ex = (s && s.excluded) || {};
+
+  // Kubernetes specifically is a DOWNGRADE, not a removal — ruling out Kubernetes does not mean
+  // ruling out containers, and silently dropping containerisation would over-read the constraint.
+  if (ex.kubernetes && !ex.containers){
+    rec.containers = {v:'Docker + managed serverless containers (Cloud Run / Fargate / Container Apps) — not Kubernetes',
+      conf:'high', excluded:true,
+      why:'You ruled out Kubernetes, so this is the container story without a control plane to run: ' +
+          'the same images, deployed on a managed serverless-container runtime. If you also want to avoid ' +
+          'containers entirely, say so and this drops to plain VM/PaaS deployment.'};
+  }
+  if (ex.containers) rec.containers = excludedPick('containers');
+  if (ex.microservices){
+    rec.arch = {v:'Modular monolith (single deployable, module boundaries enforced in-code)',
+      conf:'high', excluded:true,
+      why:'You ruled out microservices. A modular monolith keeps the bounded-context discipline — ' +
+          'clear module seams, no cross-module database access — without the distributed-systems cost. ' +
+          'It is also the migration path if you later change your mind: extract a module, not a rewrite.'};
+  }
+  if (ex.messaging)     rec.msg   = excludedPick('messaging/streaming');
+  if (ex.cache)         rec.cache = excludedPick('caching');
+  if (ex.database)      rec.db    = excludedPick('a database');
+  if (ex.cloud)         rec.cloud = excludedPick('cloud hosting');
+  if (ex.frontend)      rec.fe    = excludedPick('a web/mobile frontend');
+  if (ex.mesh)          rec.mesh  = excludedPick('a service mesh');
+  if (ex.iam)           rec.iam   = excludedPick('a managed identity provider');
+  if (ex.observability) rec.obs   = excludedPick('an observability vendor');
+
+  // rag/llm carry different shapes from the {v,why,conf} cards — handle each explicitly rather
+  // than assuming a uniform pick shape.
+  if (ex.rag){
+    rec.rag = {name:'Not recommended — you excluded RAG', conf:'high', excluded:true,
+      why:'You ruled out retrieval-augmented generation, so no retrieval pattern is recommended.'};
+    rec.vectorDb = Object.assign({}, rec.vectorDb, {needed:false, excluded:true,
+      dbChoice:'Not required — RAG excluded',
+      why:'No vector database is needed because retrieval itself was ruled out.'});
+  }
+  if (ex.llm){
+    rec.llm = [{name:'Not recommended — you excluded LLMs', tag:'excluded by requirement'}];
+  }
+  return rec;
+}
+
 function computeRecommendations(s){
   const cloud = pickCloud(s), gw = pickGateway(s), iam = pickIAM(s), lang = pickLanguages(s),
         arch = pickArchitecture(s), compute = pickCompute(s), msg = pickMessaging(s), mesh = pickMesh(s),
@@ -2671,11 +2918,17 @@ function computeRecommendations(s){
   const obsVendorPick = pickObservabilityVendor(s, obs);
   const feVendorPick = pickFrontendVendor(s, fe);
 
-  return {cloud, gw, iam, lang, arch, compute, msg, mesh, cache, db, containers, obs, fe, llm, mcp, rag,
+  // Build the result first, THEN apply exclusions to it. Applying them to a separate object
+  // literal would mutate a throwaway — the `const` bindings above stay bound to the original
+  // picks, so the exclusions would silently do nothing.
+  const out = {cloud, gw, iam, lang, arch, compute, msg, mesh, cache, db, containers, obs, fe, llm, mcp, rag,
     guardrails, cicd, dns, docs, cost, throughput, gov, tradeoffs, orchestration, hosting, computeTier,
     topology, mcpVsApi, guardrailPipeline, vectorDb, runtime, costEstimate, hybridConnectivity,
     cloudVendorPick, computePlatformPick, orchestratorPick, gatewayVendorPick, dbVendorPick, msgVendorPick,
     llmProviderPick, vectorDbVendorPick, guardrailsVendorPick, cicdVendorPick, obsVendorPick, feVendorPick};
+
+  applyExclusions(out, s);
+  return out;
 }
 
 // Every section id renderRecommendations() can produce. Kept as one list so
@@ -2714,22 +2967,32 @@ function renderRecommendations(s, rec){
     cloudVendorPick, computePlatformPick, orchestratorPick, gatewayVendorPick, dbVendorPick, msgVendorPick,
     llmProviderPick, vectorDbVendorPick, guardrailsVendorPick, cicdVendorPick, obsVendorPick, feVendorPick} = rec;
 
-  const activeSignals = Object.entries(s).filter(([k,v])=>v).map(([k])=>k);
+  // `v === true`, not `v`: signals is no longer all-booleans — excluded/known/latencyTarget are
+  // objects, and `{}` is truthy, so a plain truthiness filter would list them as detected signals.
+  const activeSignals = Object.entries(s).filter(([k,v])=>v===true).map(([k])=>k);
+  const excludedList = Object.keys(s.excluded || {});
 
+  // `stated` (see confToBasis) tells the reader "you asked for this" as opposed to "we inferred
+  // this" — so it must key on the user naming a technology or stating a hard constraint, never on
+  // context that merely CORRELATES with a pick. It used to do the latter: saying "web app" marked
+  // React as stated, and "enterprise" or "high traffic" marked microservices and Kubernetes as
+  // stated, none of which the user ever asked for. An exclusion is equally a statement, so
+  // ruling something out marks the card stated too.
+  const ex = s.excluded || {};
   const cardExplicitMap = {
-    cloud: !!(s.awsShop || s.azureShop || s.gcpShop || s.huaweiShop || s.onPrem),
-    gateway: !!(s.onPrem),
-    iam: !!(s.oktaMentioned || s.entraMentioned || s.pingMentioned || s.forgerockMentioned || s.jumpcloudMentioned || s.onPrem),
+    cloud: !!(s.awsShop || s.azureShop || s.gcpShop || s.huaweiShop || s.onPrem || ex.cloud),
+    gateway: !!(s.onPrem || ex.api),
+    iam: !!(s.oktaMentioned || s.entraMentioned || s.pingMentioned || s.forgerockMentioned || s.jumpcloudMentioned || s.onPrem || ex.iam),
     languages: !!(s.javaMentioned || s.pythonMentioned || s.dotnetMentioned || s.goMentioned || s.nodeMentioned || s.rubyMentioned || s.phpMentioned),
-    architecture: !!(s.startupMvp || s.smallTeam || s.enterprise || s.largeTeam),
-    compute: !!(s.onPrem || s.startupMvp || s.enterprise || s.highScale),
-    messaging: !!(s.highScale && s.realtime),
-    mesh: !!(s.mtlsMentioned),
-    cache: false,
-    database: !!(s.postgresMentioned || s.mongoMentioned || s.mysqlMentioned || s.sqlServerMentioned || s.oracleDbMentioned || s.structured || s.finance),
-    containers: !!(s.dockerMentioned || s.kubernetesMentioned || s.openshiftMentioned || s.onPrem || s.startupMvp || s.enterprise || s.highScale),
-    observability: !!(s.datadogMentioned || s.prometheusMentioned || s.splunkMentioned || s.dynatraceMentioned || s.newrelicMentioned || s.elkMentioned),
-    frontend: !!(s.reactMentioned || s.angularMentioned || s.vueMentioned || s.vanillaWebMentioned || s.mobile || s.web),
+    architecture: !!(s.microservicesMentioned || s.monolithMentioned || ex.microservices),
+    compute: !!(s.onPrem || s.serverlessMentioned || ex.serverless),
+    messaging: !!(s.kafkaMentioned || ex.messaging),
+    mesh: !!(s.mtlsMentioned || ex.mesh),
+    cache: !!(s.redisMentioned || ex.cache),
+    database: !!(s.postgresMentioned || s.mongoMentioned || s.mysqlMentioned || s.sqlServerMentioned || s.oracleDbMentioned || ex.database),
+    containers: !!(s.dockerMentioned || s.kubernetesMentioned || s.openshiftMentioned || s.onPrem || ex.kubernetes || ex.containers),
+    observability: !!(s.datadogMentioned || s.prometheusMentioned || s.splunkMentioned || s.dynatraceMentioned || s.newrelicMentioned || s.elkMentioned || ex.observability),
+    frontend: !!(s.reactMentioned || s.angularMentioned || s.vueMentioned || s.vanillaWebMentioned || ex.frontend),
     cicd: !!(s.terraformMentioned || s.githubActionsMentioned || s.jenkinsMentioned || s.gitlabCiMentioned || s.circleciMentioned || s.azureDevopsMentioned),
     dns: false,
     hybridconnectivity: !!(s.hybridConnectivity || s.onPrem),
@@ -2786,11 +3049,29 @@ function renderRecommendations(s, rec){
         recommendations (cloud, database, backend language, CI/CD, etc.) are skipped below. Everything
         shown assumes your current stack stays exactly as it is; only the ${s.brownfieldOmnichannel ? 'omnichannel AI' : 'AI/chatbot'} layer is new.
       </div>` : '';
+  // When NOTHING was understood, the report below is a default stack, not a recommendation —
+  // "12345" produced AWS + Kubernetes + microservices + Postgres + React with the same confidence
+  // badges as a real analysis. The one-line "generic / no strong signals" chip did not carry that,
+  // so say it plainly at the top instead of letting the reader infer it from a chip.
+  const lowSignalBanner = (activeSignals.length === 0 && excludedList.length === 0) ? `
+      <div class="brownfield-banner">
+        <b>No requirements detected in your input</b> — nothing below was derived from what you wrote.
+        This is the tool's generic default stack, shown so you can see what it looks like, and it is
+        <b>not a recommendation for your project</b>. Describe what you are building — what it does, who
+        uses it, scale, compliance, and any technology you must or must not use — and re-run.
+      </div>` : '';
+  const excludedHtml = excludedList.length ? `
+      <div class="signals" style="margin-top:6px;">
+        <span class="sig" style="opacity:.75;">excluded by you:</span>
+        ${excludedList.map(x=>`<span class="sig">${x}</span>`).join('')}
+      </div>` : '';
   const signalsHtml = `<div class="results-hero">
-      <div class="rh-eyebrow">${activeSignals.length} signal${activeSignals.length===1?'':'s'} detected</div>
+      <div class="rh-eyebrow">${activeSignals.length} signal${activeSignals.length===1?'':'s'} detected${excludedList.length?` · ${excludedList.length} exclusion${excludedList.length===1?'':'s'}`:''}</div>
       <div class="rh-headline">${heroHeadline}</div>
       <div class="signals">${activeSignals.length? activeSignals.map(x=>`<span class="sig">${x}</span>`).join('') : '<span class="sig">generic / no strong signals — defaults applied</span>'}</div>
+      ${excludedHtml}
       ${renderTokenBudgetHtml(rec, s)}
+      ${lowSignalBanner}
       ${brownfieldBanner}
     </div>`;
 
@@ -4990,6 +5271,23 @@ function mapAppPicksToKb(rec, s){
   }
 
   omitted.push({category:'AI / LLM Strategy', detail:'Now partially covered by the new llm-strategy KB domain (access strategy + frontier/small model tiers, mapped above where the pick text matches) — the mid-size (12B-30B) open-weight tier and the RAG/guardrails/MCP sub-cards (separate app sections) are not yet modeled in the KB, so remaining gaps are still reported here rather than silently dropped.'});
+
+  // The export's own header promises gaps are "listed explicitly rather than dropped silently".
+  // These four categories were dropped silently: the ADR bundle carried no RAG pattern, no
+  // guardrail set, no MCP surface and no KPIs, and no entry saying they were left out either — so
+  // a reader comparing the file against the on-screen report found content missing with no
+  // explanation. They stay out of `recs` (the ADR knowledge base genuinely has no entries to cite
+  // for them), but they are now named, with the on-screen value, so the omission is visible.
+  if (rec.rag && rec.rag.name && !/not required|excluded/i.test(rec.rag.name)){
+    omitted.push({category:'RAG Pattern', detail:`On-screen recommendation is "${rec.rag.name}" — the ADR knowledge base models vector-database choice but not retrieval patterns themselves, so no citable decision record exists for it yet. See the RAG section of the report.`});
+  }
+  if (Array.isArray(rec.guardrails) && rec.guardrails.length){
+    omitted.push({category:'Guardrails', detail:`${rec.guardrails.length} guardrail control(s) recommended on screen (${rec.guardrails.slice(0,3).join('; ')}${rec.guardrails.length>3?'; …':''}) — the KB covers guardrail VENDORS, not the control set itself, so these are not exported as decision records.`});
+  }
+  if (Array.isArray(rec.mcp) && rec.mcp.length){
+    omitted.push({category:'MCP Servers', detail:`${rec.mcp.length} MCP server surface(s) recommended on screen (${rec.mcp.slice(0,2).join('; ')}${rec.mcp.length>2?'; …':''}) — no KB domain models MCP yet.`});
+  }
+  omitted.push({category:'KPIs / success metrics', detail:'The on-screen report includes KPI and cost/latency guidance that has no ADR knowledge-base representation at all — it is not exported. Copy it from the report if your decision record needs it.' + ((s && s.latencyTarget) ? ` Your stated performance target ("${s.latencyTarget.text}") is part of that un-exported guidance — carry it into the decision record by hand.` : '')});
 
   return {recommendations: recs, omitted};
 }

@@ -42,6 +42,142 @@ def strip_negations(text: str) -> str:
     )
 
 
+EXCLUSION_TERMS = {
+    "kubernetes": ["kubernetes", "k8s", "eks", "gke", "aks"],
+    "containers": ["docker", "container", "containers", "containerisation", "containerization"],
+    "microservices": ["microservice", "microservices"],
+    "messaging": ["kafka", "rabbitmq", "message queue", "messaging", "event bus", "pub/sub"],
+    "cache": ["cache", "caching", "redis", "memcached", "valkey"],
+    "database": ["database", "db", "postgres", "postgresql", "mysql", "mongodb", "mongo", "datastore"],
+    "cloud": ["cloud", "aws", "azure", "gcp", "google cloud", "huawei"],
+    "llm": ["llm", "llms", "large language model", "gpt", "claude", "openai", "genai", "generative ai"],
+    "rag": ["rag", "retrieval augmented", "retrieval-augmented", "vector database", "vector db", "embedding", "embeddings"],
+    "frontend": ["website", "web app", "web application", "web site", "frontend", "front-end", "ui", "react", "angular", "vue"],
+    "api": ["api", "apis", "rest api", "backend service", "web service", "endpoint"],
+    "serverless": ["serverless", "lambda"],
+    "mesh": ["service mesh", "istio", "linkerd"],
+    "iam": ["sso", "okta", "identity provider", "auth0"],
+    "observability": ["observability", "monitoring", "datadog", "splunk"],
+}
+
+_NEGATION_CLAUSE = re.compile(
+    r"\b(?:no|not|without|don't|doesn't|isn't|won't|never|excluding|except for|except)\b([^.,;!?]{0,60})",
+    re.I,
+)
+
+
+def detect_exclusions(text: str) -> dict:
+    """Mirrors index.html's detectExclusions(): keeps what strip_negations() throws away.
+
+    strip_negations() deletes the negated clause so "no compliance requirements" cannot fire a
+    positive compliance signal — necessary, but it also discarded the only place the user said
+    what they DON'T want, which is why "we must not use Kubernetes" still returned Kubernetes.
+    """
+    out = {}
+    for m in _NEGATION_CLAUSE.finditer(str(text or "").lower()):
+        clause = m.group(1) or ""
+        for key, terms in EXCLUSION_TERMS.items():
+            if any(re.search(r"\b" + re.escape(term) + r"\b", clause) for term in terms):
+                out[key] = True
+    return out
+
+
+KNOWN_TERMS = {
+    "java": ["java", "spring boot"], "python": ["python", "django", "flask", "fastapi"], "go": ["golang", " go "],
+    "node": ["node.js", "nodejs", "express.js", "nestjs"], "dotnet": [".net", "c#", "asp.net"],
+    "ruby": ["ruby", "rails"], "php": ["php", "laravel"],
+    "postgres": ["postgres", "postgresql"], "mysql": ["mysql"], "sqlServer": ["sql server", "mssql"],
+    "oracleDb": ["oracle database", "oracle db"], "mongo": ["mongodb", "mongo"],
+    "docker": ["docker"], "kubernetes": ["kubernetes", "k8s"], "openshift": ["openshift"],
+    "react": ["react"], "angular": ["angular"], "vue": ["vue", "vue.js"],
+    "datadog": ["datadog"], "prometheus": ["prometheus", "grafana"], "splunk": ["splunk"],
+    "dynatrace": ["dynatrace"], "newrelic": ["new relic", "newrelic"], "elk": ["elk", "elastic stack", "elasticsearch"],
+    "terraform": ["terraform"], "githubActions": ["github actions"], "jenkins": ["jenkins"],
+    "gitlabCi": ["gitlab ci"], "circleci": ["circleci", "circle ci"], "azureDevops": ["azure devops"],
+    "pinecone": ["pinecone"], "weaviate": ["weaviate"], "qdrant": ["qdrant"],
+}
+
+EXPERIENCE_BEFORE = ["we use", "we are using", "we're using", "we run", "we have", "we deploy", "we host",
+    "our team knows", "our team uses", "team knows", "team uses", "experience with", "experienced with",
+    "familiar with", "already on", "already use", "already using", "already run", "currently use",
+    "currently using", "currently on", "our stack", "we know", "we standardise on", "we standardize on",
+    "skilled in", "proficient in", "migrating from", "shop uses"]
+EXPERIENCE_AFTER = ["experience", "expertise", "shop", "in production", "today", "already"]
+EXPERIENCE_DISCLAIMERS = ["never used", "never worked", "no experience", "not familiar", "unfamiliar",
+    "evaluating", "considering", "should we use", "thinking about", "looking at", "new to", "want to learn",
+    "have not used", "haven't used", "no one knows", "nobody knows", "would like to use", "plan to use",
+    "planning to use"]
+
+
+def detect_known_tech(text: str) -> dict:
+    """Mirrors index.html's detectKnownTech(). `xxxMentioned` means the user NAMED a technology;
+    this means they showed ownership of it. Conflating the two is what made "should we use
+    Kubernetes? we have never used it before" claim the team already knew Kubernetes."""
+    t = str(text or "").lower()
+    out = {}
+    for key, terms in KNOWN_TERMS.items():
+        for term in terms:
+            idx = t.find(term)
+            while idx != -1:
+                before = t[max(0, idx - 60):idx]
+                after = t[idx + len(term): idx + len(term) + 40]
+                disclaimed = any(d in before or d in after for d in EXPERIENCE_DISCLAIMERS)
+                if not disclaimed and (any(e in before for e in EXPERIENCE_BEFORE)
+                                       or any(e in after for e in EXPERIENCE_AFTER)):
+                    out[key] = True
+                    break
+                idx = t.find(term, idx + len(term))
+            if out.get(key):
+                break
+    return out
+
+
+_WORD_NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+                 "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10}
+
+_LATENCY_RE = re.compile(
+    r"(?:under|below|less than|within|at most|no more than|sub-?|<=?|max(?:imum)? of)\s*"
+    r"([0-9]+(?:\.[0-9]+)?|one|two|three|four|five|six|seven|eight|nine|ten)\s*"
+    r"(ms|millisecond|milliseconds|s|sec|secs|second|seconds|m|min|minute|minutes)\b")
+
+
+def detect_latency_target(text: str):
+    """Mirrors index.html's detectLatencyTarget(). detect_signals() had no numeric parsing at all,
+    so an explicit "in under three seconds" requirement was dropped entirely."""
+    best = None
+    for m in _LATENCY_RE.finditer(str(text or "").lower()):
+        raw = m.group(1)
+        n = _WORD_NUMBERS.get(raw)
+        if n is None:
+            try:
+                n = float(raw)
+            except ValueError:
+                continue
+        unit = m.group(2)
+        if unit == "ms" or unit.startswith("millisecond"):
+            ms = n
+        elif unit == "m" or unit.startswith("min"):
+            ms = n * 60000
+        else:
+            ms = n * 1000
+        if best is None or ms < best["ms"]:
+            best = {"ms": ms, "text": m.group(0).strip()}
+    return best
+
+
+def excluded_pick(what: str) -> dict:
+    """A pick the user explicitly ruled out — kept as a real card so the report shows the
+    constraint was understood rather than silently producing a shorter stack."""
+    return {
+        "v": "Not recommended — you excluded " + what,
+        "conf": "high",
+        "excluded": True,
+        "why": "Your requirement explicitly ruled this out, so nothing is recommended for this "
+               "category. This is a stated constraint, not a heuristic default — if the exclusion "
+               "was picked up in error, rephrase the requirement and re-run.",
+    }
+
+
 def detect_signals(text: str) -> dict:
     """Mirrors index.html's detectSignals() exactly (100+ signal dimensions as of the
     expansion pass — see KICKOFF_BRIEF.md Section 0)."""
@@ -79,6 +215,10 @@ def detect_signals(text: str) -> dict:
     return {
         "onPrem": strong_on_prem or soft_on_prem,
         "hybridConnectivity": hybrid_connectivity,
+        # Objects, not booleans — any consumer counting "active signals" must skip these.
+        "excluded": detect_exclusions(text),
+        "known": detect_known_tech(text),
+        "latencyTarget": detect_latency_target(text),
         "brownfieldOmnichannel": has([
             "omnichannel ai support", "omnichannel support", "omni-channel ai",
             "multiple channels", "across channels", "web widget, whatsapp", "channel routing",
@@ -161,6 +301,11 @@ def detect_signals(text: str) -> dict:
         "vanillaWebMentioned": has(["html5", "html/css", "vanilla javascript", "vanilla js"]) or (has(["html"]) and has(["css"])),
         "dockerMentioned": has(["docker"]),
         "kubernetesMentioned": has(["kubernetes", "k8s"]),
+        "redisMentioned": has(["redis", "memcached", "valkey"]),
+        "kafkaMentioned": has(["kafka", "rabbitmq", "message queue", "event bus"]),
+        "microservicesMentioned": has(["microservice", "microservices"]),
+        "monolithMentioned": has(["monolith", "modular monolith", "single deployable"]),
+        "serverlessMentioned": has(["serverless", "lambda", "cloud functions"]),
         "openshiftMentioned": has(["openshift"]),
         "pineconeMentioned": has(["pinecone"]),
         "weaviateMentioned": has(["weaviate"]),
@@ -773,7 +918,37 @@ def pick_hybrid_connectivity(s, cloud):
 
 
 def pick_cache(s):
-    return {"v": "Redis", "why": "De facto standard for caching, session storage, rate limiting, and lightweight pub/sub — recommended almost universally.", "conf": "high"}
+    # This ignored `s` entirely and returned Redis unconditionally, so a static site or a
+    # notebook-only ML script got a cache tier it has no use for. Redis is still right when a
+    # cache is warranted — the fix is requiring a reason, not changing the product.
+    reasons = []
+    if s["redisMentioned"]:
+        reasons.append("you already use Redis")
+    if s["highScale"]:
+        reasons.append("high traffic/volume")
+    if s["realtime"]:
+        reasons.append("real-time/low-latency paths")
+    if s["ecommerce"]:
+        reasons.append("e-commerce catalog and cart reads")
+    if s["liveMultiplayer"]:
+        reasons.append("live session/leaderboard state")
+    if s["chatbot"] or s["ragNeed"]:
+        reasons.append("repeated LLM/retrieval calls worth caching")
+    if s["enterprise"] or s["largeTeam"]:
+        reasons.append("session storage across multiple services")
+    if s["geospatial"]:
+        reasons.append("ephemeral live-location state")
+
+    if not reasons:
+        return {"v": "Not required yet", "conf": "medium", "needed": False,
+                "why": "Nothing in the requirement implies a caching tier — no high traffic, real-time "
+                       "path, shared session state, or repeated expensive lookup was detected. Adding "
+                       "Redis here would be infrastructure to run and pay for with no load to justify "
+                       "it. Revisit when you have a measured hot path; Redis is the default choice at "
+                       "that point."}
+    return {"v": "Redis", "conf": "high", "needed": True,
+            "why": "De facto standard for caching, session storage, rate limiting, and lightweight "
+                   "pub/sub. Recommended here because of " + ", ".join(reasons) + "."}
 
 
 def pick_database(s):
@@ -1379,6 +1554,23 @@ def pick_cost_estimate(s, ctx=None):
 
 
 def pick_concurrency(s):
+    # A stated numeric target is the binding constraint for this section, so it leads and is
+    # quoted verbatim. detect_signals() parsed no numbers at all before, so an explicit
+    # "in under three seconds" contributed nothing and the reader got generic latency advice.
+    lt = s.get("latencyTarget")
+    _lead = []
+    if lt:
+        if lt["ms"] >= 1000:
+            budget = (f"Budget it explicitly end-to-end: retrieval, model generation and any tool "
+                      f"calls all have to fit inside {lt['ms'] / 1000}s together, not each.")
+        else:
+            budget = (f"At {lt['ms']}ms end-to-end there is no room for a synchronous LLM call in the "
+                      f"request path — serve from cache/precomputed results, or return async and stream.")
+        _lead.append({"t": f"Meet your stated target: {lt['text']} end-to-end",
+                      "w": f'You specified "{lt["text"]}", so treat it as this section\'s acceptance '
+                           f"criterion rather than a general aspiration. {budget} Measure at P95 against "
+                           f"the full user-visible path, not per-component averages — component budgets "
+                           f"that each look fine routinely add up past the target."})
     items = [
         {"t": "Async, non-blocking I/O throughout the request path", "w": "Blocking calls (especially to LLMs or external APIs) are the most common throughput killer — async lets one instance serve many concurrent requests."},
         {"t": "Connection pooling for database and external API clients", "w": "Avoids connection-setup overhead becoming the bottleneck under concurrent load."},
@@ -1393,7 +1585,7 @@ def pick_concurrency(s):
         items.append({"t": "Stream LLM responses (SSE/WebSocket) instead of waiting for full completion", "w": "Improves perceived latency and lets clients start rendering before generation finishes — important under concurrent chat load."})
     if s["agentic"]:
         items.append({"t": "Circuit breakers and timeouts on every external tool call inside agent loops", "w": "One slow tool call in a multi-step agent workflow shouldn't be able to hang the whole request."})
-    return items
+    return _lead + items
 
 
 def pick_governance(s):
@@ -1429,6 +1621,60 @@ def pick_governance(s):
 
 
 # ---------- Top-level entry point ----------
+
+
+def apply_exclusions(rec: dict, s: dict) -> dict:
+    """Mirrors index.html's applyExclusions(): overwrite picks the user explicitly ruled out.
+
+    Applied at the one place every category is in scope rather than threading a guard through 47
+    pick functions — one auditable list, and a new category cannot silently miss the check.
+    """
+    ex = (s or {}).get("excluded") or {}
+
+    # Kubernetes is a DOWNGRADE, not a removal: ruling out Kubernetes is not ruling out containers.
+    if ex.get("kubernetes") and not ex.get("containers"):
+        rec["containers"] = {
+            "v": "Docker + managed serverless containers (Cloud Run / Fargate / Container Apps) — not Kubernetes",
+            "conf": "high", "excluded": True,
+            "why": "You ruled out Kubernetes, so this is the container story without a control plane "
+                   "to run: the same images on a managed serverless-container runtime. If you also "
+                   "want to avoid containers entirely, say so and this drops to plain VM/PaaS deployment."}
+    if ex.get("containers"):
+        rec["containers"] = excluded_pick("containers")
+    if ex.get("microservices"):
+        rec["architecture"] = {
+            "v": "Modular monolith (single deployable, module boundaries enforced in-code)",
+            "conf": "high", "excluded": True,
+            "why": "You ruled out microservices. A modular monolith keeps the bounded-context "
+                   "discipline — clear module seams, no cross-module database access — without the "
+                   "distributed-systems cost, and remains the migration path if you change your mind."}
+    if ex.get("messaging"):
+        rec["messaging"] = excluded_pick("messaging/streaming")
+    if ex.get("cache"):
+        rec["cache"] = excluded_pick("caching")
+    if ex.get("database"):
+        rec["database"] = excluded_pick("a database")
+    if ex.get("cloud"):
+        rec["cloud"] = excluded_pick("cloud hosting")
+    if ex.get("frontend"):
+        rec["frontend"] = excluded_pick("a web/mobile frontend")
+    if ex.get("mesh"):
+        rec["mesh"] = excluded_pick("a service mesh")
+    if ex.get("iam"):
+        rec["iam"] = excluded_pick("a managed identity provider")
+    if ex.get("observability"):
+        rec["observability"] = excluded_pick("an observability vendor")
+
+    # rag/llm carry different shapes from the {v, why, conf} cards.
+    if ex.get("rag"):
+        rec["rag"] = {"name": "Not recommended — you excluded RAG", "conf": "high", "excluded": True,
+                      "why": "You ruled out retrieval-augmented generation, so no retrieval pattern is recommended."}
+        rec["vector_db_placement"] = dict(rec.get("vector_db_placement") or {}, needed=False, excluded=True,
+                                          dbChoice="Not required — RAG excluded",
+                                          why="No vector database is needed because retrieval itself was ruled out.")
+    if ex.get("llm"):
+        rec["llm"] = [{"name": "Not recommended — you excluded LLMs", "tag": "excluded by requirement"}]
+    return rec
 
 
 def recommend_stack(requirement_text: str) -> dict:
@@ -1504,5 +1750,7 @@ def recommend_stack(requirement_text: str) -> dict:
         "observability_vendor": pick_observability_vendor(s, obs),
         "frontend_vendor": pick_frontend_vendor(s, fe),
     }
+
+    apply_exclusions(recommendations, s)
 
     return {"signals": s, "recommendations": recommendations}
