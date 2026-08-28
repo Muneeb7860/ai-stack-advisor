@@ -37,9 +37,14 @@ def mock_anthropic(monkeypatch):
     with, so tests can assert on both behavior and the exact inputs sent to the model."""
     calls = []
 
-    def _fake_run_refinement(api_key, requirement_text, recommendations):
+    def _fake_run_refinement(api_key, requirement_text, recommendations, signals=None):
         calls.append(
-            {"api_key": api_key, "requirement_text": requirement_text, "recommendations": recommendations}
+            {
+                "api_key": api_key,
+                "requirement_text": requirement_text,
+                "recommendations": recommendations,
+                "signals": signals,
+            }
         )
         return FAKE_REFINEMENT_RESULT, {"input_tokens": 512, "output_tokens": 128}
 
@@ -177,7 +182,7 @@ def test_refine_drops_a_pick_with_an_unrecognized_category(monkeypatch, refine_p
         "open_questions": [],
     }
 
-    def _fake_run_refinement(api_key, requirement_text, recommendations):
+    def _fake_run_refinement(api_key, requirement_text, recommendations, signals=None):
         return bogus_result, {"input_tokens": 10, "output_tokens": 10}
 
     monkeypatch.setattr(refine_module, "_run_refinement", _fake_run_refinement)
@@ -206,7 +211,7 @@ def test_refine_accepts_a_promoted_kb_category(monkeypatch, refine_payload):
         "open_questions": [],
     }
 
-    def _fake_run_refinement(api_key, requirement_text, recommendations):
+    def _fake_run_refinement(api_key, requirement_text, recommendations, signals=None):
         return result, {"input_tokens": 10, "output_tokens": 10}
 
     monkeypatch.setattr(refine_module, "_run_refinement", _fake_run_refinement)
@@ -234,6 +239,50 @@ def test_refinement_tool_schema_enumerates_valid_categories():
     all, for every category, not just the six newly-promoted ones."""
     category_schema = refine_module.REFINEMENT_TOOL["input_schema"]["properties"]["adjusted_picks"]["items"]["properties"]["category"]
     assert category_schema["enum"] == refine_module.VALID_CATEGORIES
+
+
+# ------------------------------------------------------------ scale-aware retrieval wiring
+# Step 2 of the RAG-derivation-engine plan (see app/retrieval.py's build_scale_aware_query()).
+
+def test_refine_passes_the_analysis_signals_to_the_model(mock_anthropic, refine_payload):
+    """An existing Analysis's real signals (created via POST /api/analyses, same as the
+    frontend's actual flow — see index.html's ensureAnalysisId()) must reach _run_refinement,
+    which is what threads them into the retrieval query (see _build_grounding_context)."""
+    created = client.post(
+        "/api/analyses",
+        json={
+            "requirement_text": refine_payload["requirement_text"],
+            "signals": {"finance": True, "compliance": True},
+            "recommendations": refine_payload["recommendations"],
+        },
+    ).json()
+    client.post("/api/refine", json={**refine_payload, "analysis_id": created["id"]})
+    assert mock_anthropic[0]["signals"] == {"finance": True, "compliance": True}
+
+
+def test_refine_passes_empty_signals_for_a_freshly_created_analysis(mock_anthropic, refine_payload):
+    """The documented gap (this module's own docstring): a refine call with no analysis_id
+    creates a new Analysis with signals={} — that {} must reach _run_refinement too (as a real
+    empty dict, not silently omitted), so grounding degrades exactly the way
+    build_scale_aware_query() is designed to degrade, not by luck."""
+    client.post("/api/refine", json=refine_payload)
+    assert mock_anthropic[0]["signals"] == {}
+
+
+def test_build_grounding_context_folds_signals_into_the_retrieval_query(monkeypatch):
+    """Unit-level check of refine.py's own _build_grounding_context, mirroring ask.py's
+    equivalent test — monkeypatches retrieve() directly so this runs everywhere, no
+    @requires_ollama needed."""
+    captured = {}
+
+    def _fake_retrieve(query, top_k=5):
+        captured["query"] = query
+        return []
+
+    monkeypatch.setattr(refine_module, "retrieve", _fake_retrieve)
+    refine_module._build_grounding_context("What audit logging do I need?", {"enterprise": True})
+    assert "enterprise" in captured["query"].lower()
+    assert captured["query"].startswith("What audit logging do I need?")
 
 
 def test_refine_surfaces_anthropic_api_errors_as_502(monkeypatch, refine_payload):
