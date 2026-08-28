@@ -75,6 +75,17 @@ your domain module's build, framework leakage has already happened.
   framework types out of the domain layer, which can be maintained incrementally even in a young
   codebase.
 
+## Revisit triggers
+
+- If a database, transport protocol (REST → gRPC), or third-party integration needs to be swapped
+  and the change turns out to touch domain logic rather than just the adapter layer, that is the
+  signature of framework types having leaked into the domain — the fix is separating persistence
+  models from domain models, not deferring the pattern further.
+- **"Treating this as all-or-nothing"** (see Common mistakes): a small, young codebase does not need
+  a fully generalized ports abstraction for every dependency on day one — start with the one
+  discipline that matters (no framework types in the domain layer) and formalize further only when
+  a second engineer's onboarding friction, or an actual planned swap, makes the gap concrete.
+
 ## As implemented in `index.html`
 
 `pickArchitecture(s)` now appends a `hexagonalNote` to every branch's `why` text, stating the

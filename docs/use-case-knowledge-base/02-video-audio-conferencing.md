@@ -94,6 +94,17 @@ bitrate estimation.
 - **LiveKit / Daily.co / Agora / 100ms** — commercial/managed SFU platforms, common "buy vs. build"
   reference point for startups.
 
+## Revisit triggers
+
+- **§A (media topology):** if participant count is approaching or has crossed **~5**, a P2P mesh
+  will not scale further — move to an SFU before calls start degrading, not after.
+- **§B (TURN):** if users report they "can't connect" or calls silently fail to establish, that is
+  the signature of missing TURN fallback behind symmetric NATs/corporate firewalls — this is not
+  optional hardening to add later, but if it was skipped, this is the symptom that forces it.
+- **§C (recording isolation):** if live-call quality (jitter, freezes) degrades specifically when a
+  recording/transcription bot joins, that is the signal that recording was never isolated from the
+  live media-plane nodes — separate it before it becomes a recurring incident.
+
 ## As implemented in `index.html`
 
 Wired into `pickCompute(s)` via the `videoConferencing` signal (a `videoNote` appended to every

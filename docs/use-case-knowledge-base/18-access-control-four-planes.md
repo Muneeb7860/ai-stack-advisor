@@ -205,6 +205,19 @@ mechanism generalise directly to AWS (IAM Identity Center, IRSA, Systems Manager
 the bastion equivalent) and GCP (Identity Platform, Workload Identity, IAP) — the plane boundaries
 and the "attested, short-lived identity over stored secret" principle don't change with the vendor.
 
+## Revisit triggers
+
+- **§G (privileged access):** `pickPrivilegedAccess()`'s solo-admin floor holds only while there is
+  genuinely one administrator — the moment a second person gets infrastructure access, revisit
+  toward a named admin list at minimum, and toward full JIT/PIM once compliance or enterprise scale
+  is also in play.
+- **§C (token revocation):** if a compromised credential's blast radius is currently bounded only by
+  a token's natural expiry rather than an active revocation path, that gap — not a scheduled review
+  — is the trigger to close it.
+- **§H (audit-event production):** standing privileged access and shared accounts are, per this
+  document, the most common real finding in an access review — if either exists anywhere in the
+  estate, that is itself the revisit trigger, not something to wait for an audit to surface.
+
 ## As implemented in `index.html`
 
 Partially. `pickIAM()` selects an identity vendor for plane 1 without reasoning about RBAC/ABAC

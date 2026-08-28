@@ -205,6 +205,16 @@ multi-year retention.
 The pattern is provider-agnostic. The signal classes, the collector's position, the async
 propagation requirement and the separate audit path are invariant; only the product names change.
 
+## Revisit triggers
+
+- `pickAuditLogging()`'s minimal-project floor (application logs only) holds until this system
+  handles real user data or gains a compliance obligation — either one is the trigger to add a
+  separate immutable audit pipeline, not a scheduled migration.
+- If "who did what, to what data, when" is ever asked by an actual auditor, regulator, or customer
+  contract and the honest answer requires reconstructing it from sampled, weeks-retained application
+  logs, that gap is itself the revisit trigger — it means the audit pipeline should have already
+  existed.
+
 ## As implemented in `index.html`
 
 Partially. `pickAuditLogging()` (its own "Audit Logging" stack card) now implements §H: a minimal,

@@ -89,6 +89,20 @@ federation) gets most of the maintainability win at a fraction of the complexity
 - **Angular Architects** (`@angular-architects/module-federation`) — widely adopted toolchain for
   Angular-based multi-team, multi-framework rollouts.
 
+## Revisit triggers
+
+- **§D (do you even need this):** the reverse of most triggers in this corpus — if the team is
+  still under roughly **15-20 engineers** with no genuinely separate team-ownership boundaries,
+  reconsider whether micro-frontends are justified at all before adopting them, not after paying
+  the coordination tax. Cross past that threshold with real multi-team ownership pain, and a
+  modular monolith stops being enough.
+- **§A (federation mechanism):** if shared-dependency negotiation (singleton React/Angular version
+  conflicts) becomes a recurring source of runtime breakage, that is the signal the federation
+  config needs real ownership, not that the mechanism itself was wrong.
+- **§C (state-sharing):** if the shared-state coupling between federated apps keeps growing, the
+  "independent deployability" benefit that justified micro-frontends in the first place is eroding
+  — worth naming explicitly rather than letting it happen silently.
+
 ## As implemented in `index.html`
 
 Wired into `pickTradeoffs(s)` via the `microFrontend` signal (or `enterprise && largeTeam && mobile

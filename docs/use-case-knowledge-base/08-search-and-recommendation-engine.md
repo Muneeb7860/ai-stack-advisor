@@ -95,6 +95,17 @@ at large scale (large feeds, news, marketplaces) where freshness materially move
 - **Typesense / Meilisearch** — open-source, single-binary engines for instant/product search.
 - **YouTube / TikTok** — commonly cited public examples of retrieval-then-rank at massive scale.
 
+## Revisit triggers
+
+- **§C (recommendation approach):** collaborative filtering fails on cold start (new users/items
+  with no interaction history) — if cold start is a recurring, material problem, blend in
+  content-based filtering rather than tuning CF alone. Learned ranking models (two-tower/LTR) are
+  worth the build/maintenance cost only once basic relevance/CF is already solid — adopting them
+  earlier is spending the more expensive tool before the cheaper one has been exhausted.
+- **§D (real-time vs. batch personalization):** batch/precomputed recommendations are sufficient
+  for most mid-size products — move to real-time (session-based re-ranking, streaming features)
+  only once measured freshness materially moves engagement at scale, not as a default upgrade path.
+
 ## As implemented in `index.html`
 
 Wired into `pickTradeoffs(s)` via the `searchRecommendation` signal — a dedicated trade-off card

@@ -151,3 +151,45 @@ def test_target_design_documents_say_so_in_their_implementation_section():
             f"{name} declares Status 'target design' but its 'As implemented' section does not say so"
         )
 
+
+# --------------------------------------------------------------- "Revisit triggers" (Step 3)
+# Several documents stated, in free prose scattered across their decision points, the condition
+# under which a recommendation should flip — e.g. doc 17: "reconsider if a single-vendor outage
+# has caused a business-critical incident more than once." /api/ask and /api/refine could only
+# ever paraphrase that condition out of a larger chunk, never quote it reliably. This is the same
+# problem the **Status:** field solves for "is this implemented" — a fact stated once in prose is
+# a fact an LLM will eventually paraphrase into something subtly wrong.
+#
+# Deliberately placed as a real "## " content section (not a **bolded:** line in the preamble,
+# unlike Status) — app/retrieval.py's two-stage design treats preamble text as ROUTING-only,
+# never returned as citable content (see that module's docstring). A "## Revisit triggers"
+# section is a normal content chunk: it participates in the same embedding+BM25 hybrid ranking as
+# every other decision point, with zero changes needed to retrieval.py itself.
+REVISIT_TRIGGERS_HEADER = re.compile(r"^## Revisit triggers\s*$", re.M)
+
+
+def test_every_domain_document_has_a_revisit_triggers_section():
+    """Regression lock for Step 3 of the RAG-derivation-engine plan: every domain document must
+    state its own revisit condition(s) as a dedicated, greppable section — not leave them
+    scattered across decision-point prose for an LLM to paraphrase out."""
+    missing = [name for name in DOC_FILES if not REVISIT_TRIGGERS_HEADER.search((CORPUS_DIR / name).read_text(encoding="utf-8"))]
+    assert not missing, f"no '## Revisit triggers' section: {missing}"
+
+
+def test_revisit_triggers_sections_have_at_least_one_bullet():
+    """A header with no content under it is worse than no header — it would look formalized while
+    conveying nothing. Every 'Revisit triggers' section must have at least one real `- ` bullet
+    before the next '## ' header."""
+    empty = []
+    for name in DOC_FILES:
+        text = (CORPUS_DIR / name).read_text(encoding="utf-8")
+        m = REVISIT_TRIGGERS_HEADER.search(text)
+        if not m:
+            continue  # caught by the presence test above; don't double-report here
+        section = text[m.end():]
+        next_header = re.search(r"^## ", section, re.M)
+        section = section[: next_header.start()] if next_header else section
+        if not re.search(r"^- ", section, re.M):
+            empty.append(name)
+    assert not empty, f"'## Revisit triggers' section has no bullets: {empty}"
+

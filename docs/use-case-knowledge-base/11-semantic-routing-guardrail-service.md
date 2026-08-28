@@ -100,6 +100,21 @@ expensive checks feeding dashboards/alerts.
 **Not Diamond**, **OpenRouter Auto Router**, **RouteLLM** (open source), **Martian**, **Portkey**,
 **Cloudflare AI Gateway**, **vLLM Semantic Router** (CNCF).
 
+## Revisit triggers
+
+- **§B (placement):** an embedded per-agent library is fine for a single team/model, but becomes a
+  trap once scaled past a handful of services — move to a dedicated internal "LLM control plane"
+  microservice in the **roughly 10-50 engineer** range, and reconsider folding routing/guardrails
+  into the existing API gateway once past **~100 engineers** where that gateway infra already
+  exists.
+- **§C (routing sophistication):** start rule-based; add embedding-similarity once paraphrasing
+  causes real misroutes; add a trained classifier only after evaluating that it beats a simple k-NN
+  baseline — each step up in sophistication should be earned by a measured gap the simpler tier
+  actually has, not adopted by default.
+- **§D (guardrail placement):** post-call checks are usually async/sampled — revisit that to
+  synchronous, blocking enforcement specifically once the domain (healthcare, finance, regulated
+  content) requires it regardless of the added latency.
+
 ## As implemented in `index.html`
 
 Wired into `pickTradeoffs(s)` via the `routingGuardrailService` signal (or implicitly when

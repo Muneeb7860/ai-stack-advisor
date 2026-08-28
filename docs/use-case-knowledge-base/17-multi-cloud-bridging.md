@@ -163,6 +163,17 @@ The pattern generalises to any provider pair: the compute/data split, the three-
 bridging mechanism, the federation requirement, and the cache-locally/cross-asynchronously mitigation
 do not depend on which two clouds are involved.
 
+## Revisit triggers
+
+- **§A (lead with the constraint):** if nobody can name the specific data-residency law,
+  organizational mandate, or provider-specific service forcing a multi-cloud split, that is the
+  trigger to revisit the split itself before adding another bridging mechanism on top of it —
+  "avoiding lock-in" alone was never a sufficient reason.
+- **§D (bridging tier):** move from a public-endpoint-with-mTLS setup to a dedicated interconnect
+  once the traffic crossing the link is real transaction or customer data for a regulated
+  institution — predictability and an SLA become the compliance-relevant property at that point, not
+  raw speed.
+
 ## As implemented in `index.html`
 
 Partially. A new `multiCloudMentioned` signal (two or more distinct cloud-vendor groups named —

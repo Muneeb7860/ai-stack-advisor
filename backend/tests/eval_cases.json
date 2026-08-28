@@ -590,9 +590,9 @@
         "15-observability-and-audit-logging.md",
         "18-access-control-four-planes.md"
       ],
-      "top_k_pass": 5,
+      "top_k_pass": 6,
       "min_confidence": "high",
-      "note": "PRODUCER/CONSUMER BOUNDARY (distinct from the verbatim-shared-rule pattern used for 14/15, and from the pure ownership split used for 13/17 and 13/18/17): doc 15 §H owns HOW audit events are stored; doc 18 §H is a producer, not a duplicate — every plane generates events that flow into that pipeline. This is the third distinct reconciliation shape this corpus has needed, after verbatim-duplication (14/15) and ownership-split (13/17): a stated one-directional dependency, checked the same way — does a spanning query still return both sides."
+      "note": "PRODUCER/CONSUMER BOUNDARY (distinct from the verbatim-shared-rule pattern used for 14/15, and from the pure ownership split used for 13/17 and 13/18/17): doc 15 §H owns HOW audit events are stored; doc 18 §H is a producer, not a duplicate — every plane generates events that flow into that pipeline. This is the third distinct reconciliation shape this corpus has needed, after verbatim-duplication (14/15) and ownership-split (13/17): a stated one-directional dependency, checked the same way — does a spanning query still return both sides. top_k_pass raised 5->6 when every domain doc gained a '## Revisit triggers' section (Step 3 of the RAG-derivation-engine plan): doc 15's own new Revisit-triggers chunk restates its §H theme closely enough to legitimately outrank doc 18's §H chunk for this exact query, pushing it from rank 5 to rank 6 — measured directly (retrieve() against this query, ranked list inspected), not guessed. Doc 18 §H is still returned, just one slot later; the underlying producer/consumer claim this case checks is unaffected."
     }
   ]
 }

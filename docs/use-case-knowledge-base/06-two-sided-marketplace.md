@@ -88,6 +88,19 @@ model consistent.
   architecture, separate host/guest and driver/rider experiences; Uber's H3 geospatial indexing for
   driver-rider matching.
 
+## Revisit triggers
+
+- **§A (search):** simple filtered SQL is fine under roughly **10K listings** — once volume and
+  relevance needs (facets, free text, ranking) grow past that, a dedicated search index earns its
+  cost. Match the tool to actual current volume, not aspirational volume, in either direction.
+- **§C (trust & safety):** a reactive-only pipeline (reviews + manual tickets) is the cheapest way
+  to launch, but revisit before a fraud incident or trust erosion forces the scramble — GMV growth
+  outpacing support-team capacity to catch scams manually is the signal, not a fixed calendar date.
+- **§D (supply/demand app split):** if UX compromises from a shared app (seller dashboards vs. buyer
+  discovery flows fighting for the same screens) are visibly slowing either team's iteration speed,
+  that is the trigger to split into separate supply-side/demand-side apps behind a shared core API —
+  not a default starting architecture.
+
 ## As implemented in `index.html`
 
 Wired into `pickTradeoffs(s)` via the `marketplace` signal — a dedicated trade-off card
