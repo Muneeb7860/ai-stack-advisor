@@ -3,7 +3,7 @@
     "description": "Machine-readable retrieval eval set for docs/use-case-knowledge-base/. See RETRIEVAL-EVAL-SET.md for full rationale per case. Built ahead of /api/refine's existence so it's ready to run the moment retrieval is wired up. Cases 22-27 cover documents 12-14, contributed from the project owner's own reference architectures; case 20 was reclassified from negative_control to direct when doc 12 made its out-of-scope premise false.",
     "corpus_dir": "docs/use-case-knowledge-base/",
     "status": "cases_only_not_yet_run",
-    "total_cases": 42
+    "total_cases": 48
   },
   "cases": [
     {
@@ -521,6 +521,78 @@
       "top_k_pass": 5,
       "min_confidence": "high",
       "note": "OWNERSHIP DISAMBIGUATION CASE. A private endpoint (doc 13) answers reachability WITHIN one cloud; a dedicated interconnect for bridging (doc 17) answers connecting TWO clouds that don't otherwise share a network. The query is genuinely ambiguous without knowing which situation the asker is in, so both documents returning together is correct — the reader needs to see both framings to pick the right one, not have retrieval silently guess."
+    },
+    {
+      "id": 43,
+      "section": "direct",
+      "query": "What are the four planes of access control for end users, services, humans, and workloads?",
+      "expected_docs": [
+        "18-access-control-four-planes.md"
+      ],
+      "expected_decision_point": "A",
+      "top_k_pass": 3,
+      "min_confidence": "high",
+      "note": "The structural query. A vaguer phrasing ('how do you think about access control as a whole system') abstained entirely at the retrieval confidence threshold — same shape as case 37's original phrasing before it was rewritten. Fixed by phrasing, not by touching MIN_CONFIDENT_RRF, per that precedent."
+    },
+    {
+      "id": 44,
+      "section": "anti_pattern",
+      "query": "How do we revoke a JWT before it expires?",
+      "expected_docs": [
+        "18-access-control-four-planes.md"
+      ],
+      "expected_decision_point": "C",
+      "top_k_pass": 5,
+      "min_confidence": "high",
+      "note": "Token revocation — the gap coarse/fine-grained authorization doesn't close on its own."
+    },
+    {
+      "id": 45,
+      "section": "anti_pattern",
+      "query": "Is access to the cluster the same thing as access to the data?",
+      "expected_docs": [
+        "18-access-control-four-planes.md"
+      ],
+      "expected_decision_point": "G",
+      "top_k_pass": 5,
+      "min_confidence": "high",
+      "note": "'Access to the box is not access to the data' — the sharpest audit question, per the source diagram's own framing."
+    },
+    {
+      "id": 46,
+      "section": "cross_document",
+      "query": "Why do we need a service mesh at all versus what proves a service identity?",
+      "expected_docs": [
+        "13-private-network-egress-control.md",
+        "18-access-control-four-planes.md"
+      ],
+      "top_k_pass": 5,
+      "min_confidence": "high",
+      "note": "OWNERSHIP BOUNDARY: doc 13 §D owns why the mesh/default-deny east-west exists (network segmentation); doc 18 §D owns what proves a service's identity once traffic is allowed to flow (SPIFFE/SVID/attestation). A query spanning both halves must return both documents."
+    },
+    {
+      "id": 47,
+      "section": "cross_document",
+      "query": "How does a pod authenticate to a database in the same cloud vs a different cloud?",
+      "expected_docs": [
+        "17-multi-cloud-bridging.md",
+        "18-access-control-four-planes.md"
+      ],
+      "top_k_pass": 5,
+      "min_confidence": "high",
+      "note": "OWNERSHIP BOUNDARY: doc 18 §F owns same-cloud workload identity and explicitly defers the cross-cloud half to doc 17 §E rather than restating it. A spanning query must still surface both."
+    },
+    {
+      "id": 48,
+      "section": "cross_document",
+      "query": "What produces the events that go into our immutable audit log?",
+      "expected_docs": [
+        "15-observability-and-audit-logging.md",
+        "18-access-control-four-planes.md"
+      ],
+      "top_k_pass": 5,
+      "min_confidence": "high",
+      "note": "PRODUCER/CONSUMER BOUNDARY (distinct from the verbatim-shared-rule pattern used for 14/15, and from the pure ownership split used for 13/17 and 13/18/17): doc 15 §H owns HOW audit events are stored; doc 18 §H is a producer, not a duplicate — every plane generates events that flow into that pipeline. This is the third distinct reconciliation shape this corpus has needed, after verbatim-duplication (14/15) and ownership-split (13/17): a stated one-directional dependency, checked the same way — does a spanning query still return both sides."
     }
   ]
 }

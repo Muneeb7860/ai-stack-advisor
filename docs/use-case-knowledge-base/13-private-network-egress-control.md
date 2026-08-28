@@ -25,7 +25,10 @@ frequently determines whether an AI feature is approvable.
 private and what has to cross to the public internet. Bridging two *different* cloud providers
 together (a physical link between two networks that do not otherwise exist on the same backbone,
 plus identity federation across a trust boundary neither provider owns) is a disjoint problem, owned
-by `17-multi-cloud-bridging.md`.
+by `17-multi-cloud-bridging.md`. §D's mesh/mTLS coverage is *why* east-west traffic is segmented at
+all — the identity layer on top of that (what a SPIFFE ID and an SVID actually are, and everything
+about human-operator and workload-to-resource access) is owned by
+`18-access-control-four-planes.md`.
 
 ## Signals / triggers
 
