@@ -44,6 +44,15 @@ anti-patterns sections were written to answer. Same best-effort framing as /api/
 match found is a normal outcome, not an error, and /api/ask's core grounding (the existing
 Analysis's own requirement_text and recommendations, scoped structurally by analysis_id) is
 unaffected either way.
+
+Scale-aware retrieval query (Step 2 of the RAG-derivation-engine plan — see
+app/retrieval.py's build_scale_aware_query()): the question text alone doesn't say whether
+"what audit logging do I need?" is being asked about a college project or a regulated bank,
+even though the corpus's own prose answers that differently within the same chunk. This
+Analysis's stored `signals` (real when created via POST /api/analyses first, which is the
+frontend's actual flow — see index.html's ensureAnalysisId(); {} for an analysis refine.py
+created on the fly with no prior /api/analyses call) get folded into the retrieval query text,
+not into retrieve()'s ranking logic itself.
 """
 import json
 
@@ -55,7 +64,7 @@ from .. import models, schemas
 from ..config import settings
 from ..db import get_db
 from ..llm_providers import run_ollama_ask
-from ..retrieval import format_citation, retrieve
+from ..retrieval import build_scale_aware_query, format_citation, retrieve
 
 GROUNDING_SCORE_THRESHOLD = 0.55  # see refine.py's identical constant for the full rationale
 # (re-tuned for the embeddings scale, not the old TF-IDF-era 0.03)
@@ -85,10 +94,18 @@ or the grounding context, say so explicitly rather than inventing details.
 """
 
 
-def _build_grounding_context(question: str) -> str:
+def _build_grounding_context(question: str, signals: dict | None = None) -> str:
     """Best-effort RAG grounding keyed on the follow-up question — see module docstring for
-    why the question, not the original requirement text, is the retrieval query here."""
-    results = [r for r in retrieve(question, top_k=GROUNDING_TOP_K) if r["score"] >= GROUNDING_SCORE_THRESHOLD]
+    why the question, not the original requirement text, is the retrieval query here.
+
+    `signals` (the analysis this question is scoped to — see retrieval.build_scale_aware_query)
+    nudges retrieval toward whichever scale-conditioned framing in a matched chunk actually
+    applies, without changing which chunk gets matched by topic. None/{} (an analysis created
+    via a direct /api/refine call with no prior /api/analyses — see refine.py's docstring) is a
+    real, expected case, not an error — degrades to the unmodified question, same as before this
+    existed."""
+    query = build_scale_aware_query(question, signals)
+    results = [r for r in retrieve(query, top_k=GROUNDING_TOP_K) if r["score"] >= GROUNDING_SCORE_THRESHOLD]
     if not results:
         return ""
     sections = [f"[{format_citation(r)}]\n{r['chunk_text']}" for r in results]
@@ -146,7 +163,7 @@ def ask(payload: schemas.AskRequest, db: Session = Depends(get_db)):
     system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
         requirement_text=analysis.requirement_text,
         recommendations=json.dumps(analysis.recommendations),
-        grounding=_build_grounding_context(payload.question),
+        grounding=_build_grounding_context(payload.question, analysis.signals),
     )
     history = [{"role": m.role, "content": m.content} for m in prior_messages]
     history.append({"role": "user", "content": payload.question})

@@ -62,7 +62,7 @@ from .. import models, schemas
 from ..config import settings
 from ..db import get_db
 from ..llm_providers import run_ollama_refinement
-from ..retrieval import format_citation, retrieve
+from ..retrieval import build_scale_aware_query, format_citation, retrieve
 
 # Re-tuned when app/retrieval.py moved from TF-IDF to embeddings (ChromaDB + Ollama
 # nomic-embed-text) — the old value (0.03) was calibrated to TF-IDF's sparse lexical scoring
@@ -88,10 +88,19 @@ GROUNDING_TOP_K = 3
 # without materially growing prompt size.
 
 
-def _build_grounding_context(requirement_text: str) -> str:
+def _build_grounding_context(requirement_text: str, signals: dict | None = None) -> str:
     """Best-effort RAG grounding — returns '' if nothing scores above threshold, which is a
-    valid, expected outcome (see module docstring), not an error."""
-    results = [r for r in retrieve(requirement_text, top_k=GROUNDING_TOP_K) if r["score"] >= GROUNDING_SCORE_THRESHOLD]
+    valid, expected outcome (see module docstring), not an error.
+
+    `signals` (Step 2 of the RAG-derivation-engine plan — see
+    app/retrieval.py's build_scale_aware_query()) nudges retrieval toward whichever
+    scale-conditioned framing in a matched chunk actually applies to THIS requirement, without
+    changing which chunk gets matched by topic. None/{} — a refinement created without a prior
+    /api/analyses call, so there's no real Analysis.signals to hand this (see this module's own
+    docstring on analysis_id being optional) — is a real, expected case: degrades to the
+    unmodified requirement_text, same as before this existed."""
+    query = build_scale_aware_query(requirement_text, signals)
+    results = [r for r in retrieve(query, top_k=GROUNDING_TOP_K) if r["score"] >= GROUNDING_SCORE_THRESHOLD]
     if not results:
         return ""
     sections = [
@@ -214,13 +223,15 @@ REFINEMENT_TOOL = {
 }
 
 
-def _run_refinement(api_key: str, requirement_text: str, recommendations: dict) -> tuple[dict, dict]:
+def _run_refinement(
+    api_key: str, requirement_text: str, recommendations: dict, signals: dict | None = None
+) -> tuple[dict, dict]:
     """Isolated into its own function so tests can monkeypatch it instead of hitting the real
     Anthropic API — no network calls, no real API key, needed to test this endpoint.
 
     Returns (result, usage) — usage is {"input_tokens": int, "output_tokens": int} read
     straight from message.usage, the real count for this one call, not an estimate."""
-    grounding = _build_grounding_context(requirement_text)
+    grounding = _build_grounding_context(requirement_text, signals)
     client = Anthropic(api_key=api_key)
     try:
         message = client.messages.create(
@@ -280,11 +291,13 @@ def _filter_to_valid_categories(result: dict) -> dict:
     }
 
 
-def _run_ollama_refinement_call(requirement_text: str, recommendations: dict) -> tuple[dict, dict]:
+def _run_ollama_refinement_call(
+    requirement_text: str, recommendations: dict, signals: dict | None = None
+) -> tuple[dict, dict]:
     """Isolated the same way _run_refinement() is, for the same testing reason (monkeypatch
     instead of a real local Ollama call in unit tests) — see app/llm_providers.py for the real
     measured reliability numbers this local path is based on."""
-    grounding = _build_grounding_context(requirement_text)
+    grounding = _build_grounding_context(requirement_text, signals)
     return run_ollama_refinement(
         settings.ollama_base_url,
         settings.ollama_model,
@@ -327,11 +340,13 @@ def refine(payload: schemas.RefineRequest, db: Session = Depends(get_db)):
         db.refresh(analysis)
 
     if payload.provider == "ollama":
-        result, usage = _run_ollama_refinement_call(payload.requirement_text, payload.recommendations)
+        result, usage = _run_ollama_refinement_call(
+            payload.requirement_text, payload.recommendations, analysis.signals
+        )
         model_used = settings.ollama_model
     else:
         result, usage = _run_refinement(
-            payload.anthropic_api_key, payload.requirement_text, payload.recommendations
+            payload.anthropic_api_key, payload.requirement_text, payload.recommendations, analysis.signals
         )
         model_used = MODEL
 

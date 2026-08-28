@@ -228,6 +228,59 @@ def test_ask_persists_nothing_when_model_call_fails(monkeypatch, existing_analys
         db.close()
 
 
+# ------------------------------------------------------------ scale-aware retrieval wiring
+# Step 2 of the RAG-derivation-engine plan (see app/retrieval.py's build_scale_aware_query()).
+# These monkeypatch retrieve() itself (not the Ollama-backed embedding stack) to capture the
+# exact query text ask.py constructed — so they run everywhere, no @requires_ollama needed,
+# same as test_retrieval_query_construction.py's own reasoning.
+
+def test_build_grounding_context_folds_signals_into_the_retrieval_query(monkeypatch):
+    captured = {}
+
+    def _fake_retrieve(query, top_k=5):
+        captured["query"] = query
+        return []
+
+    monkeypatch.setattr(ask_module, "retrieve", _fake_retrieve)
+    ask_module._build_grounding_context("What audit logging do I need?", {"enterprise": True, "compliance": True})
+    assert "enterprise" in captured["query"].lower()
+    assert "regulated" in captured["query"].lower() or "compliance" in captured["query"].lower()
+    assert captured["query"].startswith("What audit logging do I need?")
+
+
+def test_build_grounding_context_defaults_to_the_raw_question_with_no_signals(monkeypatch):
+    captured = {}
+
+    def _fake_retrieve(query, top_k=5):
+        captured["query"] = query
+        return []
+
+    monkeypatch.setattr(ask_module, "retrieve", _fake_retrieve)
+    ask_module._build_grounding_context("What audit logging do I need?")
+    assert captured["query"] == "What audit logging do I need?"
+
+
+def test_ask_passes_the_analysis_signals_to_grounding(mock_ask, existing_analysis, monkeypatch):
+    """End-to-end wiring check: the Analysis fetched by analysis_id really is the source of the
+    signals handed to grounding — existing_analysis's fixture sets signals={"finance": True}."""
+    captured = {}
+
+    def _fake_retrieve(query, top_k=5):
+        captured["query"] = query
+        return []
+
+    monkeypatch.setattr(ask_module, "retrieve", _fake_retrieve)
+    client.post(
+        "/api/ask",
+        json={
+            "analysis_id": existing_analysis["id"],
+            "question": "What audit logging do I need?",
+            "anthropic_api_key": "sk-ant-fake-key-not-real",
+        },
+    )
+    assert "regulated" in captured["query"].lower() or "compliance" in captured["query"].lower()
+
+
 @requires_ollama
 def test_build_grounding_context_uses_question_as_query():
     """/api/ask grounds on the follow-up QUESTION, not the original requirement text (module

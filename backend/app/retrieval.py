@@ -645,3 +645,60 @@ def format_citation(result: dict) -> str:
     """Matches 00-INDEX-AND-INGESTION-GUIDE.md §2's citation format: source doc + decision-
     point/header name, so /api/ask can cite its reasoning rather than paraphrase it."""
     return f"{result['doc']} § {result['header']}"
+
+
+# Step 2 of the RAG-derivation-engine plan (see docs/adr/0001 and the KB-promotion work in
+# PRs #6/#7): SIZE-AWARE QUERY CONSTRUCTION. Every doc in the corpus writes its decision points
+# scale-conditioned — "a minimal/learning project needs none of this," "a compliance/enterprise
+# requirement needs the full version" — often in the SAME chunk, since the KB's own convention
+# (see 00-INDEX §2) is one decision point per header, not one header per scale tier. Retrieval
+# itself (retrieve() above) is correctly blind to this: it ranks by topical relevance, and
+# doesn't need to change to keep doing that right. What it doesn't have any signal for is scale
+# — the same query text ("what audit logging do I need?") is retrieved identically regardless
+# of whether the requirement behind it is a solo college project or a regulated bank, even
+# though the corpus's own prose is written to answer differently for each. This function is
+# the fix, and it is deliberately narrow: it only changes what TEXT gets passed as the query to
+# retrieve() — nothing about retrieve()'s two-stage/hybrid ranking, its RRF weights, or its
+# empirically-tuned thresholds (MIN_CONFIDENT_RRF, ROUTING_BOOST_WEIGHT) changes here, and none
+# of that carefully-measured tuning needs to be re-verified because of this function.
+#
+# Signal keys match rule_engine.py's detect_signals() output exactly (camelCase, mirroring
+# index.html — see that module's docstring for why). Only the flags a KB decision point is
+# actually written to condition on are included; this is not every signal the rule engine
+# detects, only the ones the corpus's own prose demonstrably branches on (minimal-project
+# floors, compliance/finance/healthcare/enterprise escalation, onPrem-specific handling,
+# highScale performance framing — the exact same guard conditions used throughout
+# rule_engine.py's pickX() functions).
+def build_scale_aware_query(text: str, signals: dict | None) -> str:
+    """Appends a short, explicit scale/context descriptor to `text` before it's used as a
+    retrieval query — nudging BOTH halves of the hybrid ranking (BM25 gets literal terms like
+    "compliance"/"minimal" that the corpus's own scale-conditioned prose is dense with;
+    embeddings get a semantic nudge toward the same framing) without touching retrieve()'s
+    internals at all.
+
+    `signals` may be None or {} (a real, expected case — see refine.py's docstring on why a
+    refinement created without an analysis_id has no signals to hand this) — degrades to
+    returning `text` unchanged, the same best-effort framing as every other missing-data path
+    in this module. Never raises.
+    """
+    if not signals:
+        return text
+    descriptors = []
+    # Order matters only for readability of the appended phrase, not for ranking — RRF/BM25
+    # don't care about term order. minimalProject is checked first because it is the one true
+    # floor in every pickX() guard chain (see e.g. pickAuditLogging/pickTestingStrategy in
+    # index.html): a minimal project can still separately be onPrem or highScale, so these are
+    # additive, not mutually exclusive branches.
+    if signals.get("minimalProject"):
+        descriptors.append("minimal personal or learning-scale project — lightweight, proportionate guidance, not enterprise-grade controls")
+    if signals.get("compliance") or signals.get("finance") or signals.get("healthcare"):
+        descriptors.append("regulated, compliance-driven context")
+    if signals.get("enterprise"):
+        descriptors.append("large enterprise organization")
+    if signals.get("highScale"):
+        descriptors.append("high-scale, high-traffic production system")
+    if signals.get("onPrem"):
+        descriptors.append("on-premises or air-gapped environment")
+    if not descriptors:
+        return text
+    return f"{text} ({'; '.join(descriptors)})"
