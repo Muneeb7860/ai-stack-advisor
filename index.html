@@ -3644,7 +3644,7 @@ function renderRecommendations(s, rec){
   if (s.brownfieldAiOnly) setView('cards');
   document.getElementById('resultsShell').scrollIntoView({behavior:'smooth', block:'start'});
 
-  const graph = buildFlowGraph({cloud,gw,iam,lang,arch,compute,msg,mesh,cache,db,containers,obs,fe,cicd,dns,llm,rag,mcp,guardrails,vectorDb,hybridConnectivity}, s);
+  const graph = buildFlowGraph({cloud,gw,iam,lang,arch,compute,msg,mesh,cache,db,containers,obs,fe,cicd,dns,llm,rag,mcp,guardrails,vectorDb,hybridConnectivity,multiCloudBridging}, s);
   renderFlow(graph);
   setView(currentView); // preserve whichever view (Cards/Flow) the user had open across re-analysis
 }
@@ -3681,6 +3681,14 @@ const OVERRIDE_EFFECT_CARDS = {
   msg:'Messaging / Streaming', mesh:'Service Mesh', cache:'Caching', db:'Primary Database(s)',
   containers:'Containers / Orchestration', obs:'Observability', fe:'Frontend',
   cicd:'CI/CD & Deployment', dns:'DNS', hybridConnectivity:'Hybrid Connectivity',
+  // Found in review: missing entirely, for all six categories promoted in the KB-promotion pass
+  // (PR #6). Every one of them is gated on signals a user CAN toggle here (compliance,
+  // enterprise, minimalProject, onPrem, multiCloudMentioned, ...) — without these entries,
+  // toggling one of those assumptions could silently change up to six picks with
+  // toggleInference()'s diff summary reporting none of it, or worse, telling the user "No
+  // recommendation changes" when several categories actually changed underneath them.
+  auditLogging:'Audit Logging', privilegedAccess:'Privileged Access', testingStrategy:'Testing Strategy',
+  networkBoundary:'Network Boundary', multiCloudBridging:'Multi-Cloud Bridging', securityGates:'Security Gates (CI/CD)',
 };
 
 function diffRecommendations(before, after){
@@ -4007,7 +4015,7 @@ const CATALOG_AI_OPPORTUNITIES = [
 // either that or lastRecommendations directly.
 function buildCanonicalArchitectureGraph(ctx, signals = {}){
   const s = signals || {};
-  const {cloud,gw,iam,lang,arch,compute,msg,mesh,cache,db,containers,obs,fe,cicd,dns,llm,rag,mcp,guardrails,vectorDb,hybridConnectivity} = ctx;
+  const {cloud,gw,iam,lang,arch,compute,msg,mesh,cache,db,containers,obs,fe,cicd,dns,llm,rag,mcp,guardrails,vectorDb,hybridConnectivity,multiCloudBridging} = ctx;
   const nodes = [], edges = [];
   const N = (id,cat,title,sub,conf,why,persona,detail) => {
     nodes.push({id,cat,title,sub:sub||'',conf:conf||null,why:why||'',persona:persona||'',detail:detail||null,opportunities:[]});
@@ -4024,6 +4032,14 @@ function buildCanonicalArchitectureGraph(ctx, signals = {}){
   // compatibility concern as any other field added to computeRecommendations() after it shipped.
   let hybridId = null;
   if(hybridConnectivity && hybridConnectivity.needed){ N('hybridconnectivity','edge','Hybrid Connectivity', hybridConnectivity.v, hybridConnectivity.conf, hybridConnectivity.why, 'Enterprise Architect'); hybridId='hybridconnectivity'; }
+  // Found in review: multiCloudBridging follows the exact same conditional needed:true/false
+  // shape as hybridConnectivity above (both represent an actual physical/logical link, unlike
+  // the other five categories promoted alongside it in PR #6, which are cross-cutting policy
+  // concerns with nothing to draw — see doc 14's own reasoning for why it has no pickX() at
+  // all). It was wired into every card/refine surface but never into Flow View. Same
+  // defensive optional-chaining as hybridConnectivity: absent on an older replayed share link.
+  let multiCloudId = null;
+  if(multiCloudBridging && multiCloudBridging.needed){ N('multicloudbridging','edge','Multi-Cloud Bridging', multiCloudBridging.v, multiCloudBridging.conf, multiCloudBridging.why, 'Enterprise Architect'); multiCloudId='multicloudbridging'; }
   N('cloud','compute','Cloud Provider', cloud.v, cloud.conf, cloud.why, 'Enterprise Architect');
   N('arch','compute','Architecture Style', arch.v, arch.conf, arch.why, 'Solution Architect');
   N('computemodel','compute','Compute Model', compute.v, compute.conf, compute.why, 'Solution Architect');
@@ -4047,6 +4063,7 @@ function buildCanonicalArchitectureGraph(ctx, signals = {}){
   const E = (a,b) => edges.push({from:a,to:b});
   E('frontend','gateway'); E('gateway','iam'); E('gateway','cloud');
   if(hybridId) E(hybridId,'cloud');
+  if(multiCloudId) E(multiCloudId,'cloud');
   E('cloud','arch'); E('arch','computemodel'); E('computemodel','containers'); E('computemodel','lang');
   E('computemodel','db'); E('computemodel','cache'); E('computemodel','messaging'); E('computemodel','mesh');
   E('computemodel','llm');
@@ -4089,6 +4106,7 @@ function buildCanonicalArchitectureGraph(ctx, signals = {}){
 // for the Flow View canvas. Presentation concern only — never consumed by exporters.
 const FLOW_LAYOUT = {
   frontend:[40,260], gateway:[300,40], iam:[300,165], dns:[300,290], hybridconnectivity:[300,415],
+  multicloudbridging:[300,540],
   cloud:[560,30], arch:[560,155], computemodel:[560,280], containers:[560,405], lang:[560,530],
   db:[820,90], cache:[820,215], messaging:[820,340], mesh:[820,465],
   llm:[1080,30], rag:[1080,155], vectordb:[1080,280], mcp:[1080,405], guardrails:[1080,530],
@@ -6116,6 +6134,7 @@ const EDGE_LABELS = {
   'llm->rag': 'Retrieval', 'rag->vectordb': 'Vector Search', 'llm->mcp': 'Tool calls',
   'guardrails->llm': 'Policy checks', 'computemodel->observability': 'Metrics & Traces',
   'computemodel->cicd': 'Deploys via', 'hybridconnectivity->cloud': 'Dedicated link',
+  'multicloudbridging->cloud': 'Cross-cloud bridge',
 };
 
 function generateDrawioXml(rec, signals) {
@@ -6276,13 +6295,23 @@ function generateSvgDiagram(rec, signals) {
   // uses — rather than being invented for the picture.
   const tierOf = {};
   graph.nodes.forEach(n => { tierOf[n.id] = n.cat; });
+  // Found in review: this used to `return` on the FIRST matching edge, so whenever more than
+  // one labeled edge crosses the same tier boundary (e.g. gateway->cloud "Routes to" AND
+  // hybridconnectivity->cloud "Dedicated link"/multicloudbridging->cloud "Cross-cloud bridge"
+  // both crossing edge->compute), every label after the first was silently dropped — not a
+  // regression from adding multicloudbridging, but a pre-existing bug the new category's edge
+  // label exposed for the first time (hybridconnectivity's own label had been shadowed by
+  // gateway's since the day it shipped, just never noticed because nothing before this compared
+  // the rendered SVG against what EDGE_LABELS actually declares). The band layout still draws
+  // one connector line per boundary — that visual constraint isn't changing — but the label on
+  // it should reflect everything crossing that boundary, not an arbitrary first match.
   const labelBetween = (a, b) => {
+    const labels = [];
     for (const e of graph.edges) {
-      if (tierOf[e.from] === a && tierOf[e.to] === b && EDGE_LABELS[`${e.from}->${e.to}`]) {
-        return EDGE_LABELS[`${e.from}->${e.to}`];
-      }
+      const lbl = tierOf[e.from] === a && tierOf[e.to] === b && EDGE_LABELS[`${e.from}->${e.to}`];
+      if (lbl && !labels.includes(lbl)) labels.push(lbl);
     }
-    return '';
+    return labels.join(' · ');
   };
 
   // SVG has no text measurement without a DOM, and this adapter must stay callable headlessly (the
