@@ -154,6 +154,11 @@ demonstrated.
 **Condition:** enforce the shipping of these logs by policy rather than by convention. A diagnostic
 setting a team can forget to enable is a control that exists in the diagram and not in the estate.
 
+**Ownership note:** this section owns *how* audit events are stored — the pipeline, immutability,
+retention. It does not enumerate *what produces* them. `18-access-control-four-planes.md` §H is the
+producer side: every authentication, PIM elevation, workload token issuance, and privileged data
+query is an audit event that lands here, without this document needing to restate what generated it.
+
 ### I. Observability cost is a real architecture input
 
 Telemetry is routinely a top-three cloud line item, driven mostly by log volume and retention rather

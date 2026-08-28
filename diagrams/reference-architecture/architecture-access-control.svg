@@ -1,0 +1,201 @@
+<svg viewBox="0 0 1340 1780" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <marker id="d" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#334155"/></marker>
+    <style>
+      .t  { font-size:14px; font-weight:800; fill:#0f172a; }
+      .h  { font-size:15px; font-weight:800; }
+      .s  { font-size:11.5px; font-weight:700; fill:#0f172a; }
+      .g  { font-size:10px; fill:#475569; }
+      .n  { font-size:11px; font-weight:700; fill:#fff; }
+    </style>
+  </defs>
+  <rect x="0" y="0" width="1340" height="1780" fill="#f8fafc"/>
+  <text x="30" y="38" font-size="23" font-weight="800" fill="#0f172a">Access Control — the 4 planes (one coherent model)</text>
+  <text x="30" y="60" font-size="13" fill="#64748b">"Access control" is NOT one thing. Four planes, different mechanisms. Blurring them is the junior mistake; a bank cares most about planes 3 &amp; 4 and the "what about—" follow-ups (orange).</text>
+
+  <rect x="30" y="78" width="1280" height="46" rx="10" fill="#ede9fe" stroke="#a78bfa"/>
+  <text x="46" y="98" class="s" fill="#5b21b6">The thread through all four: least privilege · deny by default · short-lived credentials · every grant is attested + auditable · no long-lived stored secrets anywhere.</text>
+  <text x="46" y="116" class="g" fill="#5b21b6">Identity is the new perimeter — you don't trust the network, you verify identity on every access, human or machine. Every access DECISION is itself an audit event (→ immutable log).</text>
+
+  <!-- PLANE 1 -->
+  <rect x="30" y="140" width="635" height="404" rx="12" fill="#eff6ff" stroke="#60a5fa" stroke-width="2"/>
+  <circle cx="58" cy="170" r="15" fill="#3b82f6"/><text class="n" x="58" y="175" text-anchor="middle">1</text>
+  <text class="t" x="82" y="164" fill="#1d4ed8">End-user access</text>
+  <text class="g" x="82" y="182">customer / admin → the application</text>
+  <text class="s" x="46" y="210">Question: "who is this user, what may they do?"</text>
+
+  <rect x="46" y="220" width="290" height="106" rx="8" fill="#fff" stroke="#93c5fd"/>
+  <text class="s" x="56" y="240" font-size="11" fill="#1d4ed8">Authentication (who you are)</text>
+  <text class="g" x="56" y="258">• Entra External ID / CIAM for customers</text>
+  <text class="g" x="56" y="274">• OAuth2 / OIDC — token-based, standards</text>
+  <text class="g" x="56" y="290">• MFA · Conditional Access (device, risk,</text>
+  <text class="g" x="56" y="304">&#160;&#160;named location)</text>
+  <text class="g" x="56" y="320">• session mgmt: short tokens + refresh</text>
+
+  <rect x="346" y="220" width="310" height="106" rx="8" fill="#fff" stroke="#93c5fd"/>
+  <text class="s" x="356" y="240" font-size="11" fill="#1d4ed8">Authorization (what you may do)</text>
+  <text class="g" x="356" y="258">• RBAC — role → permissions (coarse)</text>
+  <text class="g" x="356" y="274">• ABAC — attributes (dept, amount, region)</text>
+  <text class="g" x="356" y="290">&#160;&#160;for fine-grained + contextual rules</text>
+  <text class="g" x="356" y="306">• enforced at the API Gateway (Apigee)</text>
+  <text class="g" x="356" y="322">&#160;&#160;BEFORE the request hits a service</text>
+
+  <rect x="46" y="332" width="610" height="70" rx="8" fill="#eff6ff" stroke="#bfdbfe"/>
+  <text class="s" x="56" y="352" fill="#1d4ed8">Enforcement lives in two layers</text>
+  <text class="g" x="56" y="370">Gateway = token + coarse scope (valid, authorized caller?). Service = fine-grained (can THIS</text>
+  <text class="g" x="56" y="386">user touch THIS record?). "Coarse authz at the gateway, fine-grained in the service — never</text>
+  <text class="g" x="56" y="398" font-style="italic" fill="#1d4ed8">rely on the edge alone."</text>
+
+  <!-- GAP A: revocation -->
+  <rect x="46" y="408" width="610" height="60" rx="8" fill="#fff7ed" stroke="#fb923c"/>
+  <text class="s" x="56" y="428" fill="#9a3412">◆ Follow-up: how do you REVOKE immediately?</text>
+  <text class="g" x="56" y="446">A JWT is valid until it expires — a fired employee's token keeps working. Answer: very short</text>
+  <text class="g" x="56" y="462">token TTL (minutes) to shrink the window + a deny-list / introspection endpoint for instant kill + refresh-token rotation.</text>
+
+  <!-- GAP D: RLS -->
+  <rect x="46" y="474" width="610" height="60" rx="8" fill="#fff7ed" stroke="#fb923c"/>
+  <text class="s" x="56" y="494" fill="#9a3412">◆ Follow-up: authz at the DATA layer (defense in depth)</text>
+  <text class="g" x="56" y="512">Row-Level Security + column masking in the DB itself, so even if service logic has a bug the</text>
+  <text class="g" x="56" y="528">database won't return rows/columns the user shouldn't see. Belt and braces on fine-grained authz.</text>
+
+  <!-- PLANE 2 -->
+  <rect x="685" y="140" width="625" height="404" rx="12" fill="#f0fdfa" stroke="#5eead4" stroke-width="2"/>
+  <circle cx="713" cy="170" r="15" fill="#14b8a6"/><text class="n" x="713" y="175" text-anchor="middle">2</text>
+  <text class="t" x="737" y="164" fill="#0f766e">Service-to-service access</text>
+  <text class="g" x="737" y="182">one microservice → another (east-west)</text>
+  <text class="s" x="701" y="210">Question: "is this really claim-svc calling, or an impostor?"</text>
+
+  <rect x="701" y="220" width="595" height="94" rx="8" fill="#fff" stroke="#5eead4"/>
+  <text class="s" x="711" y="240" font-size="11" fill="#0f766e">mTLS via the service mesh (Istio)</text>
+  <text class="g" x="711" y="258">• every service presents a cert; BOTH sides verify — mutual, not one-way TLS</text>
+  <text class="g" x="711" y="274">• identity = a SPIFFE ID in an X.509 SVID (spiffe://bank/ns/prod/sa/payment)</text>
+  <text class="g" x="711" y="290">• sidecar handles issue + rotation — zero TLS code in the app</text>
+  <text class="g" x="711" y="306">• SPIRE issues SVIDs by ATTESTATION, short-lived + auto-rotated</text>
+
+  <rect x="701" y="320" width="595" height="100" rx="8" fill="#f0fdfa" stroke="#99f6e4"/>
+  <text class="s" x="711" y="340" fill="#0f766e">Default-deny east-west</text>
+  <text class="g" x="711" y="358">NetworkPolicy + mesh authz policy: a service can ONLY call the services it's allowed to.</text>
+  <text class="g" x="711" y="374">A breached pod can't freely pivot — only its allowlisted neighbours.</text>
+  <text class="g" x="711" y="392" font-style="italic" fill="#0f766e">For a bank, east-west encryption is a stated control, not just good practice. Say that.</text>
+  <text class="g" x="711" y="410">Zero-trust: verify identity on every internal call, not just at the edge.</text>
+
+  <!-- GAP C: secrets rotation / secret zero -->
+  <rect x="701" y="426" width="595" height="108" rx="8" fill="#fff7ed" stroke="#fb923c"/>
+  <text class="s" x="711" y="446" fill="#9a3412">◆ Follow-up: secrets rotation &amp; the "secret zero" problem</text>
+  <text class="g" x="711" y="464">For the few secrets that MUST exist (3rd-party API keys): Key Vault with automated rotation</text>
+  <text class="g" x="711" y="480">on a schedule, versioned, fetched at runtime.</text>
+  <text class="g" x="711" y="498">"Secret zero" = how does the pod auth to Key Vault in the FIRST place? Answer: it doesn't hold</text>
+  <text class="g" x="711" y="514">a secret — workload identity (plane 4) bootstraps it. That's the loop closed: no secret to fetch</text>
+  <text class="g" x="711" y="528">the secrets. The chain terminates in platform-attested identity, not a planted credential.</text>
+
+  <!-- PLANE 3 -->
+  <rect x="30" y="560" width="635" height="470" rx="12" fill="#fef2f2" stroke="#fca5a5" stroke-width="2"/>
+  <circle cx="58" cy="590" r="15" fill="#ef4444"/><text class="n" x="58" y="595" text-anchor="middle">3</text>
+  <text class="t" x="82" y="584" fill="#991b1b">Human operator → infrastructure</text>
+  <text class="g" x="82" y="602">engineers accessing cluster / cloud — BFSI differentiator</text>
+  <text class="s" x="46" y="630">Question: "how does a human get admin, and can we prove who did what?"</text>
+
+  <rect x="46" y="640" width="290" height="130" rx="8" fill="#fff" stroke="#fca5a5"/>
+  <text class="s" x="56" y="660" font-size="11" fill="#991b1b">Just-in-time, not standing access</text>
+  <text class="g" x="56" y="678">• PIM — request elevation, time-boxed,</text>
+  <text class="g" x="56" y="694">&#160;&#160;approval required, MFA on activation</text>
+  <text class="g" x="56" y="710">• nobody holds standing admin — you</text>
+  <text class="g" x="56" y="726">&#160;&#160;elevate for 2h, then it drops</text>
+  <text class="g" x="56" y="742">• every activation logged →</text>
+  <text class="g" x="56" y="758">&#160;&#160;the audit trail auditors ask for</text>
+
+  <rect x="346" y="640" width="310" height="130" rx="8" fill="#fff" stroke="#fca5a5"/>
+  <text class="s" x="356" y="660" font-size="11" fill="#991b1b">The controls a bank audit checks</text>
+  <text class="g" x="356" y="678">• break-glass: 2 accounts, excluded from</text>
+  <text class="g" x="356" y="694">&#160;&#160;CA, hardware MFA, alert on ANY use</text>
+  <text class="g" x="356" y="710">• access reviews — periodic recertify</text>
+  <text class="g" x="356" y="726">• Bastion / no public SSH-RDP; JIT VM</text>
+  <text class="g" x="356" y="742">• segregation of duties (approver ≠</text>
+  <text class="g" x="356" y="758">&#160;&#160;requester)</text>
+
+  <!-- GAP B: human access to DATA -->
+  <rect x="46" y="778" width="610" height="86" rx="8" fill="#fff7ed" stroke="#fb923c"/>
+  <text class="s" x="56" y="798" fill="#9a3412">◆ Follow-up: who can read production DATA? (the sharpest audit question)</text>
+  <text class="g" x="56" y="816">Infra-admin ≠ data-access. A DBA reading prod customer records is a higher-sensitivity grant:</text>
+  <text class="g" x="56" y="832">JIT-elevated too, every query audited, dynamic data masking so even privileged queries see</text>
+  <text class="g" x="56" y="848">masked PII unless explicitly authorized. "Access to the box is not access to the data."</text>
+
+  <rect x="46" y="872" width="610" height="146" rx="8" fill="#fef2f2" stroke="#fca5a5"/>
+  <text class="s" x="56" y="892" fill="#991b1b">Why this plane is the BFSI differentiator</text>
+  <text class="g" x="56" y="910">Most candidates answer "access control" with plane 1 and stop. Audit findings land HERE —</text>
+  <text class="g" x="56" y="926">standing admin, shared accounts, no MFA on elevation, no review trail, unaudited data access.</text>
+  <text class="g" x="56" y="942">Naming PIM + break-glass + access reviews + data-access auditing unprompted marks you as</text>
+  <text class="g" x="56" y="958">someone who's been through a real security review, not just built a login page.</text>
+  <text class="g" x="56" y="978" font-style="italic" fill="#991b1b">Line: "no standing privilege — access is requested, time-boxed, approved, and logged."</text>
+  <text class="g" x="56" y="1000" font-style="italic" fill="#991b1b">And: "access to the infrastructure is a separate, lower grant than access to the data."</text>
+
+  <!-- PLANE 4 -->
+  <rect x="685" y="560" width="625" height="470" rx="12" fill="#f5f3ff" stroke="#a78bfa" stroke-width="2"/>
+  <circle cx="713" cy="590" r="15" fill="#8b5cf6"/><text class="n" x="713" y="595" text-anchor="middle">4</text>
+  <text class="t" x="737" y="584" fill="#6b21a8">Workload → resource (DB / secret)</text>
+  <text class="g" x="737" y="602">a pod reaching a database or Key Vault — BFSI differentiator</text>
+  <text class="s" x="701" y="630">Question: "how does a pod auth to a DB WITHOUT a stored password?"</text>
+
+  <rect x="701" y="640" width="595" height="112" rx="8" fill="#fff" stroke="#c4b5fd"/>
+  <text class="s" x="711" y="660" font-size="11" fill="#6b21a8">Workload identity — no static secrets</text>
+  <text class="g" x="711" y="678">• pod's identity (K8s service account) federates to cloud IAM →</text>
+  <text class="g" x="711" y="694">&#160;&#160;gets a SHORT-LIVED token for the DB / Key Vault. Nothing stored, nothing to leak.</text>
+  <text class="g" x="711" y="710">• Azure: Managed / Workload Identity · AWS: IRSA · GCP: Workload Identity</text>
+  <text class="g" x="711" y="726">• cross-cloud: Workload Identity Federation (the GKE→Entra ID case)</text>
+  <text class="g" x="711" y="742">• secrets that must exist → Key Vault, runtime fetch, never in the image</text>
+
+  <rect x="701" y="762" width="595" height="120" rx="8" fill="#f5f3ff" stroke="#c4b5fd"/>
+  <text class="s" x="711" y="782" fill="#6b21a8">Why "no stored secret" is the whole game</text>
+  <text class="g" x="711" y="800">A password in a config / env var / image layer is the #1 way credentials leak — committed to</text>
+  <text class="g" x="711" y="816">git, logged, or copied. Workload identity removes the secret: platform attests the pod and</text>
+  <text class="g" x="711" y="832">issues a token that expires in minutes.</text>
+  <text class="g" x="711" y="850">Same principle as plane 2 (SPIFFE) and plane 3 (PIM): identity is EARNED + short-lived,</text>
+  <text class="g" x="711" y="866">never a long-lived secret you hold.</text>
+
+  <!-- audit link callout -->
+  <rect x="701" y="890" width="595" height="128" rx="8" fill="#eef6fc" stroke="#7dd3fc"/>
+  <text class="s" x="711" y="910" fill="#0369a1">◆ Ties to your audit design: every access DECISION is an audit event</text>
+  <text class="g" x="711" y="928">Who authenticated, whose token was issued, which human elevated via PIM, which pod got a DB</text>
+  <text class="g" x="711" y="944">token, which DBA ran which query — all flow to the SAME immutable WORM audit log from the</text>
+  <text class="g" x="711" y="960">observability design. Access control produces the evidence; the audit pipeline stores it tamper-proof.</text>
+  <text class="g" x="711" y="980" font-style="italic" fill="#0369a1">"Every grant is logged to the immutable audit trail — access control and audit are one story,</text>
+  <text class="g" x="711" y="996" font-style="italic" fill="#0369a1">not two. A grant you can't prove happened is a grant you can't defend in an audit."</text>
+
+  <!-- ANSWER BOX -->
+  <rect x="30" y="1046" width="1280" height="700" rx="12" fill="#0f172a"/>
+  <text x="54" y="1082" font-size="18" font-weight="800" fill="#fff">How to walk it — the coherent model</text>
+
+  <text x="54" y="1116" class="h" fill="#67e8f9" font-size="14">Open by splitting it — the seniority move.</text>
+  <text x="54" y="1138" font-size="12.5" fill="#e2e8f0">"Access control is four planes: end-user, service-to-service, human-operator-to-infrastructure, and workload-to-resource. Different mechanisms each, and</text>
+  <text x="54" y="1156" font-size="12.5" fill="#e2e8f0">for a bank the last two matter most — privileged human access and secretless workload access are where audit findings actually land."</text>
+
+  <text x="54" y="1190" class="h" fill="#93c5fd" font-size="14">1 End-user:</text>
+  <text x="54" y="1210" font-size="12.5" fill="#e2e8f0">OIDC/OAuth2 + MFA/Conditional Access; RBAC coarse + ABAC contextual. Coarse authz at gateway, fine-grained in service, and Row-Level Security in the</text>
+  <text x="54" y="1228" font-size="12.5" fill="#e2e8f0">DB as defense in depth. Revocation: short token TTL + a deny-list/introspection endpoint for instant kill — a JWT is otherwise valid till it expires.</text>
+
+  <text x="54" y="1262" class="h" fill="#5eead4" font-size="14">2 Service-to-service:</text>
+  <text x="54" y="1282" font-size="12.5" fill="#e2e8f0">mTLS in the mesh, SPIFFE identity in an SVID, sidecar-rotated, default-deny east-west. Secrets that must exist: Key Vault with auto-rotation, and the</text>
+  <text x="54" y="1300" font-size="12.5" fill="#e2e8f0">secret-zero problem is solved by workload identity — the pod doesn't hold a secret to fetch the secrets.</text>
+
+  <text x="54" y="1334" class="h" fill="#fca5a5" font-size="14">3 Human operator (differentiator):</text>
+  <text x="54" y="1354" font-size="12.5" fill="#e2e8f0">No standing admin — PIM just-in-time, time-boxed, approved, MFA'd, logged. Break-glass monitored, access reviews, Bastion, segregation of duties. And</text>
+  <text x="54" y="1372" font-size="12.5" fill="#e2e8f0">the sharp one: access to the DATA is a separate, higher grant than access to the box — DBA queries are JIT, audited, and see masked PII by default.</text>
+
+  <text x="54" y="1406" class="h" fill="#c4b5fd" font-size="14">4 Workload-to-resource (differentiator):</text>
+  <text x="54" y="1426" font-size="12.5" fill="#e2e8f0">Workload identity — pod federates to cloud IAM for a short-lived DB/Key Vault token, nothing stored. Managed Identity / IRSA / Workload Identity;</text>
+  <text x="54" y="1444" font-size="12.5" fill="#e2e8f0">federation across clouds. Secrets that must exist live in Key Vault, auto-rotated, runtime-fetched, never in the image.</text>
+
+  <line x1="54" y1="1474" x2="1286" y2="1474" stroke="#334155"/>
+  <text x="54" y="1502" class="h" fill="#fcd34d" font-size="14">The one thread that unifies all four:</text>
+  <text x="54" y="1522" font-size="12.5" fill="#e2e8f0">Every plane replaces a long-lived stored credential with a short-lived ATTESTED identity. User tokens refresh, service SVIDs rotate, human admin is JIT</text>
+  <text x="54" y="1540" font-size="12.5" fill="#e2e8f0">via PIM, pod DB access is a minutes-long federated token. "Identity is earned and short-lived, never a secret you hold." And every grant lands in the</text>
+  <text x="54" y="1558" font-size="12.5" fill="#e2e8f0">immutable audit log — access control and audit are one story. That's zero-trust applied consistently to humans and machines alike.</text>
+
+  <line x1="54" y1="1588" x2="1286" y2="1588" stroke="#334155"/>
+  <text x="54" y="1616" class="h" fill="#86efac" font-size="14">One-paragraph answer:</text>
+  <text x="54" y="1638" font-size="12.5" fill="#e2e8f0">"Four planes. End users: OIDC + MFA, RBAC/ABAC, coarse authz at the gateway, fine-grained in the service, RLS in the DB; short token TTL plus a</text>
+  <text x="54" y="1656" font-size="12.5" fill="#e2e8f0">deny-list for instant revocation. Services: mTLS with SPIFFE identity, default-deny east-west. Human operators: no standing admin — PIM just-in-time,</text>
+  <text x="54" y="1674" font-size="12.5" fill="#e2e8f0">break-glass, access reviews, and data access audited separately from infra access. Workloads: identity federation for short-lived DB/secret tokens,</text>
+  <text x="54" y="1692" font-size="12.5" fill="#e2e8f0">nothing stored. The thread is short-lived attested identity over long-lived secrets, every grant logged to the immutable trail — zero-trust for humans and</text>
+  <text x="54" y="1710" font-size="12.5" fill="#e2e8f0">machines the same way."</text>
+</svg>

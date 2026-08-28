@@ -14,7 +14,10 @@ cloud — what stays on a private link and what has to cross to the public inter
 owns the disjoint problem: bridging two providers whose networks do not otherwise touch at all,
 which needs an actual physical or virtual link provisioned between them before anything private is
 possible, plus identity federation across a trust boundary neither provider owns. Neither document
-restates the other.
+restates the other. §E's federation is specifically the *cross-cloud* case — the same pattern
+applied *within* one cloud (a pod reaching its own cloud's database or secret store) is owned by
+`18-access-control-four-planes.md` §F, which defers back here the moment a second provider is
+involved.
 
 ## Business context
 
