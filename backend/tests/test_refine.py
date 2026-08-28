@@ -145,6 +145,97 @@ def test_refine_rejects_overlong_requirement_text(mock_anthropic, refine_payload
     assert resp.status_code == 422
 
 
+# ------------------------------------------------------- category enum / server-side filtering
+# refine_module.VALID_CATEGORIES mirrors index.html's STACK_CARD_CATEGORY values exactly — a
+# category outside that closed set can never be matched back to a card by
+# applyRefinementToCard()'s frontend matching, so it must not reach the response as if it were a
+# normal, applicable pick. See VALID_CATEGORIES' own comment in routers/refine.py for the full
+# reasoning (this closes Step 4 of the RAG-derivation-engine plan: the six categories promoted
+# in the prior KB-promotion pass are only genuinely reachable from /api/refine if a bogus
+# category can't silently swallow a real one, or itself go unnoticed).
+
+def test_valid_categories_include_all_six_promoted_kb_categories():
+    """Regression lock: the six categories promoted from docs/use-case-knowledge-base (12, 13,
+    15, 16, 17, 18) must be in the enum, or the model is structurally unable to ever adjust
+    them even though the categories themselves exist and render."""
+    for cat in ("auditlogging", "privilegedaccess", "testingstrategy", "networkboundary",
+                "multicloudbridging", "securitygates"):
+        assert cat in refine_module.VALID_CATEGORIES
+
+
+def test_refine_drops_a_pick_with_an_unrecognized_category(monkeypatch, refine_payload):
+    """A category the model invents (or gets wrong, e.g. the JSON key 'gw' instead of the
+    canonical 'gateway') must not reach the response as if it were an applicable pick — it
+    would silently never match any card, indistinguishable from the rule engine simply being
+    right about that category."""
+    bogus_result = {
+        "adjusted_picks": [
+            {"category": "gw", "pick": "Kong", "reason": "Requirement names Kong explicitly."},
+            {"category": "database", "pick": "PostgreSQL only", "reason": "Only transactional data mentioned."},
+        ],
+        "rationale": "Two changes proposed.",
+        "open_questions": [],
+    }
+
+    def _fake_run_refinement(api_key, requirement_text, recommendations):
+        return bogus_result, {"input_tokens": 10, "output_tokens": 10}
+
+    monkeypatch.setattr(refine_module, "_run_refinement", _fake_run_refinement)
+    resp = client.post("/api/refine", json=refine_payload)
+    assert resp.status_code == 200
+    body = resp.json()
+    # Only the valid-category pick survives into adjusted_picks.
+    assert len(body["adjusted_picks"]) == 1
+    assert body["adjusted_picks"][0]["category"] == "database"
+    # The dropped pick isn't silently lost — it's surfaced as an open question instead.
+    assert any("gw" in q for q in body["open_questions"])
+
+
+def test_refine_accepts_a_promoted_kb_category(monkeypatch, refine_payload):
+    """The positive case: a pick using one of the six newly-promoted categories' canonical
+    value passes straight through, unfiltered."""
+    result = {
+        "adjusted_picks": [
+            {
+                "category": "auditlogging",
+                "pick": "Application logs only — no dedicated audit pipeline needed",
+                "reason": "Requirement text describes a personal learning project with no compliance obligation.",
+            }
+        ],
+        "rationale": "Compliance signal was a false positive.",
+        "open_questions": [],
+    }
+
+    def _fake_run_refinement(api_key, requirement_text, recommendations):
+        return result, {"input_tokens": 10, "output_tokens": 10}
+
+    monkeypatch.setattr(refine_module, "_run_refinement", _fake_run_refinement)
+    resp = client.post("/api/refine", json=refine_payload)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["adjusted_picks"]) == 1
+    assert body["adjusted_picks"][0]["category"] == "auditlogging"
+    assert body["open_questions"] == []
+
+
+def test_filter_to_valid_categories_is_a_noop_when_everything_is_valid():
+    result = {
+        "adjusted_picks": [{"category": "cloud", "pick": "AWS", "reason": "x"}],
+        "rationale": "r",
+        "open_questions": ["q"],
+    }
+    filtered = refine_module._filter_to_valid_categories(result)
+    assert filtered == result
+
+
+def test_refinement_tool_schema_enumerates_valid_categories():
+    """The tool schema itself must expose VALID_CATEGORIES as an enum — this is the actual
+    'wiring' Step 4 closes: before this, category was an unconstrained string with no enum at
+    all, for every category, not just the six newly-promoted ones."""
+    category_schema = refine_module.REFINEMENT_TOOL["input_schema"]["properties"]["adjusted_picks"]["items"]["properties"]["category"]
+    assert category_schema["enum"] == refine_module.VALID_CATEGORIES
+
+
 def test_refine_surfaces_anthropic_api_errors_as_502(monkeypatch, refine_payload):
     from fastapi import HTTPException
 

@@ -109,6 +109,32 @@ router = APIRouter(prefix="/api", tags=["refine"])
 # instruction-following for the 'only override with a cited reason' constraint").
 MODEL = "claude-sonnet-5"
 
+# The closed vocabulary a refinement's `category` must come from — mirrors index.html's
+# STACK_CARD_CATEGORY values exactly, plus 'tradeoffs' (the one non-stack-card pseudo-category,
+# used by the trade-off cards' own refine buttons — see attachRefineUI()'s second
+# querySelectorAll loop). Must be kept in sync with that object by hand, the same duplication
+# discipline as the two rule engines: index.html cannot import this file (v1 stays fully
+# client-side per PRD NFR-1/NFR-5), so there is no way to share this list at runtime, only to
+# keep both copies committed and reviewed together.
+#
+# Before this existed, `category` was an unconstrained string (schemas.AdjustedPick.category:
+# str, no validation) and the tool schema had no enum — nothing stopped the model from writing
+# "Cloud Provider" or "cloud provider" or "gw" for a pick meant to land on the Cloud Provider
+# card. The frontend's matching (`p.category.toLowerCase().includes(category.toLowerCase())` in
+# applyRefinementToCard()) only succeeds when the model's string, lowercased, CONTAINS the
+# canonical value below — "gateway" only matches if the model says "gateway" or something
+# containing it, never the shorter internal JS var name "gw" it might otherwise see in the
+# recommendations JSON it's shown (computeRecommendations() uses abbreviated keys — gw, db,
+# msg, fe, lang, arch, obs — that do NOT equal their STACK_CARD_CATEGORY values). A model
+# reasonably inferring "gw" from that JSON key would silently and permanently fail to match any
+# card, with the user only ever seeing "No change suggested" and no signal anything was wrong.
+VALID_CATEGORIES = [
+    "cloud", "gateway", "iam", "languages", "architecture", "compute", "messaging", "mesh",
+    "cache", "database", "containers", "observability", "frontend", "cicd", "dns",
+    "hybridconnectivity", "auditlogging", "privilegedaccess", "testingstrategy",
+    "networkboundary", "multicloudbridging", "securitygates", "tradeoffs",
+]
+
 SYSTEM_PROMPT = """You are reviewing an existing technology/AI architecture recommendation \
 that was produced by a deterministic rule engine. You are NOT generating a new \
 recommendation from scratch.
@@ -122,6 +148,12 @@ or clearly under-supported by the requirement text, and propose a specific repla
 for that category alone.
 
 Hard constraints:
+- The `category` field of every adjusted pick MUST be exactly one of the values listed in the \
+tool schema's enum for that field (e.g. "cloud", "database", "auditlogging") — never the \
+recommendations JSON's own key names (which use different, abbreviated internal names like \
+"gw" or "db" that will not match anything), and never a human-readable label like "Cloud \
+Provider". A category value outside that enum cannot be matched back to anything on screen and \
+is silently discarded.
 - Do not propose a change unless you can cite the specific phrase or fact in the requirement \
 text that justifies it. A generic stylistic preference is not a valid reason.
 - Do not touch categories the rule engine got right — leave them out of adjusted_picks \
@@ -149,7 +181,16 @@ REFINEMENT_TOOL = {
                 "items": {
                     "type": "object",
                     "properties": {
-                        "category": {"type": "string"},
+                        "category": {
+                            "type": "string",
+                            "enum": VALID_CATEGORIES,
+                            "description": (
+                                "Must be one of these exact values — the internal category key "
+                                "each corresponds to on screen, NOT a human-readable label and "
+                                "NOT the recommendations JSON's own (differently-abbreviated) "
+                                "key names."
+                            ),
+                        },
                         "pick": {"type": "string"},
                         "reason": {
                             "type": "string",
@@ -211,6 +252,34 @@ def _run_refinement(api_key: str, requirement_text: str, recommendations: dict) 
     raise HTTPException(status_code=502, detail="Model did not return a refinement result.")
 
 
+def _filter_to_valid_categories(result: dict) -> dict:
+    """Defense in depth, not trust: the tool schema's enum (VALID_CATEGORIES) is strong
+    guidance for Claude, but nothing here guarantees it was obeyed — least of all on the
+    Ollama fallback path, whose lower tool-calling reliability is the whole reason
+    app/llm_providers.py's docstring exists. A pick whose category isn't one of the known
+    values can never be matched back to a card by applyRefinementToCard() in index.html (see
+    VALID_CATEGORIES' comment on why) — surfaced as an open question rather than either
+    applied silently (where it would just as silently never render, indistinguishable from a
+    real "no change" for that category) or dropped with no trace (wasting real model output
+    that a user might still want to see)."""
+    picks = result.get("adjusted_picks") or []
+    valid = [p for p in picks if p.get("category") in VALID_CATEGORIES]
+    invalid = [p for p in picks if p.get("category") not in VALID_CATEGORIES]
+    if not invalid:
+        return result
+    notes = [
+        f'Model proposed a change to "{p.get("category")}" ({p.get("pick", "")!r}) but that '
+        f'category name does not match any known category, so it could not be applied to a '
+        f'card. Reason given: {p.get("reason", "")}'
+        for p in invalid
+    ]
+    return {
+        **result,
+        "adjusted_picks": valid,
+        "open_questions": [*(result.get("open_questions") or []), *notes],
+    }
+
+
 def _run_ollama_refinement_call(requirement_text: str, recommendations: dict) -> tuple[dict, dict]:
     """Isolated the same way _run_refinement() is, for the same testing reason (monkeypatch
     instead of a real local Ollama call in unit tests) — see app/llm_providers.py for the real
@@ -265,6 +334,8 @@ def refine(payload: schemas.RefineRequest, db: Session = Depends(get_db)):
             payload.anthropic_api_key, payload.requirement_text, payload.recommendations
         )
         model_used = MODEL
+
+    result = _filter_to_valid_categories(result)
 
     refinement_row = models.RefinementResult(
         analysis_id=analysis.id,
