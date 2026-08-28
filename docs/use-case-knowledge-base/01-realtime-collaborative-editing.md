@@ -96,6 +96,18 @@ expiry, sent over the same WebSocket connection but logically distinct from docu
 - **Yjs ecosystem** (Tiptap, BlockNote, y-sweet, Hocuspocus) — the de facto open-source standard for
   rich-text/block editors.
 
+## Revisit triggers
+
+- **§A (CRDT vs. OT):** if you started on OT for a plain-text-only, single-central-server case and
+  now need rich/nested document structures, offline editing, or true peer-to-peer sync — migrate to
+  a CRDT library (Yjs) rather than extending the transform functions.
+- **§B (sync transport):** if you started on a managed provider (Liveblocks, PartyKit) pre-product-
+  market-fit to skip building the relay yourself, revisit self-hosting (Hocuspocus) once ops
+  capacity exists and per-seat SaaS cost starts to matter more than engineering time.
+- **§C (persistence):** if load times are degrading or storage is growing unbounded, the raw CRDT
+  update log needs snapshotting/compaction — this is a "when it starts hurting," not a day-one,
+  concern, but it is not optional past that point.
+
 ## As implemented in `index.html`
 
 Wired into `pickMessaging(s)` via the `collabEditing` signal: recommends a CRDT sync relay

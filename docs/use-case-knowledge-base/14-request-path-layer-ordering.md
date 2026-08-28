@@ -145,6 +145,18 @@ product name changes. The cross-cutting column covers security and secrets, obse
 and governance, and it is drawn beside the stack rather than within it for the reason given in
 decision point F.
 
+## Revisit triggers
+
+- **§A ("condition where this collapses"):** if a cross-cloud edge product already provides DNS,
+  CDN, WAF and DDoS in one service, layers 2 and 3 legitimately collapse into it — the error to
+  revisit is stacking both that product and the cloud-native equivalents, paying twice for one
+  function.
+- **§B (compute platform):** this is not a "when to move on" trigger like most of this corpus — it's
+  a reminder that managed Kubernetes, an enterprise Kubernetes distribution, and serverless
+  containers are mutually exclusive answers to one question. Revisit the choice itself (not "add
+  another layer") if the original driver changes — e.g. an on-prem/hybrid mandate appearing after a
+  serverless choice was made, or a workload's traffic shape moving from bursty to steady baseline.
+
 ## As implemented in `index.html`
 
 Partially, and structurally rather than as reasoning. `buildCanonicalArchitectureGraph()` assigns

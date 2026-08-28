@@ -146,6 +146,19 @@ admission. The pattern is cloud-agnostic — the equivalent AWS path is ECR plus
 Actions with IAM roles for service accounts, and GCP's is Artifact Registry plus Cloud Build with
 workload identity federation.
 
+## Revisit triggers
+
+- The `pickSecurityGates()` floor (secrets + dependency scanning only) is proportionate for a
+  learning/minimal project with no compliance/finance/healthcare/enterprise signal — revisit the
+  moment any of those appears, or once real user data enters the picture: the full gate set
+  (§A-E: SAST/DAST/image scan/sign+SBOM, GitOps human-approved promotion, admission control) is
+  what a regulated reviewer will check for, and retrofitting it after an incident costs more than
+  adopting it deliberately.
+- **§E (admission control):** if a pipeline gate is ever bypassed in practice (an emergency deploy,
+  a manual `kubectl apply`), that is the concrete argument for admission control at the cluster edge
+  — a pipeline can be bypassed, an admission policy enforced at the cluster cannot be without an
+  audited change.
+
 ## As implemented in `index.html`
 
 Partially. `pickSecurityGates()` (its own "Security Gates (CI/CD)" stack card) now reasons about

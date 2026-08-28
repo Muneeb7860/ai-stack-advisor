@@ -91,6 +91,17 @@ files/S3 paths do not.
 - **Tecton, Feast (Linux Foundation), Hopsworks** — vendor/OSS reference implementations widely
   benchmarked against each other.
 
+## Revisit triggers
+
+- **§A (feature store):** a full feature store (Feast/Tecton/Databricks/SageMaker) pays off only
+  once multiple teams share features, sub-second online serving is a real requirement, and
+  train/serve skew is an active problem — below that, a versioned feature-catalog repo is simpler
+  and sufficient. Adopting the heavier platform before that threshold is the specific, documented
+  over-build mistake this section warns about.
+- **§B (online serving):** don't add the online (Redis/DynamoDB/Aerospike) serving path until a
+  product genuinely needs sub-second freshness — the offline/batch path alone is the right default
+  until that requirement is real, not aspirational.
+
 ## As implemented in `index.html`
 
 Wired into `pickTradeoffs(s)` via the `mlFeatureStore` signal — recommends a full feature store

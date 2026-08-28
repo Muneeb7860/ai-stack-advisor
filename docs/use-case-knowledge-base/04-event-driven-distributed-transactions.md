@@ -88,6 +88,21 @@ integrated stack.
 - **microservices.io** (Chris Richardson) — the original canonical source for the Saga pattern
   definition used across the industry.
 
+## Revisit triggers
+
+- **§A (choreography vs. orchestration):** if a choreographed saga grows past roughly **4-5
+  steps**, or "where is this order stuck" becomes a recurring support/debugging question, move to
+  an orchestrator (Temporal.io or Step Functions) before the smeared-across-services flow logic
+  becomes unmaintainable.
+- **§C (CQRS):** if read and write workloads for the same data start diverging sharply in shape or
+  scale (e.g. reporting/search load dwarfing write volume), that divergence — not a default
+  preference — is what justifies introducing CQRS; revisit if it hasn't appeared yet and CQRS was
+  adopted anyway.
+- **§D (event sourcing):** if full audit history, temporal queries, or true event-driven state
+  reconstruction is not an active requirement, event sourcing's added complexity (schema evolution,
+  replay tooling, snapshotting) is not yet earning its cost — revisit only when one of those three
+  becomes real.
+
 ## As implemented in `index.html`
 
 Wired into `pickTradeoffs(s)` via the `sagaWorkflow` signal — recommends orchestration (Temporal.io

@@ -95,6 +95,21 @@ all tenants.
 - **Neon and Nile** — both publish current (2025–2026) reference architectures specifically for
   RLS-based and database-per-tenant Postgres multi-tenancy.
 
+## Revisit triggers
+
+- **§A/§B (isolation and DB strategy):** as tenant count and mix change, the right answer changes
+  with it — shared-schema+RLS for thousands of small/mid tenants, schema-per-tenant once mid-size
+  tenants demand backup/customization granularity, database-per-tenant or full silo once a small
+  number of large enterprise or regulated tenants demand contractual isolation. A growing enterprise
+  segment inside an otherwise-pooled system is the signal to revisit, not a wholesale migration.
+- **§B (database-per-tenant specifically):** if connection-pool exhaustion or migration fan-out
+  starts becoming a recurring operational problem, database-per-tenant has hit its scaling ceiling
+  (low hundreds/thousands of tenants) — this is the point to move toward schema-per-tenant or
+  shared-schema+RLS, not add more database instances.
+- **§D (cell-based architecture):** if a single tenant's overload or failure has started visibly
+  affecting other tenants on shared pooled compute, that blast-radius leak is the trigger for
+  cell-based partitioning — not a scale number alone.
+
 ## As implemented in `index.html`
 
 Wired into `pickTradeoffs(s)` via the `multiTenant` signal — recommends the bridge model (shared

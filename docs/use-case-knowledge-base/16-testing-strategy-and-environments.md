@@ -150,6 +150,18 @@ compliance/usability strip covering accessibility (WCAG), localisation, and audi
 Test-data strategy is drawn as three parallel approaches (masked copy, synthetic generation,
 subsetting) with the common-practice combination stated explicitly.
 
+## Revisit triggers
+
+- **§A (contract tests):** contract testing earns its cost specifically once there is more than one
+  service to integrate against — introducing it earlier is process weight with nothing to protect
+  yet.
+- **§B (performance testing):** `pickTestingStrategy()`'s load/soak-testing addition fires on the
+  `highScale` signal — revisit toward the full four-test taxonomy (load, stress, soak, spike) once
+  autoscaling thresholds are actually being trusted in production, not just configured.
+- **§D (test data):** the moment compliance, finance, or healthcare data enters a lower environment,
+  the masked/synthetic test-data rule stops being a nice-to-have and becomes the one rule in this
+  document stated as absolute — this is the sharpest, least-negotiable trigger in the whole corpus.
+
 ## As implemented in `index.html`
 
 Partially. `pickTestingStrategy()` (its own "Testing Strategy" stack card) now implements the

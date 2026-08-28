@@ -68,7 +68,7 @@ sourced tool is trying to avoid in the first place.
   claim from this corpus, it should be able to cite the source, matching the citation discipline
   already used in `market-analysis.md` and the `docs/alternatives-research/` files.
 
-## 2b. Two conventions that exist because retrieval broke without them
+## 2b. Three conventions that exist because retrieval broke without them
 
 ### Canonical rules are stated verbatim in every document that touches them — never cross-referenced
 
@@ -109,6 +109,27 @@ distinguish what a system does from what its author thinks it should do will sta
 facts. `/api/ask` answering "yes, the tool handles that" about target design is a worse failure than
 not answering. The status is a parseable field rather than prose so the distinction can be enforced
 and, later, surfaced in a citation.
+
+### `## Revisit triggers` states the condition where a recommendation flips — as its own section, not a `**bolded:**` line
+
+Every domain document states, in prose scattered across its decision points, the condition under
+which a pick should change ("once tenant count crosses X," "if a second admin joins," "the moment
+compliance appears"). Before this section existed, `/api/ask`/`/api/refine` could only ever
+paraphrase that condition out of a larger chunk — the same "a fact stated once in prose eventually
+gets paraphrased into something subtly wrong" problem `Status:` solves for implementation state.
+
+The fix is **not** shaped like `Status:` — it is a real `## Revisit triggers` content section
+(2-4 bullets, each tied to the decision point it revisits, e.g. `**§B (database strategy):**...`),
+placed just before `## As implemented in `index.html`` (or `## Caveats and re-verification` for
+`09`, which has no implementation section). Deliberately **not** a bolded preamble line: `Status:`
+lives in the preamble because it only needs to be *parseable*, and preamble text is ROUTING-only in
+`app/retrieval.py`'s two-stage design — never returned as citable content. A revisit condition needs
+to be *quotable*, so it has to live in a real chunk that participates in the same embedding+BM25
+ranking as everything else, with zero special-casing in `retrieval.py` itself.
+
+Enforced by `test_every_domain_document_has_a_revisit_triggers_section` and
+`test_revisit_triggers_sections_have_at_least_one_bullet` in `test_kb_corpus.py` — presence and
+non-emptiness, not content quality, the same enforcement ceiling as the `Status:` tests.
 
 ## 3. Domain index
 

@@ -143,6 +143,17 @@ The pattern maps directly onto AWS (PrivateLink and VPC endpoints, ALB plus WAF,
 (Private Service Connect, Cloud Load Balancing plus Cloud Armor, GKE). The names change; the two
 kinds of outbound do not.
 
+## Revisit triggers
+
+- `pickNetworkBoundary()`'s default-networking-is-fine answer is proportionate for a single small
+  deployment with no compliance signal — revisit once a specific service is genuinely sensitive, a
+  compliance requirement appears, or enough services exist that an internal attack surface actually
+  exists (§B).
+- **§F (private model endpoints):** the moment an LLM call enters the request path for a
+  compliance/finance/healthcare requirement, "the model call never left our network" needs to be
+  literally true, not a talking point — that is the trigger to add the cloud's own model endpoint to
+  the private-endpoint list, not a general AI-adoption decision.
+
 ## As implemented in `index.html`
 
 Partially. `pickNetworkBoundary()` (its own "Network Boundary" stack card) now reasons about decision

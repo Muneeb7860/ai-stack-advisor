@@ -106,6 +106,16 @@ Sources: [Claude API Pricing](https://claude.com/pricing), [OpenAI API Pricing](
 None of these present a range for early-stage planning the way this tool's estimator does — that's
 the deliberate differentiation.
 
+## Revisit triggers
+
+- The bands above are a snapshot as of **August 2026** — before quoting one to a user for a real
+  budget commitment, re-check the official pricing pages linked in "Reference tools" above; vendor
+  pricing (especially LLM API pricing, the highest-leverage number in this document) moves faster
+  than the rest of this corpus.
+- If a user's actual measured traffic/usage diverges materially from the low/medium/high tier this
+  tool inferred, that divergence — not this document's bands — should drive the real budget number;
+  these ranges exist to bound a planning conversation, not to replace one.
+
 ## Caveats and re-verification
 
 - Vendor pricing moves — treat every figure above as a snapshot, not a permanent reference. Before
