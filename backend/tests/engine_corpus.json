@@ -1,5 +1,5 @@
 {
-  "_comment": "Requirements exercised against BOTH rule engines by test_engine_differential.py. Add a case here whenever a bug is found in one engine — the corpus is the cheapest place to pin cross-engine behaviour. Each string should exercise a distinct branch family.",
+  "_comment": "Requirements exercised against BOTH rule engines by test_engine_differential.py. Add a case here whenever a bug is found in one engine \u2014 the corpus is the cheapest place to pin cross-engine behaviour. Each string should exercise a distinct branch family.",
   "requirements": [
     "A fintech payments platform, high traffic, PCI compliance, real-time fraud detection.",
     "Early-stage startup, 3 engineers, MVP web app, budget conscious, serverless.",
@@ -25,6 +25,10 @@
     "We use OpenShift and Jenkins on-premises with Splunk for logging.",
     "Agentic workflow automation for a regulated bank, needs tool use and audit logging.",
     "Retain audit logs for 12 months and launch within 6 months.",
-    "A GCP shop with an existing MongoDB estate building a document search assistant."
+    "A GCP shop with an existing MongoDB estate building a document search assistant.",
+    "A college project \u2014 a simple to-do list app for my final year submission.",
+    "A college project that needs to handle high traffic, millions of users, for my thesis on distributed systems.",
+    "A college project for a healthcare data class assignment, HIPAA patient records.",
+    "A college project \u2014 I want to use AWS specifically to learn cloud deployment."
   ]
 }
