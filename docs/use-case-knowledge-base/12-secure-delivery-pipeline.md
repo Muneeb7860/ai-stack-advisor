@@ -1,6 +1,8 @@
 # Secure Delivery Pipeline — CI security gates, GitOps promotion, progressive delivery
 
-**Status:** target design — `pickCICD()` picks a CI product; no reasoning about pipeline controls exists.
+**Status:** partial — `pickSecurityGates()` scales the required gate set by project size and
+compliance/finance/healthcare/enterprise signals; the promotion-model and canary-rollback mechanics
+(decision points C–E) are not yet implemented.
 
 **Domain:** How code reaches production safely in a regulated environment — the security gates that
 run on every pull request, the GitOps promotion model, and the progressive-delivery mechanics that
@@ -146,11 +148,15 @@ workload identity federation.
 
 ## As implemented in `index.html`
 
-Not yet implemented. `pickCICD()` selects a CI platform and deployment shape but reasons about
-neither the security-gate set nor the promotion model; `pickGuardrails()` covers AI guardrails, a
-different concern entirely. The nearest existing surface is the CI/CD stack card and its vendor
-comparison. A trade-off card ("pipeline security gates: which subset, and when the full set is
-justified") and a governance-section extension are the natural wiring points.
+Partially. `pickSecurityGates()` (its own "Security Gates (CI/CD)" stack card) now reasons about
+decision points A–B: a minimal project gets secrets + dependency scanning only, a compliance/
+finance/healthcare/enterprise requirement gets the full gate set (secrets, SAST, SCA, image scan,
+sign + SBOM) plus GitOps promotion with a human-approved step and canary with SLO-gated auto-
+rollback named in the pick's rationale, and everything else gets the scaled middle tier. `pickCICD()`
+still separately selects the CI platform and deployment topology — the two are complementary, not
+merged. Not yet implemented: the specific canary-percentage staging (5/25/50/100), SOX segregation-
+of-duties detail, and admission-control policy as their own reasoned decision rather than mentioned
+in prose. `pickGuardrails()` remains a different concern (AI guardrails, not pipeline security).
 
 ## Sources
 

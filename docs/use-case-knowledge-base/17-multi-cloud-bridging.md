@@ -1,8 +1,9 @@
 # Multi-Cloud Bridging — a constraint, not a preference
 
-**Status:** target design — nothing below is implemented. `pickCloud()` always returns exactly one
-provider; there is no code path that reasons about compute in one cloud and data in another, or
-about how two providers' networks and identity systems connect.
+**Status:** partial — a new `multiCloudMentioned` signal plus `pickMultiCloudBridging()` now reason
+about the constraint-first framing, IaC-source, interconnect-tier, and federation guidance (decision
+points A–E) once two distinct cloud providers are named. `pickCloud()` still always returns exactly
+one provider — the split itself is not modeled structurally, only named in the pick's prose.
 
 **Domain:** How to bridge two different cloud providers when a hard constraint forces it — the
 physical link between networks that do not otherwise share a backbone, cross-cloud identity
@@ -164,13 +165,16 @@ do not depend on which two clouds are involved.
 
 ## As implemented in `index.html`
 
-Nothing of this document is implemented. `pickCloud()` is structurally single-answer — it returns
-exactly one provider and has no representation of a split architecture at all.
-`pickHybridConnectivity()` is the nearest existing function and answers a different question: it
-reasons about a dedicated link between on-prem infrastructure and *one* cloud, not between two cloud
-providers. The natural wiring point is a new signal for a stated multi-cloud requirement, feeding a
-dedicated pick that names the constraint-first framing (decision point A) before recommending a
-bridging mechanism (decision point D).
+Partially. A new `multiCloudMentioned` signal (two or more distinct cloud-vendor groups named —
+counts vendor groups, not raw keyword hits) feeds `pickMultiCloudBridging()` (its own "Multi-Cloud
+Bridging" stack card), which is conditional rather than always-substantive: a single-cloud or
+on-prem requirement gets an explicit "Not applicable," and a genuine multi-cloud requirement gets the
+constraint-first framing (decision point A) before naming a single IaC source across both providers
+(C), a dedicated interconnect for real data volume (D), and workload-identity federation over a
+stored credential (E), with the cache-locally/cross-async mitigation (F) named in the rationale.
+`pickCloud()` remains structurally single-answer — the split itself is stated in prose, not modeled
+as two separate cloud picks. `pickHybridConnectivity()` remains the separate on-prem↔one-cloud
+question this document does not own.
 
 ## Sources
 

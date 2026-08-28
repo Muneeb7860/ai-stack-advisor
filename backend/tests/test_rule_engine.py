@@ -129,7 +129,10 @@ def test_recommend_stack_returns_all_expected_categories():
     """Category set as of the frontend expansion pass (see docs/adr/0001, Addendum 2) —
     vram_tier was replaced by compute_tier, and cost_estimate/runtime plus 12 vendor-comparison
     keys were added; hybrid_connectivity and integration_guidance were added when the JS<->Python
-    parity gap they'd been sitting in was closed (see tests/test_engine_parity.py). If this test
+    parity gap they'd been sitting in was closed (see tests/test_engine_parity.py). Six more
+    categories (audit_logging, privileged_access, testing_strategy, network_boundary,
+    multi_cloud_bridging, security_gates) were added when docs 12/13/15/16/17/18 in
+    docs/use-case-knowledge-base were promoted from target-design to implemented. If this test
     needs updating again, cross-check against the actual index.html analyze() assembly, not
     against what an MCP client currently expects.
 
@@ -147,7 +150,8 @@ def test_recommend_stack_returns_all_expected_categories():
         "vector_db_placement", "cloud_vendor", "compute_platform_vendor", "orchestrator_vendor",
         "gateway_vendor", "database_vendor", "messaging_vendor", "llm_provider_vendor",
         "vector_db_vendor", "guardrails_vendor", "cicd_vendor", "observability_vendor",
-        "frontend_vendor",
+        "frontend_vendor", "audit_logging", "privileged_access", "testing_strategy",
+        "network_boundary", "multi_cloud_bridging", "security_gates",
     }
     assert set(result["recommendations"].keys()) == expected_categories
 

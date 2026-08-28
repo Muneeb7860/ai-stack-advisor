@@ -47,6 +47,9 @@ KEYMAP = {
     "containers": "containers", "obs": "observability", "fe": "frontend", "cicd": "cicd",
     "dns": "dns", "hybridConnectivity": "hybrid_connectivity", "hosting": "hosting_location",
     "runtime": "runtime",
+    "auditLogging": "audit_logging", "privilegedAccess": "privileged_access",
+    "testingStrategy": "testing_strategy", "networkBoundary": "network_boundary",
+    "multiCloudBridging": "multi_cloud_bridging", "securityGates": "security_gates",
 }
 
 # Rationale prose still differs in this many (requirement, category) pairs out of 450. Ratcheted
