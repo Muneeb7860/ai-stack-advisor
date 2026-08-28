@@ -1,8 +1,8 @@
 # Observability & Audit Logging — instrument once, alert on symptoms, audit separately
 
-**Status:** target design — `pickObservability()` selects an APM vendor and nothing else. None of
-the reasoning below (what to alert on, how a trace survives the message bus, why audit logging is a
-different pipeline) exists in the engine today.
+**Status:** partial — `pickAuditLogging()` now covers §H (audit logging as a separate immutable
+pipeline). `pickObservability()` still only selects an APM vendor; alerting policy, trace
+propagation, sampling, and cardinality (the rest of the reasoning below) remain unimplemented.
 
 **Domain:** What to emit, where it goes, what wakes a human, and why audit logging is a separate
 system rather than a log level. Source:
@@ -207,17 +207,19 @@ propagation requirement and the separate audit path are invariant; only the prod
 
 ## As implemented in `index.html`
 
-Nothing of this document is implemented, which is why its Status is `target design`.
-`pickObservability()` chooses an APM vendor from team-skill and enterprise/compliance signals and
-emits a single "OpenTelemetry (instrumentation standard) + <vendor>" string. There is no reasoning
-about alerting policy, SLOs, trace propagation, sampling, cardinality, or the audit pipeline, and
-`pickGovernance()`'s audit-log mentions are about access control rather than about an immutable
-trail.
+Partially. `pickAuditLogging()` (its own "Audit Logging" stack card) now implements §H: a minimal,
+non-regulated project is told application logs are enough, a compliance/finance/healthcare/large-
+enterprise requirement gets a separate immutable WORM-storage audit pipeline distinct from
+application logs, and the middle case gets application logs today with an explicit revisit trigger —
+closing the highest-value gap this document identified. `pickObservability()` still only chooses an
+APM vendor from team-skill and enterprise/compliance signals and emits a single "OpenTelemetry
+(instrumentation standard) + <vendor>" string; there is still no reasoning about alerting policy,
+SLOs, trace propagation, sampling, or cardinality, and `pickGovernance()`'s audit-log mentions remain
+about access control rather than the immutable trail (that distinction is now `pickAuditLogging()`'s
+job, not `pickGovernance()`'s).
 
-The natural wiring points are a trade-off card for the backend-per-signal-class rule, an
-observability section extension covering alerting policy, and a governance-section extension for the
-separate audit path — the last being the highest-value one for regulated requirements, since it is
-currently absent from an output that already claims to reason about compliance.
+The natural next wiring points are a trade-off card for the backend-per-signal-class rule and an
+observability section extension covering alerting policy, sampling, and cardinality.
 
 ## Sources
 

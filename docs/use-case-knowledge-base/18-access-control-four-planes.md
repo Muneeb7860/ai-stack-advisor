@@ -1,9 +1,9 @@
 # Access Control — four planes, one coherent model
 
-**Status:** partial — `pickMesh()` and an existing trade-off card already cover plane 2's
-SPIFFE/SPIRE identity reasoning in real depth. Everything else is target design: `pickIAM()` picks a
-vendor without reasoning about RBAC/ABAC enforcement location or token revocation, and PIM,
-break-glass, JIT elevation, data-access auditing, and same-cloud workload identity (planes 3 and 4)
+**Status:** partial — `pickPrivilegedAccess()` now covers plane 3 (PIM/JIT/break-glass); `pickMesh()`
+and an existing trade-off card already cover plane 2's SPIFFE/SPIRE identity reasoning in real depth.
+The rest is target design: `pickIAM()` picks a vendor without reasoning about RBAC/ABAC enforcement
+location or token revocation, and plane 4's data-access auditing and same-cloud workload identity
 have no representation anywhere in the engine.
 
 **Domain:** "Access control" is not one mechanism — it is four separate planes, each answering a
@@ -211,9 +211,14 @@ Partially. `pickIAM()` selects an identity vendor for plane 1 without reasoning 
 enforcement location or token revocation. `pickMesh()` and the existing "Edge auth (JWT) vs.
 service-to-service identity" trade-off card already cover plane 2's SPIFFE/SPIRE reasoning in real
 depth — this document adds the SVID/attestation mechanics underneath that pick rather than
-duplicating it. Planes 3 and 4 (PIM, break-glass, access reviews, data-access auditing, same-cloud
-workload identity) have no representation anywhere in the engine. The natural wiring points are a
-governance-section extension for plane 3 and a data-access card distinct from the existing
+duplicating it. `pickPrivilegedAccess()` (its own "Privileged Access" stack card) now covers plane 3:
+an air-gapped requirement gets bastion-plus-JIT-local-admin, a solo minimal project is told no formal
+process is needed yet, a compliance/finance/healthcare/enterprise requirement gets full PIM/JIT/
+break-glass/segregation-of-duties with the infra-access-vs-data-access distinction named explicitly,
+and everything else gets a proportionate named-admin-list middle tier — deliberately not duplicating
+`pickIAM()`, which picks a vendor rather than reasoning about how a human gets elevated. Plane 4
+(data-access auditing, same-cloud workload identity) still has no representation anywhere in the
+engine. The natural remaining wiring point is a data-access card distinct from the existing
 `pick_governance` audit-log mentions, which are about access control generally rather than a
 separate data-access grant.
 

@@ -1,6 +1,8 @@
 # Private Network Topology & Egress Control — private endpoints vs. the one audited exit
 
-**Status:** target design — `pickHybridConnectivity()` covers on-prem↔cloud links, not the in-cloud network boundary.
+**Status:** partial — `pickNetworkBoundary()` now covers the private-endpoint-vs-default-networking
+decision; the single-entry/single-exit gateway topology and per-provider private-model-endpoint
+verification (decision points C–D) are not yet implemented.
 
 **Domain:** How a workload reaches its dependencies without putting traffic on the public internet,
 and how the traffic that genuinely must leave is constrained to a single auditable path. The
@@ -143,12 +145,16 @@ kinds of outbound do not.
 
 ## As implemented in `index.html`
 
-Not yet implemented. `pickHybridConnectivity()` reasons about dedicated links between on-prem and
-cloud, which is a different question from private-endpoint access to managed services within one
-cloud. `pickMesh()` recommends a mesh on mTLS and team-boundary grounds without reasoning about its
-gateways. `pickHostingLocation()` decides cloud-API versus self-hosted inference but does not model
-the private-endpoint middle option that makes a cloud model endpoint acceptable to a regulated buyer
-— which is the most valuable single gap identified in this document.
+Partially. `pickNetworkBoundary()` (its own "Network Boundary" stack card) now reasons about decision
+point A's core question — an air-gapped requirement is not applicable by construction, a minimal
+project has no internal boundary worth protecting, and a compliance/finance/healthcare requirement
+gets private endpoints for every managed cloud service (explicitly including the cloud's own LLM
+endpoint) plus one audited egress gateway for genuine third parties, closing the exact gap this
+document called "the most valuable single gap identified." Not yet implemented: the single-entry/
+single-exit gateway topology as its own structural pick (decision point C), and per-provider/
+per-region verification that a named private-link claim actually holds (decision point D — still a
+documented caveat rather than a check). `pickHybridConnectivity()` and `pickMesh()` remain the
+separate concerns they always were (on-prem↔cloud links; mTLS mesh segmentation).
 
 ## Sources
 

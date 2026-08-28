@@ -1,8 +1,8 @@
 # Testing Strategy — the functional pyramid, named performance tests, and test data
 
-**Status:** target design — nothing below is implemented. `pickCICD()` selects a CI platform and
-deployment shape; no reasoning about what to test, how to size performance testing, or how test data
-is sourced exists anywhere in the engine.
+**Status:** partial — `pickTestingStrategy()` now covers the functional test pyramid, the named
+load/soak performance tests, and the test-data-masking rule. Resilience/chaos testing and DR-drill
+verification (decision points C, E) are not yet implemented.
 
 **Domain:** What to test (the functional pyramid plus non-functional test types) and how to source
 test data without ever letting real production data reach a lower environment. Source:
@@ -152,11 +152,15 @@ subsetting) with the common-practice combination stated explicitly.
 
 ## As implemented in `index.html`
 
-Nothing of this document is implemented. `pickCICD()` selects a CI platform and deployment topology
-and reasons about neither test taxonomy nor test-data strategy. The natural wiring point is a new
-trade-off card for the performance-test-type distinction (decision point B) and a governance-section
-extension for the test-data rule (decision point D), the latter being the highest-value single
-addition for any requirement carrying a compliance signal.
+Partially. `pickTestingStrategy()` (its own "Testing Strategy" stack card) now implements the
+functional pyramid framing for every requirement, adds the named load/soak performance-test guidance
+(decision point B) when `highScale` fires, and adds the masked/synthetic test-data rule (decision
+point D) when compliance/finance/healthcare fires — the two additions compose independently rather
+than collapsing into one flag, so a requirement with both gets both fragments named explicitly. A
+minimal project is told the rest is disproportionate for now. `pickCICD()` still separately handles
+deployment topology, unchanged. Not yet implemented: resilience/chaos testing as a distinct pick
+(decision point C) and DR-drill verification (decision point E) as their own reasoned output rather
+than mentioned in prose.
 
 ## Sources
 

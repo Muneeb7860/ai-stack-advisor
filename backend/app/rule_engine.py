@@ -311,11 +311,20 @@ def detect_signals(text: str) -> dict:
     hybrid_connectivity = dedicated_link_terms or (
         has_raw(["hybrid"]) and has_raw(["cloud"]) and not strong_on_prem
     )
+    # Two or more DISTINCT cloud providers named — mirrors index.html's multiCloudMentioned.
+    # Counts vendor groups, not raw keyword hits, and reuses the exact same keyword sets as
+    # awsShop/azureShop/gcpShop/huaweiShop below for consistency.
+    cloud_vendor_count = sum([
+        has(["aws", "amazon web services"]), has(["azure", "microsoft"]),
+        has(["gcp", "google cloud"]), has(["huawei", "huawei cloud"]),
+    ])
+    multi_cloud_mentioned = cloud_vendor_count >= 2
 
     _exclusions = detect_exclusions(text)
     return {
         "onPrem": strong_on_prem or soft_on_prem,
         "hybridConnectivity": hybrid_connectivity,
+        "multiCloudMentioned": multi_cloud_mentioned,
         # Objects, not booleans — any consumer counting "active signals" must skip these.
         "excluded": _exclusions,
         "known": detect_known_tech(text, _exclusions),
@@ -1065,6 +1074,90 @@ def pick_hybrid_connectivity(s, cloud):
         "conf": "high",
         "needed": True,
     }
+
+
+# -------------------------------------------------------------------------------------------
+# The six functions below mirror index.html's pickAuditLogging/pickPrivilegedAccess/
+# pickTestingStrategy/pickNetworkBoundary/pickMultiCloudBridging/pickSecurityGates exactly —
+# see that file's comment above pickAuditLogging() for why they exist (promoting target-design
+# KB docs 12/13/15/16/17/18 into real categories so /api/refine, /api/ask and the MCP tool can
+# reach them, closing the gap PRD Section 12 records under "Follow-up: RAG-derived stack
+# reasoning"). Doc 14 has no matching function here either, for the same reason stated there.
+# -------------------------------------------------------------------------------------------
+
+def pick_audit_logging(s):
+    if s["minimalProject"] and not s["compliance"] and not s["enterprise"] and not s["finance"] and not s["healthcare"]:
+        return {"v": "Application logs are enough for now — no dedicated audit pipeline needed", "why": "A learning/personal project has no regulator or auditor asking \"who did what, to what data, when\" — that question, not debugging, is what a dedicated audit pipeline exists to answer. Revisit if this ever handles real user data or gains a compliance obligation.", "conf": "high"}
+    if s["compliance"] or s["finance"] or s["healthcare"] or (s["enterprise"] and s["largeTeam"]):
+        return {"v": "Separate immutable audit pipeline (WORM storage, years retention) — distinct from application logs", "why": "Application logs are sampled, retained for weeks, and exist for debugging; audit events (who did what, to what data, when) must be complete — never sampled — immutable, and tamper-evident, because they answer a regulator, not an engineer. An audit log an administrator can delete is not an audit log. Route infrastructure-level and data-access events to the same write-once store so both are answerable from one place, and enforce shipping by policy rather than convention — a setting a team can forget to enable is a control that exists on paper, not in the estate.", "conf": "high"}
+    return {"v": "Application logs today; add a dedicated immutable audit pipeline once you have real user data or a compliance obligation", "why": "Structured application logs (retained weeks, sampled) cover debugging at this stage. A separate audit pipeline is worth the operational cost once there is a specific regulator, customer contract, or data-handling obligation asking \"who did what\" — building it earlier is real infrastructure with no one asking the question it answers yet.", "conf": "medium"}
+
+
+def pick_privileged_access(s):
+    if s["onPrem"]:
+        return {"v": "Bastion host, no public SSH/RDP; JIT-elevated local admin group membership, every elevation logged", "why": "The cloud-native pattern (PIM against a cloud IdP) assumes a cloud identity provider reachable from wherever an engineer is — an air-gapped environment needs the equivalent enforced locally: a bastion as the only path in, group membership granted for a bounded window rather than held standing, and elevation events logged to the same audit pipeline as everything else.", "conf": "high"}
+    if s["minimalProject"] and not s["compliance"] and not s["enterprise"]:
+        return {"v": "No formal privileged-access process needed — you are the only administrator", "why": "Just-in-time elevation, break-glass accounts, and access reviews exist to answer \"who had admin, when, and can we prove it\" across a TEAM of people with standing access to revoke. A solo learning project has no second admin to segregate duties from and no review to conduct. Revisit the moment a second person gets infrastructure access.", "conf": "high"}
+    if s["compliance"] or s["finance"] or s["healthcare"] or s["enterprise"]:
+        return {"v": "Just-in-time elevation (PIM) — no standing admin; time-boxed, approved, MFA'd, auto-expiring, every activation logged", "why": "Standing privileged access and shared accounts are the most common real finding in an infrastructure access review — if nobody had to ask for admin, nobody can prove why they had it during an incident. Pair JIT elevation with a small, fixed number of monitored break-glass accounts (excluded from conditional access, hardware MFA, alerted on any use) and periodic access recertification, with segregation of duties so the approver is never the requester. Critically, treat access to production DATA as a separate, higher grant from infrastructure access — a DBA with legitimate cluster access querying live customer records is its own auditable event, ideally with dynamic data masking so even an authorized query returns masked PII unless the specific need is explicit. Access to the box is not access to the data.", "conf": "high"}
+    return {"v": "A small, named set of infra admins with a shared secrets manager — add JIT elevation once the team or the compliance surface grows", "why": "Formal just-in-time elevation earns its operational cost once there are enough infrastructure admins that \"who has access\" stops being answerable from memory, or once a customer/regulator starts asking. Below that, a small named admin list with credentials in a proper secrets manager (never shared plaintext) is proportionate. Revisit if headcount with infra access grows past a handful, or a compliance requirement appears.", "conf": "medium"}
+
+
+def pick_testing_strategy(s):
+    if s["minimalProject"]:
+        return {"v": "Unit tests for core logic, a handful of integration tests — skip the rest for now", "why": "A test pyramid, named performance-test types, and a formal test-data strategy exist to manage risk across a codebase multiple people maintain under real load with real user data. A learning/personal project has none of those — unit tests catching regressions in core logic is genuinely proportionate; contract tests, load/stress/soak/spike testing, and masked-production test data all solve problems this scale does not have yet.", "conf": "high"}
+    # Two independent flags, each contributing its OWN v-summary fragment — not two booleans
+    # collapsed into one length check. The original version gated the "+ masked/synthetic
+    # test-data strategy" suffix on `len(notes) > 1` rather than on whether that specific note
+    # fired, so a compliance-only case (high_scale false, one note from compliance) produced a
+    # `v` of "Test pyramid (unit-heavy)" with no visible reason for 'high' confidence — and the
+    # JS side had the matching bug, producing a dangling "+ " instead. Caught by the JS<->Python
+    # differential harness (test_engine_differential.py) when these categories were added to it.
+    high_scale_note = s["highScale"]
+    data_strategy_note = (s["compliance"] or s["finance"] or s["healthcare"]) and not s["minimalProject"]
+    notes = []
+    if high_scale_note:
+        notes.append("load testing (expected peak) and soak testing (sustained hours — the type most teams skip, and the one that finds a memory leak) before you trust an autoscaling threshold")
+    if data_strategy_note:
+        notes.append("test data must never include real production records in a lower environment — synthetic data for volume, a masked and subsetted production slice for edge-case realism")
+    why = ('Unit tests (fast, most of the suite) at the base, integration tests against real dependencies, '
+           'contract tests between services once there is more than one, few end-to-end tests at the top — '
+           'the inverted shape ("ice-cream cone": mostly E2E, few units) is slow, flaky, and eventually ignored.')
+    if notes:
+        why += " At your scale, also: " + "; ".join(notes) + "."
+    why += (' A successful "backup completed" log is not evidence of a working restore — the only proof is '
+            'an actual restore drill, which matters more the more this system\'s data would hurt to lose.')
+    v_parts = ["Test pyramid (unit-heavy)"]
+    if high_scale_note:
+        v_parts.append("load/soak testing")
+    if data_strategy_note:
+        v_parts.append("masked/synthetic test-data strategy")
+    v = " + ".join(v_parts) if notes else "Test pyramid: unit-heavy, integration + contract tests as services multiply, few E2E"
+    return {"v": v, "why": why, "conf": "high" if notes else "medium"}
+
+
+def pick_network_boundary(s):
+    if s["onPrem"]:
+        return {"v": "Not applicable — air-gapped means every dependency is already inside your own network boundary", "why": "Private-endpoint architecture exists to keep traffic to managed CLOUD services off the public internet. An air-gapped environment has no cloud services to reach in the first place — everything is already inside the boundary by construction.", "conf": "high"}
+    if s["minimalProject"] and not s["compliance"]:
+        return {"v": "No private-endpoint architecture needed — a single small deployment has no internal boundary to protect", "why": "Private endpoints, an egress allowlist, and a single audited exit point are controls for an estate with multiple services and a real internal attack surface. One small deployment calling its own managed database over the provider's default secure connection has nothing further to gain from this — the added networking complexity would have no corresponding benefit yet.", "conf": "high"}
+    if s["compliance"] or s["finance"] or s["healthcare"]:
+        return {"v": "Private endpoints for every managed cloud service (database, cache, secrets, LLM); one egress gateway with a per-host allowlist for genuine third parties", "why": "Managed cloud services (database, cache, secrets manager, and — specifically relevant if an LLM call is in the request path — the cloud's own model endpoint) reached over a private link never transit the public internet, which is what makes \"the model call never left our network\" literally true rather than a compliance talking point. Genuine third parties (a payment gateway, an SMS provider) have no private-link option and must exit through one audited, allowlisted gateway — a compromised workload should not be able to open an arbitrary internet connection.", "conf": "high"}
+    return {"v": "Default provider networking is fine for now; move to private endpoints once a specific service or compliance need requires it", "why": "Most managed cloud services are already reasonably secured by default (TLS in transit, provider-side auth). Private-endpoint architecture is worth the added complexity once there is a specific reason — a compliance requirement, a genuinely sensitive dependency, or enough services that an internal attack surface actually exists — not as a default for every deployment.", "conf": "medium"}
+
+
+def pick_multi_cloud_bridging(s):
+    if not s["multiCloudMentioned"] or s["onPrem"]:
+        return {"v": "Not applicable — single cloud provider in use", "why": "Left to choose freely, compute and data belong in the same cloud — every call that crosses between providers costs latency and usually egress fees a single-cloud design does not pay at all. This category only has something to say once a real multi-cloud split is on the table.", "conf": "medium", "needed": False}
+    return {"v": "Constraint-driven split only — one IaC source across both providers, a dedicated interconnect (not a public-internet path) for real data volume, workload identity federation for cross-cloud auth", "why": "A split-provider architecture should be justified by a named hard constraint (data-residency law, an org/M&A mandate, or one provider-specific service) — not by \"avoiding lock-in\" as a general principle, which trades a real risk for a smaller, harder-to-name one while paying the ongoing cross-cloud tax regardless. One Terraform (or equivalent) configuration invoking both providers keeps the highest-risk part — the cross-cloud link and identity federation — reviewable in one place rather than split across two independently-reviewed pipelines. For real data volume between providers, a dedicated interconnect (not a site-to-site VPN over the public internet) gives predictable, SLA-backed latency. Authenticate across the boundary via workload identity federation — a short-lived token issued on proof of what the workload is — never a stored credential for the second cloud. Mitigate the latency that cannot be removed: cache on the compute side, and push anything that tolerates delay onto an async path rather than a synchronous cross-cloud call.", "conf": "high", "needed": True}
+
+
+def pick_security_gates(s):
+    if s["minimalProject"]:
+        return {"v": "Secrets scanning + dependency scanning on every push — skip the rest for now", "why": "The full pipeline-security-gate set (SAST, DAST, image scanning, signing, SBOM generation, a human-approved promotion step) is proportionate to a codebase multiple people maintain, handling real user data, under a change-management obligation. A learning project has none of those yet — a free secrets scanner (catches an accidentally committed API key, the single most damaging mistake at any scale) and dependency scanning cost nothing to add and catch the mistakes that actually happen at this size.", "conf": "high"}
+    if s["compliance"] or s["finance"] or s["healthcare"] or s["enterprise"]:
+        return {"v": "Full gate set at the PR (secrets, SAST, SCA, image scan, sign + SBOM) — GitOps promotion with a human-approved step before production, canary with SLO-gated auto-rollback", "why": "A vulnerability caught at the pull request costs minutes; the same vulnerability in production is an incident and an audit finding — gate placement is a cost decision, not a purity one. A green pipeline is a precondition to merge, never an authorisation to reach production: that promotion needs a human whose approval is a different person from the change's author (segregation of duties), which is exactly the control a regulated reviewer checks for. Admission control at the cluster edge (rejecting unsigned images, privileged pods, no-limits workloads) is what makes the earlier gates real controls rather than advisory scans — a pipeline can be bypassed, an admission policy enforced at the cluster cannot be without an audited change.", "conf": "high"}
+    return {"v": "Secrets scanning, dependency scanning, and unit tests as required PR checks; add SAST/DAST/signing as the team or the data sensitivity grows", "why": "The gate set scales with what is actually at stake. Secrets and dependency scanning are cheap and catch the two most common real mistakes (a leaked credential, a known-vulnerable package) regardless of scale. The heavier gates (SAST, DAST, image signing, SBOM generation) earn their operational cost once there is a compliance obligation or an external audit to satisfy — add them deliberately, not by default.", "conf": "medium"}
 
 
 def pick_cache(s):
@@ -1990,6 +2083,12 @@ def recommend_stack(requirement_text: str) -> dict:
         "cicd": cicd,
         "dns": pick_dns(s),
         "hybrid_connectivity": pick_hybrid_connectivity(s, cloud),
+        "audit_logging": pick_audit_logging(s),
+        "privileged_access": pick_privileged_access(s),
+        "testing_strategy": pick_testing_strategy(s),
+        "network_boundary": pick_network_boundary(s),
+        "multi_cloud_bridging": pick_multi_cloud_bridging(s),
+        "security_gates": pick_security_gates(s),
         "docs": pick_docs(s),
         "llm": llm,
         "mcp_servers": pick_mcp(s),
