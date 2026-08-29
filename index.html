@@ -173,6 +173,32 @@
   #sidebarExportShare{display:flex; flex-direction:column; gap:2px; margin-top:2px;}
   #sidebarExportShare .export-dropdown{display:block;}
   #sidebarExportShare .share-btn{width:100%; justify-content:flex-start;}
+  /* Phase 4 (Enterprise-shell plan) — analysis history list. #sidebarHistory itself starts
+     display:none in the markup; renderSidebarHistory() toggles it once there's ≥1 entry. */
+  #sidebarHistory{margin-top:10px;}
+  .sidebar-history-header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:6px 8px 4px; font-size:10.5px; font-weight:700; text-transform:uppercase;
+    letter-spacing:0.04em; color:var(--muted);
+  }
+  .sidebar-history-clear{
+    background:none; border:none; color:var(--muted); font-size:10.5px; font-weight:600;
+    cursor:pointer; text-transform:none; letter-spacing:normal; padding:2px 4px;
+  }
+  .sidebar-history-clear:hover{color:var(--text);}
+  .sidebar-history-item{
+    display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:var(--radius-sm);
+    color:var(--muted2); font-size:12px; cursor:pointer;
+    transition:background .15s var(--ease), color .15s var(--ease);
+  }
+  .sidebar-history-item:hover{background:var(--chip); color:var(--text);}
+  .sidebar-history-item .shi-label{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .sidebar-history-item .shi-x{
+    flex-shrink:0; display:flex; align-items:center; justify-content:center; width:16px; height:16px;
+    border-radius:50%; color:var(--muted); font-size:9px; opacity:0; transition:opacity .15s var(--ease);
+  }
+  .sidebar-history-item:hover .shi-x{opacity:1;}
+  .sidebar-history-item .shi-x:hover{background:var(--chip); color:var(--text);}
   .app-sidebar-spacer{flex:1;}
   /* Overrides .theme-toggle's own position:fixed (still the correct rule for any OTHER use of
      that class) so it sits in normal flow at the bottom of the sidebar instead of floating over
@@ -191,6 +217,10 @@
     .app-sidebar-item svg{margin:0 auto;}
     #sidebarExportShare .export-dropdown, #sidebarExportShare .share-btn{font-size:0;}
     #sidebarExportShare svg{margin:0 auto;}
+    /* A dynamic multi-row history list has no sensible icon-rail treatment yet — designing one
+       is Phase 5's job (responsive collapse), not this one's. Hidden here rather than left to
+       render broken/overflowing at 64px wide. */
+    #sidebarHistory{display:none !important;}
   }
 
   /* ---- Glide panel: reusable slide-in-from-left drawer, "signature feel" pattern ----
@@ -1044,6 +1074,17 @@
           </div>
         </div>
         <button class="share-btn icon-btn" id="shareBtn" onclick="onShareClick()" title="Share this analysis" aria-label="Share this analysis"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244"/></svg> Share this analysis</button>
+      </div>
+      <!-- Phase 4 (Enterprise-shell plan) — analysis history, localStorage-backed (see
+           getAnalysisHistory/saveAnalysisHistoryEntry/renderSidebarHistory). Starts hidden;
+           renderSidebarHistory() (called on page load and after every save/delete/clear) shows
+           it only once there's at least one entry. -->
+      <div id="sidebarHistory" style="display:none;">
+        <div class="sidebar-history-header">
+          <span>Recent</span>
+          <button type="button" class="sidebar-history-clear" onclick="clearAnalysisHistory()">Clear</button>
+        </div>
+        <div id="sidebarHistoryList"></div>
       </div>
     </nav>
     <div class="app-sidebar-spacer"></div>
@@ -4039,6 +4080,13 @@ function setAnalysis(text, rawSignals, opts){
   const rec = computeRecommendations(s);
   lastSignals = s; lastRecommendations = rec;
 
+  // Phase 4 (Enterprise-shell plan) — every entry mode (wizard, freetext, upload) and every
+  // "reopen a past entry" replay all converge on this one function, so hooking the save here
+  // covers all of them for free. loadSharedAnalysis() (a read-only shared view) deliberately
+  // calls renderRecommendations() directly rather than setAnalysis(), so it never reaches this
+  // line — someone else's shared analysis never pollutes the viewer's own local history.
+  if (typeof saveAnalysisHistoryEntry === 'function') saveAnalysisHistoryEntry(text);
+
   // The cached analysis_id/refine history describe the recommendations that were on screen a
   // moment ago. They are stale for ANY change, including an override — not just a new requirement.
   if (typeof resetRefineSession === 'function') resetRefineSession();
@@ -5827,6 +5875,82 @@ function deleteCustomKbTech(techId){
   }
 }
 
+// Phase 4 (Enterprise-shell plan) — analysis history, localStorage-backed. Same pattern as
+// getCustomKbTechs/saveCustomKbTech above: one flat array under one key, try/catch-wrapped,
+// read-modify-write. Every entry mode (wizard, freetext, upload) converges on
+// setAnalysis(text, detectSignals(text)) — see setAnalysis itself below — and detectSignals
+// is a pure function of `text` alone, so storing just {id, text, ts} per entry is enough to
+// exactly reconstruct any past analysis; no upload-specific data needs separate capture.
+const ANALYSIS_HISTORY_MAX = 20;
+
+function getAnalysisHistory(){
+  try {
+    const raw = localStorage.getItem('analysis_history');
+    return raw ? JSON.parse(raw) : [];
+  } catch(e) {
+    return [];
+  }
+}
+
+// De-dupes by exact text match (moves an existing entry to the front instead of duplicating)
+// and caps at ANALYSIS_HISTORY_MAX, oldest dropped first — both are user-facing product
+// decisions, not incidental. Called from inside setAnalysis() itself, so every creation path
+// AND every "reopen a past entry" replay (which itself calls setAnalysis) saves/reorders for
+// free, with no separate hook needed per entry mode.
+function saveAnalysisHistoryEntry(text){
+  try {
+    const list = getAnalysisHistory().filter(e => e.text !== text);
+    list.unshift({id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text, ts: Date.now()});
+    localStorage.setItem('analysis_history', JSON.stringify(list.slice(0, ANALYSIS_HISTORY_MAX)));
+  } catch(e) {
+    console.error('Failed to save analysis history entry', e);
+  }
+  renderSidebarHistory();
+}
+
+function deleteHistoryEntry(id, event){
+  if (event) event.stopPropagation(); // don't also trigger the row's own reopen click
+  try {
+    const list = getAnalysisHistory().filter(e => e.id !== id);
+    localStorage.setItem('analysis_history', JSON.stringify(list));
+  } catch(e) {}
+  renderSidebarHistory();
+}
+
+function clearAnalysisHistory(){
+  try { localStorage.setItem('analysis_history', JSON.stringify([])); } catch(e) {}
+  renderSidebarHistory();
+}
+
+// Reopen a past analysis. Deliberately NOT a new code path into the rule engine — mirrors
+// exactly what analyzeDiagramEntities() already does: set the freetext textarea, call
+// setAnalysis with a fresh detectSignals(text), scroll to the results. setAnalysis's own
+// resetOverrides logic (text differs from whatever's currently loaded) correctly clears
+// signalOverrides for the reopened entry, since those were never captured/restorable anyway.
+function openHistoryEntry(id){
+  const entry = getAnalysisHistory().find(e => e.id === id);
+  if (!entry) return;
+  document.getElementById('input').value = entry.text;
+  setAnalysis(entry.text, detectSignals(entry.text));
+  scrollToResultsShell();
+}
+
+function renderSidebarHistory(){
+  const section = document.getElementById('sidebarHistory');
+  const list = document.getElementById('sidebarHistoryList');
+  if (!section || !list) return;
+  const history = getAnalysisHistory();
+  if (!history.length){ section.style.display = 'none'; return; }
+  section.style.display = 'block';
+  list.innerHTML = history.map(e => {
+    const label = e.text.length > 60 ? e.text.slice(0, 60) + '…' : e.text;
+    return `<div class="sidebar-history-item" onclick="openHistoryEntry('${e.id}')" title="${label.replace(/"/g, '&quot;')}">
+      <span class="shi-label">${label}</span>
+      <span class="shi-x" title="Remove" onclick="deleteHistoryEntry('${e.id}', event)">✕</span>
+    </div>`;
+  }).join('');
+}
+
 function getKbData(){
   if (window.__stackKbCache) return window.__stackKbCache;
   const el = document.getElementById('stackKbData');
@@ -7181,6 +7305,7 @@ async function loadSharedAnalysis(slug){
 // ---------------- App init (routes to shared view, or shows the mode picker) ----------------
 (function initApp(){
   probeBackendHealth();
+  renderSidebarHistory(); // Phase 4 — a returning user sees their history immediately
   const params = new URLSearchParams(window.location.search);
   const slug = params.get('shared');
   if (slug){
