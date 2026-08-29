@@ -36,12 +36,14 @@ def test_sidebar_contains_new_analysis_this_analysis_and_export_share():
     assert 'id="sidebarExportShare"' in text
 
 
-def test_context_panel_placeholder_exists_and_is_hidden():
-    """Reserved for a future phase (routing refine/ask into a drawer) — must exist as a real
-    DOM node now, but must not be visibly active yet: no content, no visible styling beyond the
-    hidden-by-default CSS rule."""
+def test_context_panel_placeholder_is_hidden_by_default():
+    """This phase reserved #contextPanel as an empty, hidden placeholder for a future phase
+    (routing refine/ask into a drawer). Phase 3 (see test_phase3_context_panel.py) gave it real
+    content and an explicit .open toggle class — this test only locks in what Phase 1 itself
+    guaranteed: the panel does not display by default, so its content, whatever a later phase
+    adds, never disrupts the 3-column skeleton before that phase's own trigger is used."""
     text = _text()
-    assert '<aside id="contextPanel"></aside>' in text
+    assert '<aside id="contextPanel">' in text
     m = re.search(r"#contextPanel\{([^}]*)\}", text)
     assert m, "#contextPanel CSS rule not found"
     assert "display:none" in m.group(1)
