@@ -205,22 +205,51 @@
      the viewport corner. */
   .app-sidebar .theme-toggle{position:static; align-self:flex-start; margin-top:8px;}
   .app-main{flex:1; min-width:0;}
+  /* Phase 5a (responsive collapse) — the mobile bottom nav. Hidden outside the 860px breakpoint
+     (below); reuses the exact onclick handlers already wired to the desktop sidebar buttons. */
+  .mobile-bottom-nav{display:none;}
+  .mobile-overlay-close{display:none;}
   @media (max-width:860px){
     /* Match the existing .toc mobile breakpoint (also 860px) rather than introduce a second,
-       independently-tuned breakpoint for the same "narrow viewport" concept. Full icon-rail
-       collapse / drawer behavior is a later phase (see the plan) — for now, narrow viewports
-       just get a slimmer sidebar rather than losing it, since New Analysis/Export/Share/theme
-       are still core actions on a phone, not nice-to-haves to hide. */
-    .app-sidebar{width:64px; flex-basis:64px; padding:12px 6px;}
-    .app-sidebar-brand{display:none;}
-    .app-sidebar-item span, .app-sidebar-item{font-size:0;}
-    .app-sidebar-item svg{margin:0 auto;}
-    #sidebarExportShare .export-dropdown, #sidebarExportShare .share-btn{font-size:0;}
-    #sidebarExportShare svg{margin:0 auto;}
-    /* A dynamic multi-row history list has no sensible icon-rail treatment yet — designing one
-       is Phase 5's job (responsive collapse), not this one's. Hidden here rather than left to
-       render broken/overflowing at 64px wide. */
-    #sidebarHistory{display:none !important;}
+       independently-tuned breakpoint for the same "narrow viewport" concept.
+       Phase 1-4 shipped an interim 64px icon-rail here with a comment saying full icon-rail
+       collapse / drawer behavior was "a later phase" — this IS that phase. The sidebar itself
+       collapses to zero width (not display:none — display:none would hide every descendant
+       unconditionally, including #sidebarHistory/#sidebarExportShare when a later rule below
+       tries to re-show one of them as a full-screen overlay; position:fixed descendants escape
+       an ancestor's overflow:hidden/zero-size, so this is the one collapse technique that both
+       removes the sidebar from layout AND still lets its two overlay-capable children pop out
+       full-screen on demand). The bottom nav below replaces it as the actual mobile navigation. */
+    .app-sidebar{width:0; flex:0 0 0; min-width:0; padding:0; border:none; overflow:hidden;}
+    .mobile-bottom-nav{
+      display:flex; align-items:center; justify-content:space-around;
+      position:fixed; left:0; right:0; bottom:0; z-index:40; height:56px;
+      background:var(--panel); border-top:1px solid var(--border);
+    }
+    .mobile-bottom-nav button{
+      background:none; border:none; color:var(--muted2); cursor:pointer;
+      display:flex; align-items:center; justify-content:center; width:44px; height:44px;
+      border-radius:var(--radius-sm); transition:background .15s var(--ease), color .15s var(--ease);
+    }
+    .mobile-bottom-nav button:hover, .mobile-bottom-nav button:active{background:var(--chip); color:var(--accent);}
+    /* Reserve room so page content never sits under the fixed bottom nav. */
+    .app-main{padding-bottom:56px;}
+    /* #sidebarHistory/#sidebarExportShare, toggled via toggleMobileOverlay(), become full-screen
+       overlays — the exact same elements/markup/onclick handlers the desktop sidebar uses,
+       just repositioned. Not shown by default even at this width; only .mobile-open (set by the
+       bottom nav's History/Export buttons) activates the overlay treatment. */
+    #sidebarHistory.mobile-open, #sidebarExportShare.mobile-open{
+      display:flex !important; flex-direction:column; position:fixed; inset:0; z-index:50;
+      background:var(--panel); padding:16px; overflow-y:auto; margin:0;
+    }
+    .mobile-overlay-close{
+      display:flex; align-self:flex-end; align-items:center; justify-content:center;
+      width:28px; height:28px; border-radius:50%; background:var(--chip); color:var(--muted2);
+      font-size:12px; margin-bottom:10px; cursor:pointer;
+    }
+    .mobile-overlay-close:hover{color:var(--text);}
+    #sidebarExportShare .export-dropdown, #sidebarExportShare .share-btn{font-size:12.5px;}
+    #sidebarExportShare.mobile-open svg{margin:0;}
   }
 
   /* ---- Glide panel: reusable slide-in-from-left drawer, "signature feel" pattern ----
@@ -1029,6 +1058,9 @@
            instead of #resultsHeader, since resultsHeader itself no longer contains it. See the
            two toggle sites: setAnalysis() and loadSharedAnalysis(). -->
       <div id="sidebarExportShare" style="display:none;">
+        <!-- Phase 5a — same pattern as #sidebarHistory's close button: only rendered/shown
+             inside the 860px media query when .mobile-open is toggled by the bottom nav. -->
+        <button type="button" class="mobile-overlay-close sidebar-export-share-close" onclick="toggleMobileOverlay('sidebarExportShare')" aria-label="Close">✕</button>
         <div class="export-dropdown" id="exportDropdown">
           <button class="share-btn icon-btn" id="exportMainBtn" onclick="toggleExportMenu(event)" aria-haspopup="true" aria-expanded="false" aria-controls="exportMenu" title="Export or download this analysis" aria-label="Export or download this analysis">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
@@ -1082,7 +1114,13 @@
       <div id="sidebarHistory" style="display:none;">
         <div class="sidebar-history-header">
           <span>Recent</span>
-          <button type="button" class="sidebar-history-clear" onclick="clearAnalysisHistory()">Clear</button>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <button type="button" class="sidebar-history-clear" onclick="clearAnalysisHistory()">Clear</button>
+            <!-- Phase 5a — only rendered/shown inside the 860px media query (see
+                 .mobile-overlay-close CSS); on desktop #sidebarHistory never gets .mobile-open,
+                 so this button is always display:none there. -->
+            <button type="button" class="mobile-overlay-close" onclick="toggleMobileOverlay('sidebarHistory')" aria-label="Close">✕</button>
+          </div>
         </div>
         <div id="sidebarHistoryList"></div>
       </div>
@@ -1090,6 +1128,30 @@
     <div class="app-sidebar-spacer"></div>
     <button id="themeToggle" class="theme-toggle" onclick="toggleTheme()" title="Switch to light theme" aria-label="Switch between dark and light theme"></button>
   </aside>
+  <!-- Phase 5a (responsive collapse) — only shown inside the 860px media query, where
+       .app-sidebar itself collapses to zero width (see CSS). Every button below reuses the
+       exact same onclick handler already wired to its desktop sidebar counterpart — no new
+       logic, just a second, mobile-shaped set of triggers for the same actions. History and
+       Export/Share toggle the actual #sidebarHistory/#sidebarExportShare elements into
+       full-screen overlays (see toggleMobileOverlay() and their .mobile-open CSS) rather than
+       duplicating that markup. -->
+  <nav class="mobile-bottom-nav">
+    <button type="button" onclick="backToMode()" title="New Analysis" aria-label="New Analysis">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+    </button>
+    <button type="button" id="mobileThisAnalysisBtn" onclick="scrollToResultsShell()" style="display:none;" title="This Analysis" aria-label="This Analysis">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z"/></svg>
+    </button>
+    <button type="button" id="mobileHistoryBtn" onclick="toggleMobileOverlay('sidebarHistory')" style="display:none;" title="History" aria-label="History">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+    </button>
+    <button type="button" id="mobileExportShareBtn" onclick="toggleMobileOverlay('sidebarExportShare')" style="display:none;" title="Export &amp; Share" aria-label="Export and share">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
+    </button>
+    <button type="button" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle theme">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z"/></svg>
+    </button>
+  </nav>
   <div class="app-main">
 
 <!-- ================= Mode picker (decision #3: equal weight, no default) ================= -->
@@ -4100,6 +4162,9 @@ function setAnalysis(text, rawSignals, opts){
   // stays the single source of truth for "is there a real, non-read-only analysis on screen."
   const sidebarExportShare = document.getElementById('sidebarExportShare');
   if (sidebarExportShare) sidebarExportShare.style.display = '';
+  // Phase 5a — the mobile bottom nav's counterpart button mirrors the same visibility.
+  const mobileExportShareBtn = document.getElementById('mobileExportShareBtn');
+  if (mobileExportShareBtn) mobileExportShareBtn.style.display = '';
   return { s, rec };
 }
 
@@ -5195,6 +5260,23 @@ function scrollToResultsShell(){
 function setSidebarThisAnalysisVisible(visible){
   const btn = document.getElementById('sidebarThisAnalysisBtn');
   if (btn) btn.style.display = visible ? '' : 'none';
+  // Phase 5a — the mobile bottom nav's counterpart button mirrors the same visibility.
+  const mobileBtn = document.getElementById('mobileThisAnalysisBtn');
+  if (mobileBtn) mobileBtn.style.display = visible ? '' : 'none';
+}
+
+// Phase 5a (responsive collapse) — the mobile bottom nav's History/Export buttons toggle the
+// EXACT SAME #sidebarHistory/#sidebarExportShare elements the desktop sidebar already uses
+// (see .mobile-open in the CSS: only takes effect inside the 860px media query, harmless no-op
+// outside it) rather than duplicating their markup or logic for a second, mobile-only version.
+// A true toggle — same call opens and closes — so the bottom nav button doubles as the overlay's
+// own close affordance with no separate close function needed. Only one overlay open at a time.
+function toggleMobileOverlay(id){
+  const el = document.getElementById(id);
+  if (!el) return;
+  const opening = !el.classList.contains('mobile-open');
+  document.querySelectorAll('.mobile-open').forEach(o => { if (o !== el) o.classList.remove('mobile-open'); });
+  el.classList.toggle('mobile-open', opening);
 }
 
 // Real defect found in the ui-craft Tier 1 pass, missed by the static checker (it pattern-
@@ -5940,7 +6022,11 @@ function renderSidebarHistory(){
   const list = document.getElementById('sidebarHistoryList');
   if (!section || !list) return;
   const history = getAnalysisHistory();
-  if (!history.length){ section.style.display = 'none'; return; }
+  // Phase 5a — the mobile bottom nav's History button only makes sense to show once there's
+  // something to show; mirrors the section's own visibility exactly.
+  const mobileBtn = document.getElementById('mobileHistoryBtn');
+  if (mobileBtn) mobileBtn.style.display = history.length ? '' : 'none';
+  if (!history.length){ section.style.display = 'none'; section.classList.remove('mobile-open'); return; }
   section.style.display = 'block';
   list.innerHTML = history.map(e => {
     const label = e.text.length > 60 ? e.text.slice(0, 60) + '…' : e.text;
@@ -7294,6 +7380,8 @@ async function loadSharedAnalysis(slug){
       </div>`;
     document.getElementById('resultsHeader').style.display = 'none';
     document.getElementById('sidebarExportShare').style.display = 'none';
+    const mobileExportShareBtn = document.getElementById('mobileExportShareBtn');
+    if (mobileExportShareBtn) mobileExportShareBtn.style.display = 'none';
     renderRecommendations(data.signals, data.recommendations);
   } catch(e){
     document.getElementById('sharedBanner').innerHTML = `<div class="shared-banner">⚠️ ${e.message}</div>`;
