@@ -516,11 +516,41 @@
     transition:background .15s var(--ease);
   }
   .toc-toggle:hover{background:color-mix(in srgb, var(--accent) 10%, transparent);}
-  /* Placeholder reserved for a future phase (routing refine/ask into a drawer) — see the plan
-     this shell was built from. A THIRD flex child of #resultsShell, not a grid track: flex
-     items with display:none simply drop out of layout with no empty-gutter side effect, so
-     nothing here needs to change when a later phase turns this on and gives it real content. */
-  #contextPanel{display:none; flex:0 0 300px; position:sticky; top:12px; max-height:calc(100vh - 24px); overflow-y:auto;}
+  /* Phase 3 (Enterprise-shell plan): the drawer this placeholder was reserved for. A THIRD
+     flex child of #resultsShell, not a grid track: display:none simply drops it out of layout
+     with no empty-gutter side effect when closed, same as before this phase gave it content.
+     attachRefineToCard() (see the JS below) keeps its exact existing mechanism — same ids,
+     same functions — it just now appends each card's refine-result/ask-box zone in here
+     instead of as a child of the card, and only the currently-selected card's zone is
+     display:block at a time (see .context-zone below and openContextPanelFor()/
+     closeContextPanel()). The two trigger buttons ("Refine with AI" / "Ask a question")
+     stay on the card itself — only their RESULT surfaces moved into this shared drawer. */
+  #contextPanel{
+    display:none; flex-direction:column; flex:0 0 300px; position:sticky; top:12px;
+    max-height:calc(100vh - 24px); overflow-y:auto; background:var(--panel);
+    border:1px solid var(--border); border-radius:12px;
+  }
+  #contextPanel.open{display:flex;}
+  .ctx-panel-header{
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+    padding:12px 14px; border-bottom:1px solid var(--border); position:sticky; top:0;
+    background:var(--panel); border-radius:12px 12px 0 0; z-index:1;
+  }
+  #contextPanelTitle{font-size:12px; font-weight:700; color:var(--text);}
+  .ctx-panel-close{
+    background:none; border:none; color:var(--muted); cursor:pointer; font-size:13px;
+    line-height:1; padding:2px 4px; border-radius:4px; transition:color .15s var(--ease);
+  }
+  .ctx-panel-close:hover{color:var(--text);}
+  #contextPanelBody{padding:12px 14px;}
+  /* .refine-zone.context-zone (both classes on the same element — see attachRefineToCard) so
+     this beats plain .refine-zone's margin-top/padding-top/border-top on specificity (0,2,0 vs
+     0,1,0) regardless of declaration order — that divider made sense when the zone sat
+     directly under a card's content, but inside #contextPanelBody it's the first and only
+     visible thing under the header, so it would just double up against the header's own
+     border-bottom for no reason. */
+  .refine-zone.context-zone{display:none; margin-top:0; padding-top:0; border-top:none;}
+  .refine-zone.context-zone.active{display:block;}
   @media (max-width:860px){
     .results-shell{display:block;}
     .results-shell.active{display:block;}
@@ -820,7 +850,10 @@
 
   /* ---- Backend wiring: refine button, ask box, API-key prompt (decisions #8-11) ---- */
   .refine-zone{margin-top:11px; padding-top:11px; border-top:1px solid var(--border);}
-  .refine-btns-row{display:flex; gap:8px; flex-wrap:wrap;}
+  /* Phase 3 (Enterprise-shell plan): this row is now the LAST element appended to the card
+     (the refine-result/ask-box that used to follow it moved into #contextPanel) — it inherits
+     the top margin/divider .refine-zone used to provide, since that class no longer wraps it. */
+  .refine-btns-row{display:flex; gap:8px; flex-wrap:wrap; margin-top:11px; padding-top:11px; border-top:1px solid var(--border);}
   .refine-btn{
     background:linear-gradient(135deg, color-mix(in srgb, var(--accent2) 18%, transparent), color-mix(in srgb, var(--accent) 18%, transparent)); border:1px solid color-mix(in srgb, var(--accent2) 40%, transparent);
     color:var(--accent2); padding:6px 11px; border-radius:7px; font-size:11.5px; font-weight:600; cursor:pointer;
@@ -1278,7 +1311,13 @@
     </div>
     <div class="flow-popover" id="flowPopover"></div>
   </div>
-  <aside id="contextPanel"></aside>
+  <aside id="contextPanel">
+    <div class="ctx-panel-header">
+      <span id="contextPanelTitle"></span>
+      <button type="button" class="ctx-panel-close" onclick="closeContextPanel()" title="Close" aria-label="Close panel">✕</button>
+    </div>
+    <div id="contextPanelBody"></div>
+  </aside>
 </div>
 
 <!-- Custom Technology & Knowledge Base Modal -->
@@ -5318,6 +5357,14 @@ function renderWhySignals(category){
 
 function attachRefineUI(){
   if (isReadOnlyView) return; // decision #13 — no refine buttons on a shared read-only view
+  // Phase 3 (Enterprise-shell plan): unlike the trigger buttons and whyHtml (both children of
+  // cards that renderRecommendations() just rebuilt from scratch), #contextPanelBody lives
+  // OUTSIDE #results, so a second analysis run would otherwise silently accumulate every prior
+  // run's zones underneath the new ones. Clear it — and the label map it's keyed against, and
+  // close the panel itself, since whatever cardKey was open belonged to the previous run.
+  document.getElementById('contextPanelBody').innerHTML = '';
+  cardLabelByKey = {};
+  closeContextPanel();
   let idx = 0;
   document.querySelectorAll('#stack .stack-card').forEach(card => {
     const title = card.querySelector('h3')?.textContent?.trim();
@@ -5329,21 +5376,44 @@ function attachRefineUI(){
   });
 }
 
+// Phase 3 (Enterprise-shell plan): label of every refine/ask-enabled card, keyed by cardKey —
+// #contextPanelTitle needs this at open time, and by then the trigger button (the only thing
+// still living on the card itself) has no easy path back to the card's own label text.
+let cardLabelByKey = {};
+
 function attachRefineToCard(card, category, label, cardKey){
   // "Why this pick" signal chips — stack cards only (STACK_CARD_SIGNALS has no entries for
   // trade-off cards' pseudo-category 'tradeoffs', so this is a no-op there).
   const whyHtml = renderWhySignals(category);
   if (whyHtml) card.insertAdjacentHTML('beforeend', whyHtml);
 
+  cardLabelByKey[cardKey] = label || '';
+
+  // Trigger row stays a child of the card — it's what the user actually clicks to bring this
+  // card's AI features into view. Kept as its own element (not folded into the zone below) so
+  // it isn't affected by which card's zone is currently the active one in the shared panel.
+  const triggerRow = document.createElement('div');
+  triggerRow.className = 'refine-btns-row';
+  triggerRow.innerHTML = `
+    <button class="refine-btn icon-btn" onclick="openContextPanelFor('${cardKey}'); onRefineClick('${cardKey}', this)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z"/></svg> Refine with AI</button>
+    <button class="ask-toggle-btn icon-btn" id="askToggleBtn-${cardKey}" onclick="openContextPanelFor('${cardKey}'); onAskToggleClick('${cardKey}')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z"/></svg> Ask a question</button>
+  `;
+  card.appendChild(triggerRow);
+
+  // The result surfaces (everything the trigger row above used to sit above, in-card) move
+  // into the shared #contextPanelBody instead. Mechanism is untouched — same "zone" element,
+  // same data-card-key/data-category, same child ids (refineResult-${cardKey}, askBox-${cardKey},
+  // etc.) — every function downstream of this (onRefineClick, onAskClick,
+  // applyRefinementToAllCards, ...) keeps working by id lookup exactly as before. All cards'
+  // zones coexist in the DOM simultaneously (applyRefinementToAllCards() depends on that — one
+  // /api/refine call can adjust several categories' cards at once, so every card's result slot
+  // needs to exist even while its own zone isn't the one currently on screen); only the active
+  // one is display:block, via the .context-zone/.active pair in the CSS above.
   const zone = document.createElement('div');
-  zone.className = 'refine-zone';
+  zone.className = 'refine-zone context-zone';
   zone.dataset.cardKey = cardKey;
   zone.dataset.category = category || '';
   zone.innerHTML = `
-    <div class="refine-btns-row">
-      <button class="refine-btn icon-btn" onclick="onRefineClick('${cardKey}', this)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z"/></svg> Refine with AI</button>
-      <button class="ask-toggle-btn icon-btn" id="askToggleBtn-${cardKey}" onclick="onAskToggleClick('${cardKey}')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z"/></svg> Ask a question</button>
-    </div>
     <div class="refine-result" id="refineResult-${cardKey}"></div>
     <div class="ask-box" id="askBox-${cardKey}">
       <div class="ask-thread" id="askThread-${cardKey}"></div>
@@ -5353,7 +5423,19 @@ function attachRefineToCard(card, category, label, cardKey){
       </div>
     </div>
   `;
-  card.appendChild(zone);
+  document.getElementById('contextPanelBody').appendChild(zone);
+}
+
+function openContextPanelFor(cardKey){
+  document.querySelectorAll('#contextPanelBody .context-zone').forEach(z => {
+    z.classList.toggle('active', z.dataset.cardKey === cardKey);
+  });
+  const title = document.getElementById('contextPanelTitle');
+  if (title) title.textContent = cardLabelByKey[cardKey] || '';
+  document.getElementById('contextPanel')?.classList.add('open');
+}
+function closeContextPanel(){
+  document.getElementById('contextPanel')?.classList.remove('open');
 }
 
 function renderRefineKeyPrompt(cardKey, intent){
@@ -6330,6 +6412,7 @@ window.addEventListener('keydown', (e) => {
     // calling all three unconditionally is safe regardless of which one (if any) is open.
     closeGlidePanel();
     closeCustomTechModal();
+    closeContextPanel(); // Phase 3's refine/ask drawer — same "every drawer honors Escape" rule
     const pop = document.getElementById('flowPopover');
     if (pop) pop.style.display = 'none';
   }
