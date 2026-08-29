@@ -408,12 +408,18 @@
   .iam-vendor-card .ivc-cat{font-size:9.5px; text-transform:uppercase; letter-spacing:0.03em; color:var(--accent2); font-weight:700; background:rgba(124,91,239,0.12); border:1px solid rgba(124,91,239,0.3); border-radius:5px; padding:2px 6px;}
   .iam-vendor-card .ivc-row{font-size:11.5px; color:var(--muted); line-height:1.5; margin-top:3px;}
   .iam-vendor-card .ivc-row b{color:var(--muted2); font-weight:600;}
-  .alt-toggle{margin-top:10px; border-top:1px solid var(--border); padding-top:9px;}
-  .alt-toggle summary{cursor:pointer; font-size:11px; color:var(--accent2); font-weight:700; letter-spacing:0.01em; list-style:none; user-select:none;}
-  .alt-toggle summary::-webkit-details-marker{display:none;}
-  .alt-toggle summary::before{content:'▸ '; display:inline-block; width:12px;}
-  .alt-toggle[open] summary::before{content:'▾ ';}
-  .alt-toggle summary:hover{color:var(--accent);}
+  /* .why-signals-toggle shares this visual styling (border-top, summary arrow, hover color) via
+     these combined selectors rather than sharing the .alt-toggle CLASS itself — code review
+     found that reusing the class collided with `.grid .stack-card:has(.alt-toggle[open])`
+     below, which is meant only for the "See N alternatives" toggle: opening the small
+     why-signals disclosure was unintentionally triggering that rule's full-grid-width expansion
+     too. Same look, without sharing the selector the :has() rule keys on. */
+  .alt-toggle, .why-signals-toggle{margin-top:10px; border-top:1px solid var(--border); padding-top:9px;}
+  .alt-toggle summary, .why-signals-toggle summary{cursor:pointer; font-size:11px; color:var(--accent2); font-weight:700; letter-spacing:0.01em; list-style:none; user-select:none;}
+  .alt-toggle summary::-webkit-details-marker, .why-signals-toggle summary::-webkit-details-marker{display:none;}
+  .alt-toggle summary::before, .why-signals-toggle summary::before{content:'▸ '; display:inline-block; width:12px;}
+  .alt-toggle[open] summary::before, .why-signals-toggle[open] summary::before{content:'▾ ';}
+  .alt-toggle summary:hover, .why-signals-toggle summary:hover{color:var(--accent);}
   .iam-complementary{background:rgba(124,91,239,0.08); border:1px solid rgba(124,91,239,0.28); border-radius:var(--radius); padding:11px 13px; margin-top:10px;}
   .iam-complementary .name{font-weight:700; font-size:12.5px; color:var(--accent2); margin-bottom:2px;}
   .iam-complementary .cat-tag{font-size:9.5px; text-transform:uppercase; color:var(--muted); font-weight:700; letter-spacing:0.03em;}
@@ -692,18 +698,16 @@
   .infer-strip b{color:var(--accent2);}
 
   /* ---- "Why this pick" signal chips — makes rule-engine reasoning inspectable per card ----
-     Now collapsed behind a <details>/.alt-toggle (see renderWhySignals()) instead of always
-     visible under every card — .why-signals-label/.why-signals-empty are unused by the current
-     markup (the summary text carries that role now) but left defined rather than hunted down
-     across any other caller. .why-sig's tint is tokenized (was a hardcoded rgba(124,91,239,...)
-     — the dark theme's --accent2 hardcoded as a literal — plus a hardcoded #c3b6f7 text color
-     that would fail contrast entirely on a light background) since this component was directly
-     touched by the collapse above, unlike the many other hardcoded-tint sites left alone. */
+     Now collapsed behind a <details>/.why-signals-toggle (see renderWhySignals()) instead of
+     always visible under every card. .why-signals-label/.why-signals-empty were the labels
+     the old always-visible <div> used — removed, not just orphaned, since the summary text
+     carries that role now and code review confirmed grep-wide that nothing else emits them.
+     .why-sig's tint is tokenized (was a hardcoded rgba(124,91,239,...) — the dark theme's
+     --accent2 hardcoded as a literal — plus a hardcoded #c3b6f7 text color that would fail
+     contrast entirely on a light background) since this component was directly touched by the
+     collapse above, unlike the many other hardcoded-tint sites left alone. */
   .why-signals{margin-top:9px; display:flex; flex-wrap:wrap; align-items:center; gap:5px; font-size:10.5px;}
-  .why-signals-label{color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.03em; font-size:9.5px; margin-right:1px;}
-  .why-signals-empty{color:var(--muted); font-style:italic;}
   .why-sig{background:color-mix(in srgb, var(--accent2) 10%, transparent); border-color:color-mix(in srgb, var(--accent2) 30%, transparent); color:var(--accent2);}
-  .why-signals-toggle{margin-top:9px;}
   .why-signals-toggle .why-signals{margin-top:8px;}
 
   /* ---- Real cost tracker (idea from SmythOS's "Cost Trace" panel) ---- */
@@ -5134,14 +5138,20 @@ function renderWhySignals(category){
   // (not six; several of the doc's other named badges — a raw confidence pill, a separate
   // .badge class — turned out to already be consolidated into those two by earlier work), but
   // this row of signal chips was always-visible underneath every card regardless. Collapsed
-  // into a <details> disclosure, same visual convention as the existing "See N alternatives"
-  // .alt-toggle — the information is one click away, not removed, matching decision #4's own
-  // instruction to move this into "the row-expansion or drawer."
+  // into a <details> disclosure, visually matching the existing "See N alternatives" toggle —
+  // the information is one click away, not removed, matching decision #4's own instruction to
+  // move this into "the row-expansion or drawer."
+  // Deliberately its OWN class, .why-signals-toggle, not .alt-toggle: code review caught that
+  // sharing .alt-toggle collided with `.grid .stack-card:has(.alt-toggle[open])` above, which is
+  // meant only for the alternatives toggle — opening this smaller disclosure was unintentionally
+  // triggering that rule's full-grid-width card expansion too. The two classes share their
+  // visual styling via combined CSS selectors instead (see .alt-toggle, .why-signals-toggle{...}
+  // above), so this stays visually identical without sharing the selector the :has() rule keys on.
   const relevant = STACK_CARD_SIGNALS[category];
   if (!relevant || !relevant.length || !lastSignals) return '';
   const matched = relevant.filter(k => lastSignals[k]);
-  if (!matched.length) return '<details class="alt-toggle why-signals-toggle"><summary>Based on: no specific signal — default pick</summary></details>';
-  return `<details class="alt-toggle why-signals-toggle"><summary>Based on ${matched.length} signal${matched.length===1?'':'s'}</summary><div class="why-signals">${matched.map(k => `<span class="sig why-sig">${k}</span>`).join('')}</div></details>`;
+  if (!matched.length) return '<details class="why-signals-toggle"><summary>Based on: no specific signal — default pick</summary></details>';
+  return `<details class="why-signals-toggle"><summary>Based on ${matched.length} signal${matched.length===1?'':'s'}</summary><div class="why-signals">${matched.map(k => `<span class="sig why-sig">${k}</span>`).join('')}</div></details>`;
 }
 
 function attachRefineUI(){

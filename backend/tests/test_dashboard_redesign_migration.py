@@ -82,17 +82,23 @@ NAMED_GLASS_SELECTORS = [".theme-toggle", ".glide-panel", ".card", ".stack-card"
 
 def test_no_backdrop_filter_remains_on_the_seven_named_selectors():
     """DESIGN-dashboard.md decision #7 names these seven selectors as the backdrop-filter/glass
-    sites to remove. Checks each selector's own rule block for an actual `backdrop-filter:`
-    PROPERTY declaration (not a bare substring match, which would also trip on this file's own
-    explanatory comments describing the removal) — the un-named floating-overlay uses (.toc's
-    mobile bar, .flow-toolbar, #flowLegend, .export-menu, .custom-modal-backdrop) are
-    deliberately untouched and must stay that way."""
+    sites to remove. Checks EVERY rule block for each selector (re.finditer, not re.search) for
+    an actual `backdrop-filter:` PROPERTY declaration (not a bare substring match, which would
+    also trip on this file's own explanatory comments describing the removal) — the un-named
+    floating-overlay uses (.toc's mobile bar, .flow-toolbar, #flowLegend, .export-menu,
+    .custom-modal-backdrop) are deliberately untouched and must stay that way.
+
+    Code review caught that re.search() here only checked the FIRST matching block per
+    selector — `.stack-card{` alone appears twice in this file (a full declaration, and a
+    separate `.stack-card{position:relative;}`), so the second block went unchecked and a
+    backdrop-filter reintroduced there would have passed silently. re.finditer fixes that."""
     text = _text()
     for sel in NAMED_GLASS_SELECTORS:
         escaped = re.escape(sel)
-        m = re.search(escaped + r"\{([^}]*)\}", text)
-        assert m, f"{sel} rule not found"
-        assert "backdrop-filter:" not in m.group(1), f"{sel} still has backdrop-filter"
+        blocks = list(re.finditer(escaped + r"\{([^}]*)\}", text))
+        assert blocks, f"{sel} rule not found"
+        for m in blocks:
+            assert "backdrop-filter:" not in m.group(1), f"{sel} still has backdrop-filter (block: {m.group(0)[:80]!r})"
 
 
 def test_deliberately_excluded_overlays_still_have_backdrop_filter():
@@ -145,6 +151,46 @@ def test_why_signals_row_is_collapsed_behind_a_details_disclosure():
     body = m.group(1)
     assert "<details" in body
     assert "why-signals-toggle" in body
+
+
+def test_why_signals_toggle_does_not_share_the_alt_toggle_class():
+    """Regression lock for a real bug code review caught: renderWhySignals() originally emitted
+    `class="alt-toggle why-signals-toggle"`, and `.grid .stack-card:has(.alt-toggle[open])`
+    (a rule meant only for the "See N alternatives" toggle) matches ANY open `.alt-toggle`
+    descendant — so opening the small why-signals disclosure was unintentionally triggering
+    that rule's full-grid-width card expansion too. Fix: why-signals-toggle no longer carries
+    the `alt-toggle` class at all (styling is shared via combined CSS selectors instead, checked
+    below), so it can never satisfy that :has() rule."""
+    text = _text()
+    m = re.search(r"function renderWhySignals\(category\)\{(.*?)\n\}", text, re.S)
+    assert m, "renderWhySignals not found"
+    body = m.group(1)
+    # Only the <details class="..."> wrapper's own class matters here, not the surrounding
+    # explanatory comments (which legitimately discuss .alt-toggle in prose) or the unrelated
+    # <span class="sig why-sig"> chips nested inside it.
+    details_classes = re.findall(r'<details class="([^"]*)"', body)
+    assert details_classes, "no <details class=...> found in renderWhySignals' returned markup"
+    assert all("why-signals-toggle" in c for c in details_classes)
+    assert all("alt-toggle" not in c for c in details_classes), f"renderWhySignals's <details> emits the alt-toggle class — see the :has() collision this caused: {details_classes}"
+
+
+def test_has_alt_toggle_rule_still_exists_and_is_unaffected():
+    """Positive control: the original "See N alternatives" full-width-on-open behavior must
+    still work — this fix only needed why-signals-toggle to stop sharing the class, not for the
+    :has() rule itself to change."""
+    text = _text()
+    assert ".grid .stack-card:has(.alt-toggle[open]){grid-column:1 / -1;}" in text
+
+
+def test_why_signals_toggle_still_shares_alt_toggle_visual_styling():
+    """The two disclosures must still look the same (border-top, summary arrow, hover color) —
+    achieved via combined selectors (`.alt-toggle, .why-signals-toggle{...}`) rather than a
+    shared class, so this checks the CSS explicitly pairs them rather than trusting the classes
+    alone."""
+    text = _text()
+    assert re.search(r"\.alt-toggle,\s*\.why-signals-toggle\{[^}]*border-top", text)
+    assert re.search(r"\.alt-toggle summary,\s*\.why-signals-toggle summary\{", text)
+    assert re.search(r"\.alt-toggle\[open\] summary::before,\s*\.why-signals-toggle\[open\] summary::before\{", text)
 
 
 def test_pick_chip_and_radio_selected_tints_are_tokenized_not_hardcoded():
