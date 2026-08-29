@@ -14,7 +14,7 @@ children.push(...coverTitle(
   'Product Requirements Document',
   'Functional & technical specification',
   [
-    ['Document Version', '1.5'],
+    ['Document Version', '1.6'],
     ['Status', 'v1 and v2 shipped, frontend actually wired to the backend — see Section 7.7, Section 9.2, and Release Plan (Section 11). Hexagonal diagram-export architecture, AI Opportunity Layer, technology-catalog unification, Huawei Cloud vendor support, and Hybrid Connectivity added in a later session — see Section 7.2, 7.7, 9.4, and Release Plan.'],
     ['Prepared by', 'Muneeb, with Claude (Cowork)'],
     ['Date', new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })],
@@ -34,6 +34,7 @@ children.push(reqTable(
     ['1.3', 'Found via a documentation-vs-code validation pass: FR-27–29 marked "Shipped" based on the backend alone, without ever stating whether index.html actually called those endpoints — for a real stretch of this project it didn\'t (confirmed by grep: zero fetch() calls). Rewrote Section 7.7 to state both layers explicitly, added FR-27a (independent ask), FR-30 (why-this-pick signal inspection), and FR-31 (real cost display) — all shipped but previously undocumented. Corrected the Release Plan\'s stale "44 passing tests" to the actual 93 (verified via a live pytest run, not the prior static count).'],
     ['1.4', 'Resolved Open Questions in Section 13 (target segment hypothesis, telemetry privacy policy, low-overhead feedback mechanism) and formalized Flow View as FR-31a with cross-reference to v1.5 Release Plan.'],
     ['1.5', 'Later session: refactored diagram export (Flow View, Mermaid, Draw.io, SVG) onto a single hexagonal-architecture domain core (Section 9.4) — fixed a real inconsistency where exporters showed 5-8 nodes against Flow View\'s 18-20. Added the AI Opportunity & Leverage Layer (FR-32), unified the technology catalog into one source of truth with a maintainer CLI and client-side custom overlay (FR-33), added Huawei Cloud vendor support (FR-34) and a new Hybrid Connectivity core category (FR-6a, 16th category). Corrected stale counts: signal dimensions 65+ -> 100+, pickX() functions 45 -> 47, KB technologies now 243. Two real bugs found and fixed during this work, not just features added — see Section 12.'],
+    ['1.6', 'Later session: added the Enterprise v2.0 shell — persistent sidebar, 3-column results layout, localStorage-backed analysis history, a refine/ask context-panel drawer, and a full mobile responsive treatment (Section 7.8, FR-35 through FR-41). Documented 8 accessibility/interaction fixes and the completion of the emoji-to-icon migration (FR-42, FR-43). See BRD Section 8.2 for the user-facing feature summary.'],
   ]
 ));
 
@@ -158,6 +159,20 @@ children.push(reqTable(['ID', 'Requirement', 'Status'], [1000, 5600, 1800], [
   ['FR-34', 'Huawei Cloud vendor support: signal detection plus vendor-specific recommendations across cloud provider, API gateway (APIG + ROMA Connect), containers (CCE), DNS, observability (Cloud Eye + LTS), and CI/CD (CodeArts) — the same 6 categories AWS/Azure/GCP already branch on.', 'Shipped — client-side (index.html); backend rule_engine.py has the detection signal only, not the pick-logic branches — see Section 12 for why'],
 ]));
 
+children.push(h2('7.8 Enterprise Shell & Responsive Layout'));
+children.push(p('A presentation-layer restructuring, not a new architectural pattern — no new backend endpoints, no new domain state. Every item below is client-side only (index.html).', { italics: true, color: MUTED, size: 19 }));
+children.push(reqTable(['ID', 'Requirement', 'Status'], [1000, 5600, 1800], [
+  ['FR-35', 'Persistent sidebar navigation (new analysis, jump-to-current-analysis, export/share, theme toggle), replacing the prior fixed-position theme control and inline per-results-page export controls.', 'Shipped — client-side only'],
+  ['FR-36', 'Results view renders as a 3-column layout (in-page section navigation, results/flow content, a context drawer for refine/ask) instead of a single flowing column.', 'Shipped — client-side only'],
+  ['FR-37', 'A "Recent analyses" history list, persisted to localStorage, capped at the 20 most recent entries; re-analyzing identical text moves the existing entry to the top rather than duplicating it; clicking an entry replays the original analysis exactly via the same code path every other entry mode uses.', 'Shipped — client-side only, no backend dependency'],
+  ['FR-38', 'Refine/Ask AI moves into a shared context-panel drawer (one panel, retargeted per card) instead of being inlined into every stack card.', 'Shipped — client-side only; mechanism unchanged from FR-27/FR-28\'s existing backend calls'],
+  ['FR-39', 'On viewports ≤860px, the sidebar collapses to a fixed bottom navigation bar; History and Export/Share open as full-screen overlays reusing the same underlying elements, not a separate mobile-only implementation.', 'Shipped — client-side only'],
+  ['FR-40', 'On viewports ≤860px, the refine/ask context panel renders as a full-screen modal instead of a partial sticky overlay.', 'Shipped — client-side only'],
+  ['FR-41', 'On viewports ≤860px, the Flow View canvas hides the minimap, enlarges toolbar touch targets, and repositions the pan/zoom toolbar to clear the fixed bottom navigation bar.', 'Shipped — client-side only'],
+  ['FR-42', 'Mode-selection cards and Flow View canvas nodes are keyboard-navigable and screen-reader-labeled; a global Escape key closes any open drawer, modal, or popover; the custom-technology modal dismisses on backdrop click.', 'Shipped — client-side only'],
+  ['FR-43', 'All remaining emoji-as-iconography (a 45-item glide-panel options list, plus 3 unrelated stray instances) replaced with the existing stroke-icon system.', 'Shipped — client-side only'],
+]));
+
 // ---------- Non-functional ----------
 children.push(h1('8. Non-Functional Requirements'));
 children.push(reqTable(['ID', 'Requirement'], [1000, 7400], [
@@ -199,6 +214,7 @@ children.push(reqTable(['Release', 'Contents', 'Status'], [1600, 6000, 1800], [
   ['v2.0', 'Share links, LLM refinement endpoint (/api/refine), grounded follow-up Q&A (/api/ask), MCP tool wrapper (recommend_stack) — FastAPI + Postgres + Alembic backend, 93 passing/xfailed tests', 'Shipped'],
   ['v2.1', 'Frontend wiring: guided-input wizard, per-card Refine/Ask buttons actually calling the v2.0 backend, share button, ?shared=SLUG read-only view, why-this-pick signal inspection, refinement-pass history, real LLM cost display', 'Shipped'],
   ['v2.2', 'Hexagonal diagram-export refactor (Section 9.4) — fixed Flow View/exporter node-count inconsistency; AI Opportunity & Leverage Layer (FR-32) — fixed a phantom-signal-key bug that had silently disabled the compliance guardrail it shipped with; technology catalog unified to one source of truth with maintainer CLI + custom overlay (FR-33); Huawei Cloud vendor support (FR-34); Hybrid Connectivity category (FR-6a) — fixed a pre-existing onPrem false-positive this work surfaced (see Section 12)', 'Shipped'],
+  ['v2.3', 'Enterprise v2.0 shell (FR-35 through FR-41) — persistent sidebar, 3-column results layout, localStorage-backed analysis history, refine/ask context-panel drawer, full mobile responsive treatment (bottom nav, full-screen overlays, Flow View mobile tuning); 8 accessibility/interaction fixes and completion of the emoji-to-icon migration (FR-42, FR-43)', 'Shipped'],
 ]));
 
 // ---------- Known limitations ----------
