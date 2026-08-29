@@ -53,7 +53,11 @@
     --fs-lg:clamp(17px, 1.2vw + 15px, 19px);
     --fs-xl:clamp(21px, 2.4vw + 17px, 26px);
     /* Confidence gets a real visual channel (border + tint), not just a 6px dot's opacity. */
-    --conf-high-border:rgba(91,141,239,0.55); --conf-high-bg:rgba(91,141,239,0.05);
+    /* Phase 2 (Enterprise-shell plan): tied to --accent via color-mix() instead of a hardcoded
+       rgb literal that happened to match --accent's current value — CSS custom properties
+       resolve at use time, so a later var(--accent) change here now propagates automatically
+       instead of needing this token hand-updated in lockstep. */
+    --conf-high-border:color-mix(in srgb, var(--accent) 55%, transparent); --conf-high-bg:color-mix(in srgb, var(--accent) 5%, transparent);
     --conf-med-border:var(--border); --conf-low-border:#2a303e;
     --dot-rgb:255,255,255; --dot-alpha:0.035;
   }
@@ -86,7 +90,7 @@
     --bg:#f9fafb; --panel:#ffffff; --panel2:#f3f4f6; --border:#e5e7eb;
     --text:#111827; --muted:#6b7280; --muted2:#374151; --accent:#0b7473; --accent2:#0b7473;
     --good:#16a34a; --warn:#f59e0b; --bad:#b91c1c; --chip:#eef0f4; --surface:#ffffff;
-    --conf-high-border:rgba(11,116,115,0.4); --conf-high-bg:rgba(11,116,115,0.05);
+    --conf-high-border:color-mix(in srgb, var(--accent) 40%, transparent); --conf-high-bg:color-mix(in srgb, var(--accent) 5%, transparent);
     --conf-med-border:var(--border); --conf-low-border:#c7cbd4;
     --dot-rgb:10,12,17; --dot-alpha:0.05;
   }
@@ -384,8 +388,14 @@
     font-family:var(--font-mono); border:1px solid var(--border); background:var(--chip); color:var(--muted2);
     cursor:help;
   }
-  .conf-basis-stated{background:rgba(91,141,239,0.13); border-color:rgba(91,141,239,0.32); color:#8fb2f7;}
-  .conf-basis-constraint-derived{background:rgba(124,91,239,0.1); border-color:rgba(124,91,239,0.28); color:#b4a2f5;}
+  /* Phase 2 (Enterprise-shell plan): converted from hardcoded rgba(91,141,239,...)/
+     rgba(124,91,239,...) literals — the dark theme's --accent/--accent2 baked in as literals,
+     including two hardcoded TEXT colors (#8fb2f7, #b4a2f5) with no light-theme equivalent at
+     all, so this badge stayed dark-blue/purple-tinted and low-contrast in light theme
+     regardless of the actual light accent. Text now reads var(--accent)/var(--accent2)
+     directly, same fix already applied to .why-sig earlier this session. */
+  .conf-basis-stated{background:color-mix(in srgb, var(--accent) 13%, transparent); border-color:color-mix(in srgb, var(--accent) 32%, transparent); color:var(--accent);}
+  .conf-basis-constraint-derived{background:color-mix(in srgb, var(--accent2) 10%, transparent); border-color:color-mix(in srgb, var(--accent2) 28%, transparent); color:var(--accent2);}
   .conf-basis-consensus{background:var(--chip); border-color:var(--border); color:var(--muted2);}
   .conf-basis-heuristic-default{background:transparent; border-style:dashed; border-color:var(--border); color:var(--muted);}
   /* Exit-cost badge (playbook gap A) — flags the handful of stack-card categories that are
@@ -401,8 +411,8 @@
     font-family:var(--font-mono);
   }
   .badge{
-    display:inline-block; background:rgba(91,141,239,0.13); color:#8fb2f7;
-    border:1px solid rgba(91,141,239,0.3); border-radius:5px; padding:1px 7px;
+    display:inline-block; background:color-mix(in srgb, var(--accent) 13%, transparent); color:var(--accent);
+    border:1px solid color-mix(in srgb, var(--accent) 30%, transparent); border-radius:5px; padding:1px 7px;
     font-size:10px; font-weight:600; margin-right:5px; margin-bottom:4px;
   }
   .llm-picks{display:flex; flex-direction:column; gap:7px;}
@@ -465,7 +475,7 @@
   .iam-vendor-card.recommended{border-color:rgba(52,201,138,0.4); background:rgba(52,201,138,0.05);}
   .iam-vendor-card .ivc-head{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;}
   .iam-vendor-card .ivc-name{font-weight:700; font-size:13px; color:var(--text); letter-spacing:-0.006em;}
-  .iam-vendor-card .ivc-cat{font-size:9.5px; text-transform:uppercase; letter-spacing:0.03em; color:var(--accent2); font-weight:700; background:rgba(124,91,239,0.12); border:1px solid rgba(124,91,239,0.3); border-radius:5px; padding:2px 6px;}
+  .iam-vendor-card .ivc-cat{font-size:9.5px; text-transform:uppercase; letter-spacing:0.03em; color:var(--accent2); font-weight:700; background:color-mix(in srgb, var(--accent2) 12%, transparent); border:1px solid color-mix(in srgb, var(--accent2) 30%, transparent); border-radius:5px; padding:2px 6px;}
   .iam-vendor-card .ivc-row{font-size:11.5px; color:var(--muted); line-height:1.5; margin-top:3px;}
   .iam-vendor-card .ivc-row b{color:var(--muted2); font-weight:600;}
   /* .why-signals-toggle shares this visual styling (border-top, summary arrow, hover color) via
@@ -480,7 +490,7 @@
   .alt-toggle summary::before, .why-signals-toggle summary::before{content:'▸ '; display:inline-block; width:12px;}
   .alt-toggle[open] summary::before, .why-signals-toggle[open] summary::before{content:'▾ ';}
   .alt-toggle summary:hover, .why-signals-toggle summary:hover{color:var(--accent);}
-  .iam-complementary{background:rgba(124,91,239,0.08); border:1px solid rgba(124,91,239,0.28); border-radius:var(--radius); padding:11px 13px; margin-top:10px;}
+  .iam-complementary{background:color-mix(in srgb, var(--accent2) 8%, transparent); border:1px solid color-mix(in srgb, var(--accent2) 28%, transparent); border-radius:var(--radius); padding:11px 13px; margin-top:10px;}
   .iam-complementary .name{font-weight:700; font-size:12.5px; color:var(--accent2); margin-bottom:2px;}
   .iam-complementary .cat-tag{font-size:9.5px; text-transform:uppercase; color:var(--muted); font-weight:700; letter-spacing:0.03em;}
   .subhead{font-size:12.5px; font-weight:700; color:var(--text); margin:14px 0 7px; letter-spacing:-0.006em;}
@@ -588,7 +598,7 @@
   .flow-toolbar button:hover{background:var(--chip); color:var(--text);}
   #flowMinimap{position:absolute; right:12px; top:12px; z-index:5; width:170px; height:110px; background:rgba(10,12,17,0.85); border:1px solid var(--border); border-radius:8px; overflow:hidden;}
   #flowMinimap .mm-node{position:absolute; border-radius:2px; opacity:0.85;}
-  #flowMinimap .mm-viewport{position:absolute; border:1.5px solid var(--accent); background:rgba(91,141,239,0.08); border-radius:2px;}
+  #flowMinimap .mm-viewport{position:absolute; border:1.5px solid var(--accent); background:color-mix(in srgb, var(--accent) 8%, transparent); border-radius:2px;}
   #flowLegend{position:absolute; left:12px; top:12px; z-index:5; display:flex; flex-direction:column; gap:4px; background:rgba(18,21,29,0.85); backdrop-filter:blur(6px); border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:10px; color:var(--muted);}
   #flowLegend .lg-row{display:flex; align-items:center; gap:6px;}
   #flowLegend .lg-dot{width:8px; height:8px; border-radius:50%; flex-shrink:0;}
@@ -601,16 +611,33 @@
   .flow-popover .fp-persona{font-size:9.5px; color:var(--accent2); text-transform:uppercase; font-weight:700; margin-top:8px;}
   .flow-hint{font-size:10.5px; color:var(--muted); margin-bottom:8px;}
 
-  details.section-block{margin-bottom:16px; scroll-margin-top:50px;}
+  /* Phase 2 (Enterprise-shell plan) — a considered re-skin of this ONE shared template, not each
+     of the 17 sections individually: sec()'s dispatcher (see the JS below) renders every section
+     through this exact <details class="section-block"><summary class="section-title"> markup,
+     so refining it here reaches all 17 uniformly. Deliberately NOT adding a card
+     background/border/shadow to .section-block itself — most section bodies already wrap their
+     own content in .card (which already carries that elevation treatment from the earlier
+     redesign pass), so doing it again at this outer level would nest a card inside a card for
+     most sections. The header is the one piece every section shares with nothing else already
+     styling it, so that's what this pass actually touches: a slightly larger, more deliberate
+     click target and type scale, plus a real bug fix (see below). */
+  details.section-block{margin-bottom:18px; scroll-margin-top:50px;}
   #sig-anchor{scroll-margin-top:50px;}
   summary.section-title{
     cursor:pointer; list-style:none; display:flex; align-items:center; justify-content:space-between; gap:10px; user-select:none;
     transition:color .15s var(--ease);
+    padding:4px 0 11px; font-size:11px; letter-spacing:0.065em;
   }
   summary.section-title::-webkit-details-marker{display:none;}
   summary.section-title::after{content:'▾'; font-size:9px; color:var(--muted); transition:transform .15s var(--ease); flex-shrink:0;}
   details[open] summary.section-title::after{transform:rotate(180deg);}
-  summary.section-title:hover{color:#8fb2f7;}
+  /* Bug found in this pass: the hover color was a hardcoded #8fb2f7 (a light blue, always the
+     same regardless of theme) — directly contradicting .section-title's OWN comment three rules
+     above ("Neutral, not accent-blue... one of the concrete generic-AI-dashboard tells this
+     pass fixes"). The base state honored that decision; hovering silently un-did it. Hovers to
+     var(--text) instead — a real, visible hover cue that stays neutral, matching the stated
+     intent, rather than reintroducing the exact blue that decision existed to remove. */
+  summary.section-title:hover{color:var(--text);}
   @media (max-width:600px){ h1{font-size:19px;} }
 
   /* ================= Guided-mode + backend-wiring milestone (index.html decisions #1-13) ================= */
@@ -667,7 +694,7 @@
     display:flex; flex-direction:column; align-items:center; justify-content:center;
   }
   .dropzone:hover, .dropzone.dragover{
-    border-color:var(--accent); background:rgba(91,141,239,0.06); transform:scale(1.005);
+    border-color:var(--accent); background:color-mix(in srgb, var(--accent) 6%, transparent); transform:scale(1.005);
   }
   .dropzone-icon{
     width:56px; height:56px; border-radius:50%; background:var(--chip);
@@ -741,11 +768,11 @@
   .pick-chip:hover{border-color:#3a4256;}
   /* Tokenized (was a hardcoded rgba(91,141,239,...) — the dark theme's accent hardcoded as a
      literal, so it stayed blue-tinted in light theme regardless of that theme's actual accent
-     token — same fix as .results-hero above). Directly touched by the wizard-chip icon work
-     below; the many OTHER hardcoded rgba(91,141,239,...)/rgba(124,91,239,...) tints elsewhere
-     in this file (conf-basis badges, why-sig chips, ask-toggle-btn active state, etc.) are a
-     separate, pre-existing light-theme gap not touched here — flagged, not silently expanded
-     into this change. */
+     token — same fix as .results-hero above). At the time this was written, the other
+     hardcoded rgba(91,141,239,...)/rgba(124,91,239,...) tints elsewhere in this file
+     (conf-basis badges, why-sig chips, ask-toggle-btn active state, etc.) were a deliberately
+     out-of-scope, separate cleanup item — Phase 2 of the Enterprise-shell plan closed that gap;
+     zero hardcoded accent-tint literals remain as of that phase. */
   .pick-chip.selected{border-color:var(--accent); background:color-mix(in srgb, var(--accent) 10%, transparent); font-weight:600;}
   .pick-chip.selected::after{content:'✓'; color:var(--accent); font-weight:700; margin-left:2px;}
   .radio-list{display:flex; flex-direction:column; gap:7px;}
@@ -763,7 +790,7 @@
   .skip-note{font-size:11px; color:var(--muted); margin-top:9px; font-style:italic;}
   .wiz-nav{display:flex; justify-content:space-between; align-items:center; margin-top:26px;}
   .infer-strip{
-    margin-top:22px; padding:10px 13px; background:rgba(124,91,239,0.07); border:1px solid rgba(124,91,239,0.22);
+    margin-top:22px; padding:10px 13px; background:color-mix(in srgb, var(--accent2) 7%, transparent); border:1px solid color-mix(in srgb, var(--accent2) 22%, transparent);
     border-radius:var(--radius-sm); font-size:11px; color:var(--muted2); line-height:1.6; display:none;
   }
   .infer-strip.show{display:block;}
@@ -795,19 +822,19 @@
   .refine-zone{margin-top:11px; padding-top:11px; border-top:1px solid var(--border);}
   .refine-btns-row{display:flex; gap:8px; flex-wrap:wrap;}
   .refine-btn{
-    background:linear-gradient(135deg, rgba(124,91,239,0.18), rgba(91,141,239,0.18)); border:1px solid rgba(124,91,239,0.4);
-    color:#c3b6f7; padding:6px 11px; border-radius:7px; font-size:11.5px; font-weight:600; cursor:pointer;
+    background:linear-gradient(135deg, color-mix(in srgb, var(--accent2) 18%, transparent), color-mix(in srgb, var(--accent) 18%, transparent)); border:1px solid color-mix(in srgb, var(--accent2) 40%, transparent);
+    color:var(--accent2); padding:6px 11px; border-radius:7px; font-size:11.5px; font-weight:600; cursor:pointer;
     transition:filter .15s var(--ease);
   }
   .refine-btn:hover{filter:brightness(1.15);}
   .refine-btn:disabled{opacity:0.5; cursor:default;}
   .ask-toggle-btn{
-    background:rgba(91,141,239,0.1); border:1px solid rgba(91,141,239,0.35);
-    color:#8fb2f7; padding:6px 11px; border-radius:7px; font-size:11.5px; font-weight:600; cursor:pointer;
+    background:color-mix(in srgb, var(--accent) 10%, transparent); border:1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+    color:var(--accent); padding:6px 11px; border-radius:7px; font-size:11.5px; font-weight:600; cursor:pointer;
     transition:filter .15s var(--ease);
   }
   .ask-toggle-btn:hover{filter:brightness(1.15);}
-  .ask-toggle-btn.active{background:rgba(91,141,239,0.22); border-color:rgba(91,141,239,0.6);}
+  .ask-toggle-btn.active{background:color-mix(in srgb, var(--accent) 22%, transparent); border-color:color-mix(in srgb, var(--accent) 60%, transparent);}
   /* ---- Refinement pass history ---- */
   .refine-history-toggle{
     background:transparent; border:1px solid var(--border); color:var(--muted); padding:6px 12px;
@@ -846,7 +873,7 @@
   .ask-box.show{display:block;}
   .ask-thread{display:flex; flex-direction:column; gap:6px; margin-bottom:7px;}
   .ask-msg{padding:7px 10px; border-radius:8px; font-size:11.5px; line-height:1.5; max-width:92%;}
-  .ask-msg.user{background:rgba(91,141,239,0.14); border:1px solid rgba(91,141,239,0.3); align-self:flex-end;}
+  .ask-msg.user{background:color-mix(in srgb, var(--accent) 14%, transparent); border:1px solid color-mix(in srgb, var(--accent) 30%, transparent); align-self:flex-end;}
   .ask-msg.answer{background:var(--surface); border:1px solid var(--border); align-self:flex-start;}
   .ask-input-row{display:flex; gap:6px;}
   .ask-input-row input{
@@ -868,12 +895,12 @@
   }
   .share-btn:hover{border-color:var(--accent);}
   .shared-banner{
-    background:rgba(91,141,239,0.09); border:1px solid rgba(91,141,239,0.28); border-radius:var(--radius);
+    background:color-mix(in srgb, var(--accent) 9%, transparent); border:1px solid color-mix(in srgb, var(--accent) 28%, transparent); border-radius:var(--radius);
     padding:10px 14px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center;
-    gap:10px; font-size:12.5px; color:#8fb2f7; flex-wrap:wrap;
+    gap:10px; font-size:12.5px; color:var(--accent); flex-wrap:wrap;
   }
   .shared-banner button{
-    background:transparent; border:1px solid rgba(91,141,239,0.4); color:#8fb2f7; padding:5px 11px;
+    background:transparent; border:1px solid color-mix(in srgb, var(--accent) 40%, transparent); color:var(--accent); padding:5px 11px;
     border-radius:7px; font-size:11.5px; cursor:pointer;
   }
   /* Reduced-motion accessibility (DESIGN.md §Motion & §Deliberate deviations):
