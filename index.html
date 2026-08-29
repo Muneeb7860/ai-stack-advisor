@@ -129,6 +129,66 @@
   /* Icon-button utility: for any button that contains an SVG icon + text label side-by-side. */
   .icon-btn{display:inline-flex; align-items:center; gap:5px;}
 
+  /* ---- Enterprise shell, Phase 1 (see the plan this was built from) ----
+     A persistent sidebar wrapping every screen. Purely additive: .app-main is a plain flex
+     child holding every existing screen/#resultsShell exactly as before — none of their own
+     internal layout (each screen's own max-width/margin:auto centering) changes, since they
+     size themselves relative to whatever width .app-main gives them, same as they did relative
+     to <body> before this wrapper existed. */
+  .app-shell{display:flex; min-height:100vh; align-items:flex-start;}
+  /* Bug found via live browser check, not just reading the CSS: align-items:stretch (the flex
+     default direction) made the sidebar match .app-main's height — and .app-main's height is
+     the full page's content height (the results screen can be very tall), not the viewport's.
+     That stretched the sidebar to ~19,500px tall in a real analysis, so its nav items scrolled
+     away with the page instead of staying visible — by the time a user scrolled to the results,
+     the sidebar's own content (and the Export button inside it) was thousands of pixels above
+     the visible viewport, off-screen. position:sticky + a real viewport-relative height fixes
+     it: the sidebar now pins to the viewport and scrolls its OWN overflow independently of
+     whatever height the main content happens to be. */
+  .app-sidebar{
+    width:208px; flex:0 0 208px; display:flex; flex-direction:column; gap:4px;
+    padding:16px 12px; border-right:1px solid var(--border); background:var(--panel);
+    position:sticky; top:0; height:100vh; overflow-y:auto;
+  }
+  .app-sidebar-brand{
+    font-size:13px; font-weight:700; letter-spacing:-0.01em; color:var(--text);
+    padding:6px 8px 14px;
+  }
+  .app-sidebar-nav{display:flex; flex-direction:column; gap:2px;}
+  .app-sidebar-item{
+    display:flex; align-items:center; gap:9px; width:100%; text-align:left;
+    background:transparent; border:none; border-radius:var(--radius-sm);
+    color:var(--muted2); font-size:12.5px; font-weight:600; padding:8px 8px;
+    cursor:pointer; transition:background .15s var(--ease), color .15s var(--ease);
+  }
+  .app-sidebar-item:hover{background:var(--chip); color:var(--text);}
+  .app-sidebar-item svg{flex-shrink:0; color:var(--muted);}
+  .app-sidebar-item:hover svg{color:var(--accent);}
+  /* The relocated export/share block (verbatim from the old #resultsHeader) — a plain stacked
+     column rather than the inline row it used to be, since the sidebar is narrow. */
+  #sidebarExportShare{display:flex; flex-direction:column; gap:2px; margin-top:2px;}
+  #sidebarExportShare .export-dropdown{display:block;}
+  #sidebarExportShare .share-btn{width:100%; justify-content:flex-start;}
+  .app-sidebar-spacer{flex:1;}
+  /* Overrides .theme-toggle's own position:fixed (still the correct rule for any OTHER use of
+     that class) so it sits in normal flow at the bottom of the sidebar instead of floating over
+     the viewport corner. */
+  .app-sidebar .theme-toggle{position:static; align-self:flex-start; margin-top:8px;}
+  .app-main{flex:1; min-width:0;}
+  @media (max-width:860px){
+    /* Match the existing .toc mobile breakpoint (also 860px) rather than introduce a second,
+       independently-tuned breakpoint for the same "narrow viewport" concept. Full icon-rail
+       collapse / drawer behavior is a later phase (see the plan) — for now, narrow viewports
+       just get a slimmer sidebar rather than losing it, since New Analysis/Export/Share/theme
+       are still core actions on a phone, not nice-to-haves to hide. */
+    .app-sidebar{width:64px; flex-basis:64px; padding:12px 6px;}
+    .app-sidebar-brand{display:none;}
+    .app-sidebar-item span, .app-sidebar-item{font-size:0;}
+    .app-sidebar-item svg{margin:0 auto;}
+    #sidebarExportShare .export-dropdown, #sidebarExportShare .share-btn{font-size:0;}
+    #sidebarExportShare svg{margin:0 auto;}
+  }
+
   /* ---- Glide panel: reusable slide-in-from-left drawer, "signature feel" pattern ----
      Started on the wizard's building-type step (8 options now); designed to be reused by
      other multi-select steps if this pattern earns its place after real use, not retrofitted
@@ -445,7 +505,12 @@
     font-size:11px; padding:6px 10px; border-radius:7px; cursor:pointer; text-align:left;
     transition:background .15s var(--ease);
   }
-  .toc-toggle:hover{background:rgba(91,141,239,0.1);}
+  .toc-toggle:hover{background:color-mix(in srgb, var(--accent) 10%, transparent);}
+  /* Placeholder reserved for a future phase (routing refine/ask into a drawer) — see the plan
+     this shell was built from. A THIRD flex child of #resultsShell, not a grid track: flex
+     items with display:none simply drop out of layout with no empty-gutter side effect, so
+     nothing here needs to change when a later phase turns this on and gives it real content. */
+  #contextPanel{display:none; flex:0 0 300px; position:sticky; top:12px; max-height:calc(100vh - 24px); overflow-y:auto;}
   @media (max-width:860px){
     .results-shell{display:block;}
     .results-shell.active{display:block;}
@@ -625,6 +690,13 @@
   }
   @keyframes menuFadeIn{from{opacity:0; transform:translateY(-4px);} to{opacity:1; transform:none;}}
   .export-menu.open{display:flex;}
+  /* Bug found via live browser check: .export-menu's default `right:0` anchors its right edge to
+     the dropdown button and extends 280px LEFTWARD from there — fine when the button sits near
+     the right edge of a wide header (its original home), but the relocated sidebar button sits
+     near the LEFT edge of a 208px-wide column, so the menu extended off the left edge of the
+     viewport entirely (verified: opened at x:-69, cut off). Anchoring left instead lets it
+     extend rightward into the main content area, which actually has room. */
+  .app-sidebar .export-menu{left:0; right:auto;}
   .export-menu-header{
     font-size:10px; text-transform:uppercase; letter-spacing:0.04em;
     color:var(--muted2); font-weight:700; padding:6px 10px 4px;
@@ -824,14 +896,89 @@
 </head>
 <body>
 
-<button id="themeToggle" class="theme-toggle" onclick="toggleTheme()" title="Switch to light theme" aria-label="Switch between dark and light theme"></button>
-
 <!-- Reusable glide panel — single instance, populated by openGlidePanel() -->
 <div class="glide-backdrop" id="glideBackdrop" onclick="closeGlidePanel()"></div>
 <div class="glide-panel" id="glidePanel">
   <div class="glide-head"><h3 id="glideTitle"></h3><button class="glide-close" onclick="closeGlidePanel()" aria-label="Close">✕</button></div>
   <div class="glide-list" id="glideList"></div>
 </div>
+
+<!-- Enterprise shell, Phase 1 (design/DESIGN-dashboard.md's migration doc + docs/design/ review
+     — see the plan this was built from for the full rationale): a persistent sidebar wraps every
+     screen, moving the theme toggle and export/share controls in from their previous
+     fixed-position/per-result-page homes. Purely additive — every id inside .app-main keeps
+     working exactly as before; nothing about computeRecommendations, renderRecommendations,
+     the wizard, or the rule engine changes here. #contextPanel is a placeholder for a future
+     phase (routing refine/ask into a drawer) — reserved now, deliberately empty/hidden, not
+     wired to anything yet. -->
+<div class="app-shell">
+  <aside class="app-sidebar">
+    <div class="app-sidebar-brand">AI Stack Advisor</div>
+    <nav class="app-sidebar-nav">
+      <button type="button" class="app-sidebar-item" onclick="backToMode()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+        New Analysis
+      </button>
+      <button type="button" class="app-sidebar-item" id="sidebarThisAnalysisBtn" onclick="scrollToResultsShell()" style="display:none;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z"/></svg>
+        This Analysis
+      </button>
+      <!-- Relocated verbatim from #resultsHeader (was inline there) — decision #12 (Share
+           hidden on a read-only shared view) now gates this whole block via #sidebarExportShare
+           instead of #resultsHeader, since resultsHeader itself no longer contains it. See the
+           two toggle sites: setAnalysis() and loadSharedAnalysis(). -->
+      <div id="sidebarExportShare" style="display:none;">
+        <div class="export-dropdown" id="exportDropdown">
+          <button class="share-btn icon-btn" id="exportMainBtn" onclick="toggleExportMenu(event)" aria-haspopup="true" aria-expanded="false" aria-controls="exportMenu">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
+            Export / Download ▾
+          </button>
+          <div class="export-menu" id="exportMenu" role="menu">
+            <div class="export-menu-header" role="presentation">Architecture Decisions &amp; Docs</div>
+            <button type="button" class="export-menu-item" role="menuitem" onclick="onExportAdrClick(); closeExportMenu();">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"/></svg>
+              <span><strong>Export as ADR Pack (.md)</strong><small>Markdown decision record bundle</small></span>
+            </button>
+            <button type="button" class="export-menu-item" role="menuitem" onclick="onExportJsonClick(); closeExportMenu();">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5"/></svg>
+              <span><strong>Export Blueprint (.json)</strong><small>Machine state &amp; recommendations</small></span>
+            </button>
+            <div class="export-menu-header" role="presentation">Diagrams &amp; Visual Formats</div>
+            <button type="button" class="export-menu-item" role="menuitem" onclick="onExportDrawioClick(); closeExportMenu();">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z"/></svg>
+              <span><strong>Download Draw.io (.drawio)</strong><small>Open in diagrams.net / VS Code</small></span>
+            </button>
+            <button type="button" class="export-menu-item" role="menuitem" onclick="onExportMermaidClick(); closeExportMenu();">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/></svg>
+              <span><strong>Download Mermaid (.mmd)</strong><small>C4 flow syntax for GitHub markdown</small></span>
+            </button>
+            <button type="button" class="export-menu-item" role="menuitem" onclick="onCopyMermaidClick(); closeExportMenu();">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75"/></svg>
+              <span><strong>Copy Mermaid Syntax</strong><small>Paste into Notion, PRs, or chats</small></span>
+            </button>
+            <button type="button" class="export-menu-item" role="menuitem" onclick="onExportSvgClick(); closeExportMenu();">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"/></svg>
+              <span><strong>Download SVG Vector (.svg)</strong><small>Vector graphic for design tools</small></span>
+            </button>
+            <div class="export-menu-header" role="presentation">1-Click Tool Hand-off</div>
+            <button type="button" class="export-menu-item" role="menuitem" onclick="onOpenDiagramsNetClick(); closeExportMenu();">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/></svg>
+              <span><strong>Open in Diagrams.net ↗</strong><small>Launch web editor in new tab (zero login)</small></span>
+            </button>
+            <div class="export-menu-header" role="presentation">Knowledge Base &amp; Custom Tech</div>
+            <button type="button" class="export-menu-item" role="menuitem" onclick="openCustomTechModal(); closeExportMenu();">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+              <span><strong>Custom Tech &amp; Knowledge Base</strong><small>Bring-your-own-tool (localStorage + GitHub)</small></span>
+            </button>
+          </div>
+        </div>
+        <button class="share-btn icon-btn" id="shareBtn" onclick="onShareClick()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244"/></svg> Share this analysis</button>
+      </div>
+    </nav>
+    <div class="app-sidebar-spacer"></div>
+    <button id="themeToggle" class="theme-toggle" onclick="toggleTheme()" title="Switch to light theme" aria-label="Switch between dark and light theme"></button>
+  </aside>
+  <div class="app-main">
 
 <!-- ================= Mode picker (decision #3: equal weight, no default) ================= -->
 <div id="screenMode">
@@ -1084,51 +1231,6 @@
     <div id="sharedBanner"></div>
     <div class="results-header" id="resultsHeader" style="display:none;">
       <div id="refineHistoryControls" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
-      <div class="export-dropdown" id="exportDropdown">
-        <button class="share-btn icon-btn" id="exportMainBtn" onclick="toggleExportMenu(event)" aria-haspopup="true" aria-expanded="false" aria-controls="exportMenu">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
-          Export / Download ▾
-        </button>
-        <div class="export-menu" id="exportMenu" role="menu">
-          <div class="export-menu-header" role="presentation">Architecture Decisions &amp; Docs</div>
-          <button type="button" class="export-menu-item" role="menuitem" onclick="onExportAdrClick(); closeExportMenu();">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"/></svg>
-            <span><strong>Export as ADR Pack (.md)</strong><small>Markdown decision record bundle</small></span>
-          </button>
-          <button type="button" class="export-menu-item" role="menuitem" onclick="onExportJsonClick(); closeExportMenu();">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5"/></svg>
-            <span><strong>Export Blueprint (.json)</strong><small>Machine state &amp; recommendations</small></span>
-          </button>
-          <div class="export-menu-header" role="presentation">Diagrams &amp; Visual Formats</div>
-          <button type="button" class="export-menu-item" role="menuitem" onclick="onExportDrawioClick(); closeExportMenu();">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z"/></svg>
-            <span><strong>Download Draw.io (.drawio)</strong><small>Open in diagrams.net / VS Code</small></span>
-          </button>
-          <button type="button" class="export-menu-item" role="menuitem" onclick="onExportMermaidClick(); closeExportMenu();">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/></svg>
-            <span><strong>Download Mermaid (.mmd)</strong><small>C4 flow syntax for GitHub markdown</small></span>
-          </button>
-          <button type="button" class="export-menu-item" role="menuitem" onclick="onCopyMermaidClick(); closeExportMenu();">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75"/></svg>
-            <span><strong>Copy Mermaid Syntax</strong><small>Paste into Notion, PRs, or chats</small></span>
-          </button>
-          <button type="button" class="export-menu-item" role="menuitem" onclick="onExportSvgClick(); closeExportMenu();">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"/></svg>
-            <span><strong>Download SVG Vector (.svg)</strong><small>Vector graphic for design tools</small></span>
-          </button>
-          <div class="export-menu-header" role="presentation">1-Click Tool Hand-off</div>
-          <button type="button" class="export-menu-item" role="menuitem" onclick="onOpenDiagramsNetClick(); closeExportMenu();">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/></svg>
-            <span><strong>Open in Diagrams.net ↗</strong><small>Launch web editor in new tab (zero login)</small></span>
-          </button>
-          <div class="export-menu-header" role="presentation">Knowledge Base &amp; Custom Tech</div>
-          <button type="button" class="export-menu-item" role="menuitem" onclick="openCustomTechModal(); closeExportMenu();">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
-            <span><strong>Custom Tech &amp; Knowledge Base</strong><small>Bring-your-own-tool (localStorage + GitHub)</small></span>
-          </button>
-        </div>
-      </div>
-      <button class="share-btn icon-btn" id="shareBtn" onclick="onShareClick()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244"/></svg> Share this analysis</button>
     </div>
     <div id="results"></div>
 
@@ -1149,6 +1251,7 @@
     </div>
     <div class="flow-popover" id="flowPopover"></div>
   </div>
+  <aside id="contextPanel"></aside>
 </div>
 
 <!-- Custom Technology & Knowledge Base Modal -->
@@ -1247,6 +1350,9 @@
  </div>
 </div>
 
+  </div><!-- /.app-main -->
+</div><!-- /.app-shell -->
+
 <script>
 const EXAMPLES = [
 `We're a fintech startup building a mobile + web app for real-time fraud detection on card transactions. Need to handle high transaction volume, support a chatbot for customer support that can answer questions from our internal policy documents, must be SOC2/PCI compliant, small team of 6 engineers, want to move fast but stay secure.`,
@@ -1260,6 +1366,7 @@ function clearAll(){
   document.getElementById('input').value='';
   document.getElementById('results').style.display='none';
   document.getElementById('resultsShell').classList.remove('active');
+  setSidebarThisAnalysisVisible(false);
   document.getElementById('viewToggle').style.display='none';
   document.getElementById('flowWrap').style.display='none';
   document.getElementById('flowPopover').style.display='none';
@@ -3703,6 +3810,7 @@ function renderRecommendations(s, rec){
   document.getElementById('sideNav').innerHTML = navHtml;
   document.getElementById('results').innerHTML = html;
   document.getElementById('resultsShell').classList.add('active');
+  setSidebarThisAnalysisVisible(true);
   // Flow view visualizes the infra topology (cloud/db/containers/etc) that's deliberately not
   // rendered at all in brownfield/AI-only mode — showing the toggle would offer a view of
   // exactly the thing this mode suppressed. Cards-only, forced, until Flow gets its own
@@ -3857,7 +3965,12 @@ function setAnalysis(text, rawSignals, opts){
   if (typeof attachRefineUI === 'function') attachRefineUI();
 
   const header = document.getElementById('resultsHeader');
-  if (header) header.style.display = 'flex'; // decision #12 — Share button, hidden on the read-only shared view
+  if (header) header.style.display = 'flex';
+  // decision #12 — Share button, hidden on the read-only shared view. Export+Share live in the
+  // sidebar now (#sidebarExportShare), not inside #resultsHeader — both toggle together so this
+  // stays the single source of truth for "is there a real, non-read-only analysis on screen."
+  const sidebarExportShare = document.getElementById('sidebarExportShare');
+  if (sidebarExportShare) sidebarExportShare.style.display = '';
   return { s, rec };
 }
 
@@ -4890,6 +5003,18 @@ function startUpload(){
   showScreen('screenUpload');
 }
 function backToMode(){ showScreen('screenMode'); }
+
+// Enterprise-shell Phase 1: the sidebar's "This Analysis" item only makes sense once a result
+// exists — mirrors the three call sites that toggle #resultsShell's own 'active' class (initial
+// render, restoring a shared analysis, and clearing back to zero state) rather than introducing
+// a fourth, independent source of truth for "is there a current analysis."
+function scrollToResultsShell(){
+  document.getElementById('resultsShell')?.scrollIntoView({behavior:'smooth', block:'start'});
+}
+function setSidebarThisAnalysisVisible(visible){
+  const btn = document.getElementById('sidebarThisAnalysisBtn');
+  if (btn) btn.style.display = visible ? '' : 'none';
+}
 
 // Real defect found in the ui-craft Tier 1 pass, missed by the static checker (it pattern-
 // matches inline onclick="..." attributes; these are wired via addEventListener here, which
@@ -6857,10 +6982,12 @@ async function loadSharedAnalysis(slug){
         <button onclick="navigator.clipboard.writeText(window.location.href)">Copy link</button>
       </div>`;
     document.getElementById('resultsHeader').style.display = 'none';
+    document.getElementById('sidebarExportShare').style.display = 'none';
     renderRecommendations(data.signals, data.recommendations);
   } catch(e){
     document.getElementById('sharedBanner').innerHTML = `<div class="shared-banner">⚠️ ${e.message}</div>`;
     document.getElementById('resultsShell').classList.add('active');
+    setSidebarThisAnalysisVisible(true);
   }
 }
 
