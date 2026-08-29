@@ -125,3 +125,33 @@ class AskResponse(BaseModel):
     conversation: list[ConversationMessageOut]
     usage: UsageInfo
     provider: Literal["anthropic", "ollama"] = "anthropic"  # see RefineResponse.provider
+
+
+class RecommendRequest(BaseModel):
+    """POST /api/recommend body for enterprise SaaS dashboard evaluation."""
+
+    product_type: str = Field("b2b_analytics", description="Product archetype (e.g. b2b_analytics, consumer_mobile, iot_device, fintech_realtime)")
+    product_size: Literal["mvp", "smb", "enterprise", "ent"] = Field("smb", description="Team scale tier")
+    team_size: int | None = Field(None, ge=1, le=10_000, description="Explicit team headcount if known")
+    licensed_skills: list[str] = Field(default_factory=list, description="List of active organizational licenses and certifications")
+    freeform_query: str | None = Field(None, max_length=10_000, description="Optional natural-language architectural constraint text")
+
+
+class StackCategoryRecommendation(BaseModel):
+    technology: str
+    fit_score: int = Field(..., ge=0, le=100)
+    license_status: str
+    license_flag: Literal["OK", "NEEDS_LICENSE", "INCOMPATIBLE"]
+    rationale: str
+    alternatives: list[str] = Field(default_factory=list)
+
+
+class RecommendResponse(BaseModel):
+    recommendation_id: str
+    generated_at: str
+    input_context: dict
+    overall_metrics: dict
+    stack_categories: dict[str, StackCategoryRecommendation]
+    actionable_next_steps: list[dict]
+    raw_recommendations: dict | None = None
+
