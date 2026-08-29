@@ -232,7 +232,12 @@
      provenance category). Flattened to a solid fill; --accent2 stays a live, distinct token
      everywhere it carries real meaning. */
   .glide-item.selected .gi-check{background:var(--accent); border-color:transparent; color:#fff;}
-  .glide-item .gi-icon{font-size:16px; flex-shrink:0;}
+  /* Was font-size:16px, sized for a raw emoji character — now holds an inline stroke <svg>
+     (see GLIDE_ITEM_ICONS), sized the same way .pick-chip's .pc-icon already is. */
+  .glide-item .gi-icon{width:16px; height:16px; flex-shrink:0; color:var(--muted2);}
+  .glide-item .gi-icon svg{display:block; width:100%; height:100%;}
+  .sel-tile .st-icon{width:14px; height:14px; flex-shrink:0;}
+  .sel-tile .st-icon svg{display:block; width:100%; height:100%;}
   .glide-item .gi-label{font-size:var(--fs-base); font-weight:600;}
   .glide-category{font-size:var(--fs-xs); text-transform:uppercase; letter-spacing:0.05em; color:var(--muted);
     font-weight:700; padding:14px 11px 6px; }
@@ -1410,8 +1415,8 @@
         </div>
 
         <div style="display:flex; justify-content:flex-end; gap:8px;">
-          <button type="button" class="ex-btn" onclick="exportCustomTechsJson()">📥 Export JSON</button>
-          <button type="submit" class="share-btn" style="padding:6px 14px;">💾 Save to Local Catalog</button>
+          <button type="button" class="ex-btn" onclick="exportCustomTechsJson()">Export JSON</button>
+          <button type="submit" class="share-btn" style="padding:6px 14px;">Save to Local Catalog</button>
         </div>
       </form>
     </div>
@@ -4635,7 +4640,7 @@ function showFlowPopover(id){
               <span class="conf conf-${o.complexity === 'Low' ? 'high' : o.complexity === 'Medium' ? 'medium' : 'low'}" style="font-size:10px; padding:1px 6px;">${o.complexity} Complexity</span>
             </div>
             <div style="font-size:12px; color:var(--muted); margin-bottom:4px;">${o.rationale}</div>
-            <div style="font-size:10.5px; color:var(--accent); font-weight:600;">🛠️ Tech: <span style="color:var(--text); font-weight:400;">${o.tech}</span></div>
+            <div style="font-size:10.5px; color:var(--accent); font-weight:600;">Tech: <span style="color:var(--text); font-weight:400;">${o.tech}</span></div>
             ${o.prerequisites && o.prerequisites.length ? `<div style="font-size:10px; color:#e0a23c; margin-top:3px;">⚠️ <b>Prerequisites:</b> ${o.prerequisites.join(' · ')}</div>` : ''}
           </div>
         `).join('')}
@@ -4930,18 +4935,55 @@ function wizFinish(){
 // multi-select wizard steps (compliance, AI features) — a deliberate product-feel choice, not
 // solving a "too many chips" problem (8 items already fit the inline grid fine).
 // Config-driven so adding another step later means adding an entry here, not new markup.
+// Icons for GLIDE_CONFIGS items below, keyed by `val` (building group) or `category`
+// (teamskills group) — a lookup rather than inline per-item strings, since most teamskills
+// items share one icon per category (mirroring the .pick-chip precedent: all 7 backend
+// languages already share one identical code-brackets icon, so there's no per-vendor icon
+// convention in this file to match anyway). Same stroke convention used everywhere else in
+// this file: viewBox 24x24, stroke-width 1.5, round caps/joins, currentColor.
+// - building's 8 keys are copied verbatim from the inline .pick-chip markup for the same
+//   question ("What are you building?", index.html ~1117-1124) — the glide panel is an
+//   alternate view onto the exact same choices, not a separately-curated list.
+// - 'Backend language' is copied verbatim from that same chip-grid's shared code-brackets path.
+// - 'Frontend framework' and 'Monitoring' reuse the 'web' (browser window) and 'data' (bar
+//   chart) building icons above — same visual concept, different context.
+// - 'DevOps / CI-CD' reuses the existing circular-arrows "refine again" icon defined elsewhere
+//   in this file — a repeating/continuous-process glyph fits CI/CD.
+// - 'Database' and 'Cloud' and 'Containers / Orchestration' are the only genuinely new icons
+//   this sweep needed to author (standard, conventional shapes: stacked cylinders, cloud
+//   outline, isometric cube).
+// - 'General' (the "No strong preference" item) has no entry — falls through to no icon,
+//   matching the existing plain "—" dash precedent for that exact item in the inline chip.
+const GLIDE_ITEM_ICONS = {
+  web: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path stroke-linecap="round" d="M9 20h6M12 16v4"/></svg>',
+  mobile: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="7" y="2" width="10" height="20" rx="2"/><path stroke-linecap="round" d="M11 18h2"/></svg>',
+  api: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="12" r="3"/><circle cx="18" cy="12" r="3"/><path stroke-linecap="round" d="M9 12h6"/></svg>',
+  chatbot: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z"/></svg>',
+  data: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" d="M4 20v-6M10 20v-10M16 20v-14M4 20h16"/></svg>',
+  internal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg>',
+  admin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z"/></svg>',
+  ecommerce: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 4h2l2 10h10l2-7H6"/><circle cx="9" cy="19" r="1.2" fill="currentColor" stroke="none"/><circle cx="16" cy="19" r="1.2" fill="currentColor" stroke="none"/></svg>',
+  'Backend language': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="m8 4-5 8 5 8m8-16 5 8-5 8"/></svg>',
+  'Frontend framework': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path stroke-linecap="round" d="M9 20h6M12 16v4"/></svg>',
+  'Monitoring': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" d="M4 20v-6M10 20v-10M16 20v-14M4 20h16"/></svg>',
+  'DevOps / CI-CD': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>',
+  'Database': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="6" rx="7" ry="3"/><path stroke-linecap="round" d="M5 6v6c0 1.657 3.134 3 7 3s7-1.343 7-3V6"/><path stroke-linecap="round" d="M5 12v6c0 1.657 3.134 3 7 3s7-1.343 7-3v-6"/></svg>',
+  'Cloud': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6.5 19a4.5 4.5 0 0 1-.415-8.984 5.5 5.5 0 0 1 10.831-1.556A4.5 4.5 0 0 1 17.5 19h-11Z"/></svg>',
+  'Containers / Orchestration': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5 12 3 3 7.5m18 0-9 4.5m9-4.5v9L12 21m0-9L3 7.5m9 4.5v9m-9-9v9l9 4.5"/></svg>',
+};
+
 const GLIDE_CONFIGS = {
   building: {
     title: 'What are you building?',
     items: [
-      {val:'web', icon:'🖥️', label:'Web app'},
-      {val:'mobile', icon:'📱', label:'Mobile app'},
-      {val:'api', icon:'🔌', label:'API / backend service'},
-      {val:'chatbot', icon:'💬', label:'AI chatbot / assistant'},
-      {val:'data', icon:'📊', label:'Data / analytics platform'},
-      {val:'internal', icon:'🛠️', label:'Internal tool'},
-      {val:'admin', icon:'📋', label:'Admin / dashboard app'},
-      {val:'ecommerce', icon:'🛒', label:'E-commerce / marketplace'},
+      {val:'web', label:'Web app'},
+      {val:'mobile', label:'Mobile app'},
+      {val:'api', label:'API / backend service'},
+      {val:'chatbot', label:'AI chatbot / assistant'},
+      {val:'data', label:'Data / analytics platform'},
+      {val:'internal', label:'Internal tool'},
+      {val:'admin', label:'Admin / dashboard app'},
+      {val:'ecommerce', label:'E-commerce / marketplace'},
     ],
   },
   // Items list's backend-language entries intentionally match the inline chip-grid HTML for
@@ -4955,44 +4997,44 @@ const GLIDE_CONFIGS = {
   teamskills: {
     title: 'What does your team already know?',
     items: [
-      {val:'none', icon:'—', label:'No strong preference', category:'General'},
-      {val:'java', icon:'☕', label:'Java / Spring', category:'Backend language'},
-      {val:'python', icon:'🐍', label:'Python', category:'Backend language'},
-      {val:'node', icon:'🟩', label:'Node.js / JavaScript', category:'Backend language'},
-      {val:'dotnet', icon:'🔷', label:'.NET / C#', category:'Backend language'},
-      {val:'go', icon:'🐹', label:'Go', category:'Backend language'},
-      {val:'ruby', icon:'💎', label:'Ruby on Rails', category:'Backend language'},
-      {val:'php', icon:'🐘', label:'PHP / Laravel', category:'Backend language'},
-      {val:'postgres', icon:'🐘', label:'PostgreSQL', category:'Database'},
-      {val:'mysql', icon:'🐬', label:'MySQL', category:'Database'},
-      {val:'sqlserver', icon:'🗄️', label:'SQL Server', category:'Database'},
-      {val:'oracle', icon:'🔴', label:'Oracle Database', category:'Database'},
-      {val:'mongo', icon:'🍃', label:'MongoDB', category:'Database'},
-      {val:'pinecone', icon:'🌲', label:'Pinecone (vector DB)', category:'Database'},
-      {val:'weaviate', icon:'🔷', label:'Weaviate (vector DB)', category:'Database'},
-      {val:'qdrant', icon:'🔶', label:'Qdrant (vector DB)', category:'Database'},
-      {val:'html', icon:'🧩', label:'HTML / CSS / JavaScript', category:'Frontend framework'},
-      {val:'react', icon:'⚛️', label:'React', category:'Frontend framework'},
-      {val:'angular', icon:'🅰️', label:'Angular', category:'Frontend framework'},
-      {val:'vue', icon:'💚', label:'Vue', category:'Frontend framework'},
-      {val:'aws', icon:'☁️', label:'AWS', category:'Cloud'},
-      {val:'azure', icon:'☁️', label:'Azure', category:'Cloud'},
-      {val:'gcp', icon:'☁️', label:'Google Cloud (GCP)', category:'Cloud'},
-      {val:'docker', icon:'🐳', label:'Docker', category:'Containers / Orchestration'},
-      {val:'kubernetes', icon:'☸️', label:'Kubernetes', category:'Containers / Orchestration'},
-      {val:'openshift', icon:'🎩', label:'OpenShift', category:'Containers / Orchestration'},
-      {val:'terraform', icon:'🧱', label:'Terraform / IaC', category:'DevOps / CI-CD'},
-      {val:'githubactions', icon:'⚙️', label:'GitHub Actions', category:'DevOps / CI-CD'},
-      {val:'jenkins', icon:'🔧', label:'Jenkins', category:'DevOps / CI-CD'},
-      {val:'gitlabci', icon:'🦊', label:'GitLab CI', category:'DevOps / CI-CD'},
-      {val:'circleci', icon:'⭕', label:'CircleCI', category:'DevOps / CI-CD'},
-      {val:'azuredevops', icon:'🔷', label:'Azure DevOps', category:'DevOps / CI-CD'},
-      {val:'datadog', icon:'🐶', label:'Datadog', category:'Monitoring'},
-      {val:'prometheus', icon:'📈', label:'Prometheus / Grafana', category:'Monitoring'},
-      {val:'splunk', icon:'📊', label:'Splunk', category:'Monitoring'},
-      {val:'dynatrace', icon:'🔵', label:'Dynatrace', category:'Monitoring'},
-      {val:'newrelic', icon:'🚗', label:'New Relic', category:'Monitoring'},
-      {val:'elk', icon:'🔍', label:'Elastic Stack (ELK)', category:'Monitoring'},
+      {val:'none', label:'No strong preference', category:'General'},
+      {val:'java', label:'Java / Spring', category:'Backend language'},
+      {val:'python', label:'Python', category:'Backend language'},
+      {val:'node', label:'Node.js / JavaScript', category:'Backend language'},
+      {val:'dotnet', label:'.NET / C#', category:'Backend language'},
+      {val:'go', label:'Go', category:'Backend language'},
+      {val:'ruby', label:'Ruby on Rails', category:'Backend language'},
+      {val:'php', label:'PHP / Laravel', category:'Backend language'},
+      {val:'postgres', label:'PostgreSQL', category:'Database'},
+      {val:'mysql', label:'MySQL', category:'Database'},
+      {val:'sqlserver', label:'SQL Server', category:'Database'},
+      {val:'oracle', label:'Oracle Database', category:'Database'},
+      {val:'mongo', label:'MongoDB', category:'Database'},
+      {val:'pinecone', label:'Pinecone (vector DB)', category:'Database'},
+      {val:'weaviate', label:'Weaviate (vector DB)', category:'Database'},
+      {val:'qdrant', label:'Qdrant (vector DB)', category:'Database'},
+      {val:'html', label:'HTML / CSS / JavaScript', category:'Frontend framework'},
+      {val:'react', label:'React', category:'Frontend framework'},
+      {val:'angular', label:'Angular', category:'Frontend framework'},
+      {val:'vue', label:'Vue', category:'Frontend framework'},
+      {val:'aws', label:'AWS', category:'Cloud'},
+      {val:'azure', label:'Azure', category:'Cloud'},
+      {val:'gcp', label:'Google Cloud (GCP)', category:'Cloud'},
+      {val:'docker', label:'Docker', category:'Containers / Orchestration'},
+      {val:'kubernetes', label:'Kubernetes', category:'Containers / Orchestration'},
+      {val:'openshift', label:'OpenShift', category:'Containers / Orchestration'},
+      {val:'terraform', label:'Terraform / IaC', category:'DevOps / CI-CD'},
+      {val:'githubactions', label:'GitHub Actions', category:'DevOps / CI-CD'},
+      {val:'jenkins', label:'Jenkins', category:'DevOps / CI-CD'},
+      {val:'gitlabci', label:'GitLab CI', category:'DevOps / CI-CD'},
+      {val:'circleci', label:'CircleCI', category:'DevOps / CI-CD'},
+      {val:'azuredevops', label:'Azure DevOps', category:'DevOps / CI-CD'},
+      {val:'datadog', label:'Datadog', category:'Monitoring'},
+      {val:'prometheus', label:'Prometheus / Grafana', category:'Monitoring'},
+      {val:'splunk', label:'Splunk', category:'Monitoring'},
+      {val:'dynatrace', label:'Dynatrace', category:'Monitoring'},
+      {val:'newrelic', label:'New Relic', category:'Monitoring'},
+      {val:'elk', label:'Elastic Stack (ELK)', category:'Monitoring'},
     ],
   },
 };
@@ -5005,7 +5047,12 @@ function renderSelectedTiles(groupKey){
   const container = document.getElementById(`${groupKey}Tiles`);
   if (!container) return;
   const items = (GLIDE_CONFIGS[groupKey] && GLIDE_CONFIGS[groupKey].items) || [];
-  const labelFor = val => { const it = items.find(i => i.val===val); return it ? `${it.icon} ${it.label}` : val; };
+  const labelFor = val => {
+    const it = items.find(i => i.val===val);
+    if (!it) return val;
+    const icon = GLIDE_ITEM_ICONS[it.val] || GLIDE_ITEM_ICONS[it.category] || '';
+    return `${icon ? `<span class="st-icon">${icon}</span>` : ''}${it.label}`;
+  };
   const arr = wizState[groupKey] || [];
   container.innerHTML = arr.map(val => `
     <span class="sel-tile" data-val="${val}">${labelFor(val)}<span class="st-x" title="Remove" onclick="removeTileItem('${groupKey}','${val}')">✕</span></span>
@@ -5043,7 +5090,7 @@ function openGlidePanel(groupKey){
     }
     const checked = selectedVals.includes(it.val);
     return `${headerHtml}<div class="glide-item ${checked?'selected':''}" data-val="${it.val}" tabindex="0" role="checkbox" aria-checked="${checked}" onclick="toggleGlideItem('${groupKey}','${it.val}', this)" onkeydown="if(event.key===' '||event.key==='Enter'){event.preventDefault(); toggleGlideItem('${groupKey}','${it.val}', this);}">
-      <div class="gi-check">✓</div><span class="gi-icon">${it.icon}</span><span class="gi-label">${it.label}</span>
+      <div class="gi-check">✓</div><span class="gi-icon">${GLIDE_ITEM_ICONS[it.val] || GLIDE_ITEM_ICONS[it.category] || ''}</span><span class="gi-label">${it.label}</span>
     </div>`;
   }).join('');
   document.getElementById('glidePanel').classList.add('show');
