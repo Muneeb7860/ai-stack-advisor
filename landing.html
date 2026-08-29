@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Stack Advisor — Architecture recommendations, cited not guessed</title>
+<meta name="description" content="A deterministic, client-side rule engine that recommends a technology stack and shows exactly which signal in your text drove each pick — no LLM call, no signup, no data leaving your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Same token set as index.html:26-29 — this page is a front door to that app, not a separate
+     visual identity, so it should read as the same product from the first pixel. */
+  :root{
+    --bg:#0a0c11; --panel:#12151d; --panel2:#151922; --border:#1f2430;
+    --text:#e8ebf1; --muted:#828a99; --muted2:#9aa1ae; --accent:#5b8def; --accent2:#7c5bef;
+    --good:#34c98a; --warn:#e0a23c; --chip:#171b24;
+    --font:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono:'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --radius:10px; --radius-lg:14px;
+    --ease:cubic-bezier(.4,0,.2,1);
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0; background:var(--bg); color:var(--text); font-family:var(--font);
+    font-size:15px; line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit;}
+  .wrap{max-width:1080px; margin:0 auto; padding:0 24px;}
+  code, .mono{font-family:var(--font-mono);}
+
+  /* ---------------- Nav ---------------- */
+  .nav{
+    position:sticky; top:0; z-index:10; display:flex; align-items:center; justify-content:space-between;
+    padding:16px 24px; border-bottom:1px solid var(--border); background:color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter:blur(8px);
+  }
+  .nav-brand{font-weight:800; font-size:14px; letter-spacing:-0.01em;}
+  .nav-cta{
+    background:var(--accent); color:#fff; border:none; padding:9px 18px; border-radius:var(--radius);
+    font-weight:700; font-size:13px; cursor:pointer; text-decoration:none; display:inline-block;
+    transition:filter .15s var(--ease);
+  }
+  .nav-cta:hover{filter:brightness(1.1);}
+
+  /* ---------------- Hero ---------------- */
+  .hero{padding:96px 24px 72px; text-align:center;}
+  .hero-eyebrow{
+    display:inline-flex; align-items:center; gap:7px; background:var(--chip); border:1px solid var(--border);
+    border-radius:999px; padding:6px 14px; font-size:11px; color:var(--muted2); font-weight:600;
+    text-transform:uppercase; letter-spacing:0.04em; margin-bottom:24px;
+  }
+  .hero-eyebrow::before{content:''; width:6px; height:6px; border-radius:50%; background:var(--good); flex-shrink:0;}
+  h1{
+    font-size:clamp(32px, 5vw, 52px); font-weight:800; letter-spacing:-0.02em; line-height:1.1;
+    margin:0 0 20px; text-wrap:balance;
+  }
+  h1 .hl{color:var(--accent);}
+  .hero-sub{
+    max-width:640px; margin:0 auto 36px; color:var(--muted); font-size:17px; line-height:1.6;
+  }
+  .hero-ctas{display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-bottom:32px;}
+  .btn-primary{
+    background:var(--accent); color:#fff; border:none; padding:14px 26px; border-radius:var(--radius);
+    font-weight:700; font-size:15px; cursor:pointer; text-decoration:none; display:inline-block;
+    transition:filter .15s var(--ease), transform .15s var(--ease);
+  }
+  .btn-primary:hover{filter:brightness(1.1); transform:translateY(-1px);}
+  .btn-secondary{
+    background:transparent; color:var(--text); border:1px solid var(--border); padding:14px 26px;
+    border-radius:var(--radius); font-weight:600; font-size:15px; cursor:pointer; text-decoration:none;
+    display:inline-block; transition:border-color .15s var(--ease), background .15s var(--ease);
+  }
+  .btn-secondary:hover{border-color:var(--accent); background:var(--chip);}
+  .trust-strip{
+    display:flex; gap:10px 24px; justify-content:center; flex-wrap:wrap; color:var(--muted);
+    font-size:12.5px; font-family:var(--font-mono);
+  }
+  .trust-strip span{white-space:nowrap;}
+  .trust-strip .dot{color:var(--border);}
+
+  /* ---------------- Sample card (real component, not a fabricated mockup) ---------------- */
+  .sample-wrap{padding:0 24px 88px;}
+  .sample-card{
+    max-width:620px; margin:0 auto; background:var(--panel); border:1px solid var(--border);
+    border-radius:var(--radius-lg); padding:22px 24px; text-align:left;
+  }
+  .sample-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;}
+  .sample-cat{font-size:10px; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted); font-weight:700;}
+  .sample-conf{
+    display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700;
+    color:var(--good); background:color-mix(in srgb, var(--good) 12%, transparent);
+    border:1px solid color-mix(in srgb, var(--good) 30%, transparent); border-radius:999px; padding:3px 10px;
+  }
+  .sample-title{font-size:19px; font-weight:800; margin-bottom:8px;}
+  .sample-why{color:var(--muted); font-size:13.5px; line-height:1.6; margin-bottom:14px;}
+  .sample-basis{
+    display:inline-flex; align-items:center; font-size:11px; font-weight:600; color:var(--accent);
+    background:color-mix(in srgb, var(--accent) 13%, transparent);
+    border:1px solid color-mix(in srgb, var(--accent) 32%, transparent);
+    border-radius:4px; padding:3px 9px; font-family:var(--font-mono); text-transform:lowercase;
+  }
+  .sample-caption{text-align:center; color:var(--muted); font-size:12.5px; margin-top:14px;}
+
+  /* ---------------- Sections ---------------- */
+  section{padding:72px 24px;}
+  section.alt{background:var(--panel2); border-top:1px solid var(--border); border-bottom:1px solid var(--border);}
+  .section-head{max-width:640px; margin:0 auto 48px; text-align:center;}
+  .section-eyebrow{
+    font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--accent); font-weight:700;
+    margin-bottom:12px;
+  }
+  h2{font-size:clamp(24px, 3.5vw, 32px); font-weight:800; letter-spacing:-0.015em; margin:0 0 14px; text-wrap:balance;}
+  .section-sub{color:var(--muted); font-size:15.5px; line-height:1.6;}
+
+  /* Problem / fix pair */
+  .contrast{max-width:900px; margin:0 auto; display:grid; grid-template-columns:1fr 1fr; gap:20px;}
+  @media (max-width:720px){ .contrast{grid-template-columns:1fr;} }
+  .contrast-card{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:24px;}
+  .contrast-card.bad{border-color:color-mix(in srgb, var(--warn) 35%, var(--border));}
+  .contrast-card.good{border-color:color-mix(in srgb, var(--good) 35%, var(--border));}
+  .contrast-label{
+    font-size:11px; text-transform:uppercase; letter-spacing:0.05em; font-weight:700; margin-bottom:12px;
+    display:flex; align-items:center; gap:7px;
+  }
+  .contrast-card.bad .contrast-label{color:var(--warn);}
+  .contrast-card.good .contrast-label{color:var(--good);}
+  .contrast-card p{margin:0; color:var(--muted); font-size:14px; line-height:1.65;}
+  .contrast-card p + p{margin-top:10px;}
+
+  /* Pillars grid */
+  .pillars{max-width:1000px; margin:0 auto; display:grid; grid-template-columns:repeat(2, 1fr); gap:18px;}
+  @media (max-width:720px){ .pillars{grid-template-columns:1fr;} }
+  .pillar{
+    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:24px;
+    transition:border-color .15s var(--ease);
+  }
+  .pillar:hover{border-color:color-mix(in srgb, var(--accent) 35%, var(--border));}
+  .pillar-icon{
+    width:38px; height:38px; border-radius:9px; background:color-mix(in srgb, var(--accent) 14%, transparent);
+    display:flex; align-items:center; justify-content:center; color:var(--accent); margin-bottom:16px;
+  }
+  .pillar h3{font-size:16.5px; font-weight:700; margin:0 0 8px;}
+  .pillar p{color:var(--muted); font-size:13.5px; line-height:1.65; margin:0;}
+  .pillar .stat{font-family:var(--font-mono); color:var(--text); font-weight:600;}
+
+  /* For / not for */
+  .audience{max-width:900px; margin:0 auto; display:grid; grid-template-columns:1fr 1fr; gap:20px;}
+  @media (max-width:720px){ .audience{grid-template-columns:1fr;} }
+  .audience-card{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:26px;}
+  .audience-card h3{font-size:15px; margin:0 0 16px; display:flex; align-items:center; gap:8px;}
+  .audience-list{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:11px;}
+  .audience-list li{display:flex; gap:10px; font-size:13.5px; color:var(--muted); line-height:1.5;}
+  .audience-list .mark{flex-shrink:0; width:16px; height:16px; margin-top:1px;}
+  .for .mark{color:var(--good);}
+  .notfor .mark{color:var(--muted);}
+
+  /* Final CTA */
+  .final-cta{text-align:center; padding:88px 24px;}
+  .final-cta h2{margin-bottom:16px;}
+  .final-cta .section-sub{max-width:520px; margin:0 auto 32px;}
+
+  footer{border-top:1px solid var(--border); padding:32px 24px; text-align:center; color:var(--muted); font-size:12.5px;}
+  footer a{color:var(--muted); text-decoration:underline; text-decoration-color:var(--border);}
+  footer a:hover{color:var(--text);}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-brand">AI Stack Advisor</div>
+  <a class="nav-cta" href="index.html">Open the advisor</a>
+</nav>
+
+<header class="hero">
+  <div class="hero-eyebrow">Client-side rule engine — nothing leaves your browser</div>
+  <h1>Architecture recommendations,<br><span class="hl">cited not guessed.</span></h1>
+  <p class="hero-sub">
+    Describe what you're building in plain language. A deterministic rule engine reads 100+ signals in
+    your text and returns a full stack recommendation — cloud, database, LLM strategy, RAG pattern, cost
+    estimate, guardrails — with every pick traced back to the exact sentence that triggered it.
+  </p>
+  <div class="hero-ctas">
+    <a class="btn-primary" href="index.html">Analyze my stack — free, no signup</a>
+    <a class="btn-secondary" href="#pillars">See how it works</a>
+  </div>
+  <div class="trust-strip">
+    <span>100% client-side</span><span class="dot">·</span>
+    <span>Zero signup</span><span class="dot">·</span>
+    <span>Zero telemetry</span><span class="dot">·</span>
+    <span>490 passing regression tests</span>
+  </div>
+</header>
+
+<div class="sample-wrap">
+  <div class="sample-card">
+    <div class="sample-head">
+      <span class="sample-cat">Cloud Provider</span>
+      <span class="sample-conf">● High confidence</span>
+    </div>
+    <div class="sample-title">AWS</div>
+    <div class="sample-why">Explicit AWS usage detected in your text — build on existing footprint rather than introducing a second cloud vendor for no stated reason.</div>
+    <span class="sample-basis">stated</span>
+  </div>
+  <p class="sample-caption">A real card from the app — not a mockup. "Stated" means you named it; "inferred" and "default" mean the engine derived it, and say so.</p>
+</div>
+
+<section id="problem">
+  <div class="section-head">
+    <div class="section-eyebrow">The problem</div>
+    <h2>Generic prompts get generic architecture</h2>
+    <p class="section-sub">Ask most AI tools for a stack recommendation and you'll get the same handful of popular names back, with no way to check the reasoning.</p>
+  </div>
+  <div class="contrast">
+    <div class="contrast-card bad">
+      <div class="contrast-label">⚠ Black-box prompting</div>
+      <p>One LLM call, one guess. The same "AWS, Kubernetes, Postgres" answer shows up whether you described a weekend side project or a regulated fintech platform.</p>
+      <p>No way to tell which part of your prompt actually mattered, or whether a detail you mentioned was used at all.</p>
+    </div>
+    <div class="contrast-card good">
+      <div class="contrast-label">✓ Signal-driven rules</div>
+      <p>Every recommendation traces back to a specific detected signal — a mentioned vendor, a stated compliance need, a latency target you wrote down.</p>
+      <p>The same input always produces the same output. Nothing is sampled, nothing is probabilistic.</p>
+    </div>
+  </div>
+</section>
+
+<section class="alt" id="pillars">
+  <div class="section-head">
+    <div class="section-eyebrow">What's actually in it</div>
+    <h2>Built for the parts most tools skip</h2>
+    <p class="section-sub">Every number below is a real, currently-shipping count in the codebase — not a roadmap claim.</p>
+  </div>
+  <div class="pillars">
+    <div class="pillar">
+      <div class="pillar-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg></div>
+      <h3>Auditable provenance, not a confidence score</h3>
+      <p>Every pick is tagged <span class="stat">stated</span>, <span class="stat">inferred</span>, or <span class="stat">default</span> — you can see exactly which claims are yours and which the engine filled in.</p>
+    </div>
+    <div class="pillar">
+      <div class="pillar-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z"/></svg></div>
+      <h3>AI-native from the ground up</h3>
+      <p><span class="stat">14</span> named RAG topologies (Naive through Self-RAG, Graph RAG, Fusion RAG), MCP server surfaces, and local VRAM/quantization sizing — not an afterthought bolted onto a generic stack picker.</p>
+    </div>
+    <div class="pillar">
+      <div class="pillar-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg></div>
+      <h3>Directional cost estimates, not silence</h3>
+      <p>A dedicated cost section breaks down compute, database, and LLM-API spend as planning ranges with rationale — plus a per-model-tier comparison table, and real session token cost once you use Refine/Ask.</p>
+    </div>
+    <div class="pillar">
+      <div class="pillar-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 0 1-.659 1.591l-5.432 5.432a2.25 2.25 0 0 0-.659 1.591v2.927a2.25 2.25 0 0 1-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 0 0-.659-1.591L3.659 7.409A2.25 2.25 0 0 1 3 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0 1 12 3Z"/></svg></div>
+      <h3>Zero runtime cost, works offline</h3>
+      <p>The entire rule engine — 243 cataloged technologies, 53 recommendation functions — runs client-side. No API calls for the core analysis, no per-request bill, no backend required for v1.</p>
+    </div>
+  </div>
+</section>
+
+<section id="audience">
+  <div class="section-head">
+    <div class="section-eyebrow">Fit check</div>
+    <h2>Built for a specific reader</h2>
+    <p class="section-sub">Being useful to everyone usually means being sharp for no one — here's who this is actually for.</p>
+  </div>
+  <div class="audience">
+    <div class="audience-card for">
+      <h3><svg class="mark" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg> Built for</h3>
+      <ul class="audience-list">
+        <li><span class="mark">→</span> Developers scoping AI features into an existing or new product who want the reasoning, not just an answer</li>
+        <li><span class="mark">→</span> Tech leads who need a defensible, citable starting point for an ADR</li>
+        <li><span class="mark">→</span> Anyone choosing between local/quantized models and cloud LLM APIs and wants the trade-off spelled out</li>
+        <li><span class="mark">→</span> Teams who want a stack recommendation without sending their requirements to a third-party API</li>
+      </ul>
+    </div>
+    <div class="audience-card notfor">
+      <h3><svg class="mark" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg> Not built for</h3>
+      <ul class="audience-list">
+        <li><span class="mark">→</span> A one-click website or app generator — this recommends architecture, it doesn't write your code</li>
+        <li><span class="mark">→</span> Auditing an existing codebase — input is a text description, not a repository</li>
+        <li><span class="mark">→</span> Crypto custody/HSM or ultra-low-latency HFT architecture — explicitly out of scope today</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="final-cta">
+  <h2>See what it says about your project</h2>
+  <p class="section-sub">Takes about as long as writing the description. No account, no waitlist.</p>
+  <a class="btn-primary" href="index.html">Open AI Stack Advisor</a>
+</section>
+
+<footer>
+  <p>AI Stack Advisor — a heuristic advisor, not a substitute for architecture review. <a href="index.html">Open the tool</a></p>
+</footer>
+
+</body>
+</html>
