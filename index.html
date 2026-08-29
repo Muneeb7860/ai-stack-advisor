@@ -724,6 +724,35 @@
   .flow-popover .fp-why ul{margin:0; padding-left:16px; color:var(--muted); font-size:12px; line-height:1.55;}
   .flow-popover .fp-persona{font-size:9.5px; color:var(--accent2); text-transform:uppercase; font-weight:700; margin-top:8px;}
   .flow-hint{font-size:10.5px; color:var(--muted); margin-bottom:8px;}
+  /* Phase 5c (responsive collapse) — a NEW 860px media block here (not appended to either of
+     the two earlier Phase 5a/5b blocks near index.html:~210/~625) because it must come AFTER
+     the base .flow-toolbar/#flowLegend/#flowMinimap rules above to win the cascade — a rule
+     inside an earlier media query, if it were declared before its own base rule in file order,
+     would LOSE the cascade tie regardless of the media condition being true (same class of bug
+     already found and fixed once in Phase 5a's sidebar collapse). Minimap is hidden outright:
+     it's redundant with direct touch-drag panning (already wired via pointer events, works on
+     touch) and its fixed 170x110px footprint is the single most likely thing to crowd a phone
+     screen's already-scarce space — display:none is additive here, #flowMinimap never had a
+     backdrop-filter declaration to begin with, so nothing locked in by a test is touched.
+     .flow-toolbar/#flowLegend keep every one of their base declarations (including
+     backdrop-filter, asserted present by
+     test_deliberately_excluded_overlays_still_have_backdrop_filter) — this block only ADDS a
+     larger touch target to the toolbar's buttons (26px was too small to comfortably tap), it
+     never redeclares background/backdrop-filter/border for either overlay. */
+  @media (max-width:860px){
+    #flowMinimap{display:none;}
+    .flow-toolbar button{width:36px; height:36px; font-size:16px;}
+    /* Real bug found via live scroll testing: .flow-toolbar's `bottom:12px` is relative to
+       #flowWrap's own box, not the viewport — at the very natural scroll position where
+       #flowWrap is scrolled fully into view (its own bottom edge lands at the viewport's
+       bottom edge), the toolbar's original 12px offset put it entirely inside the fixed
+       .mobile-bottom-nav's 56px band (index.html:~226), which sits on top (z-index 40 vs. the
+       toolbar's 5) — the pan/zoom/fit buttons became invisible/unclickable at exactly that
+       scroll position. 68px (56px nav height + the original 12px gap) keeps the toolbar clear
+       of the nav band even in that worst-case alignment, confirmed by re-measuring both
+       elements' getBoundingClientRect() at that exact scroll position after the fix. */
+    .flow-toolbar{bottom:68px;}
+  }
 
   /* Phase 2 (Enterprise-shell plan) — a considered re-skin of this ONE shared template, not each
      of the 17 sections individually: sec()'s dispatcher (see the JS below) renders every section
