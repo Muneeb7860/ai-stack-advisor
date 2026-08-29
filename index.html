@@ -637,6 +637,19 @@
     }
     .toc a:hover{border-color:var(--accent);}
     .toc-toggle{margin-top:0; margin-left:3px; border-radius:999px;}
+    /* Phase 5b (responsive collapse) — #contextPanel got no override at all before this: once
+       .results-shell above goes display:block, its flex:0 0 300px basis is meaningless (no
+       longer a flex child), so it fell back to full-width — but it KEPT position:sticky from
+       the desktop rule (index.html's base #contextPanel rule doesn't set position per
+       breakpoint), so opening Refine/Ask produced a sticky, full-bleed block that could
+       visually intrude on the results below it while scrolling, with no dedicated mobile
+       dismissal. CSS-only fix: turn it into a real full-screen modal instead — the existing
+       .ctx-panel-header close button and closeContextPanel() already work unmodified, since
+       neither depends on the panel's positioning. */
+    #contextPanel.open{
+      position:fixed; inset:0; top:0; z-index:60; max-height:none; border-radius:0; border:none;
+    }
+    .ctx-panel-header{border-radius:0;}
   }
 
   .view-toggle{display:none; gap:0; margin-bottom:10px;}
