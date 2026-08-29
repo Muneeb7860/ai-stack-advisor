@@ -226,7 +226,12 @@
     display:flex; align-items:center; justify-content:center; font-size:12px; color:transparent;
     transition:background .15s var(--ease), border-color .15s var(--ease), color .15s var(--ease);
   }
-  .glide-item.selected .gi-check{background:linear-gradient(135deg, var(--accent), var(--accent2)); border-color:transparent; color:#fff;}
+  /* De-genericize pass: was a decorative two-hue linear-gradient(135deg, var(--accent),
+     var(--accent2)) — purely a two-tone effect with no semantic meaning behind the second
+     hue (unlike e.g. .conf-basis-constraint-derived, where --accent2 marks a distinct
+     provenance category). Flattened to a solid fill; --accent2 stays a live, distinct token
+     everywhere it carries real meaning. */
+  .glide-item.selected .gi-check{background:var(--accent); border-color:transparent; color:#fff;}
   .glide-item .gi-icon{font-size:16px; flex-shrink:0;}
   .glide-item .gi-label{font-size:var(--fs-base); font-weight:600;}
   .glide-category{font-size:var(--fs-xs); text-transform:uppercase; letter-spacing:0.05em; color:var(--muted);
@@ -278,7 +283,7 @@
     border:1px solid var(--border); border-radius:var(--radius-lg);
     padding:16px; margin-bottom:16px;
   }
-  label.field-label{font-size:11.5px; color:var(--muted2); font-weight:600; letter-spacing:0.01em;}
+  label.field-label{font-size:12px; color:var(--muted2); font-weight:600; letter-spacing:0.01em;}
   textarea{
     width:100%; min-height:140px; resize:vertical; background:var(--surface);
     border:1px solid var(--border); border-radius:var(--radius); color:var(--text);
@@ -296,7 +301,9 @@
   .ex-btn:hover{color:var(--text); border-color:var(--accent);}
   .actions{display:flex; gap:8px; margin-top:12px; align-items:center; flex-wrap:wrap;}
   button.primary{
-    background:linear-gradient(135deg, var(--accent), var(--accent2));
+    /* De-genericize pass: was a decorative two-hue gradient — flattened to a solid fill,
+     same rationale as .glide-item.selected .gi-check above. */
+    background:var(--accent);
     border:none; color:white; padding:9px 16px; border-radius:var(--radius);
     font-size:13px; font-weight:600; cursor:pointer; letter-spacing:-0.006em;
     transition:filter .15s var(--ease), transform .1s var(--ease);
@@ -428,7 +435,7 @@
   .g-chip{background:rgba(224,162,60,0.1); border:1px solid rgba(224,162,60,0.3); color:#e8c07e; border-radius:6px; padding:5px 9px; font-size:11.5px;}
   .signals{display:flex; flex-wrap:wrap; gap:5px; margin-top:5px;}
   .sig{background:var(--chip); border:1px solid var(--border); color:var(--muted); border-radius:999px; padding:3px 8px; font-size:10.5px; font-family:var(--font-mono);}
-  .footer-note{color:var(--muted); font-size:11px; margin-top:24px; line-height:1.55; border-top:1px solid var(--border); padding-top:13px;}
+  .footer-note{color:var(--muted); font-size:12px; margin-top:24px; line-height:1.55; border-top:1px solid var(--border); padding-top:13px;}
   .docs-row{display:flex; gap:8px; flex-wrap:wrap; margin-top:5px;}
   .doc-chip{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 11px; font-size:12px; flex:1; min-width:145px;}
   .doc-chip b{display:block; font-size:11px; color:var(--accent); margin-bottom:2px;}
@@ -439,9 +446,9 @@
   .opt-item .w{font-size:11.5px; color:var(--muted); line-height:1.48;}
   .cost-grid{display:flex; flex-direction:column; gap:8px;}
   .cost-row{display:grid; grid-template-columns:120px 180px 1fr; gap:12px; align-items:start; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:11px 13px;}
-  .cost-label{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--accent2); padding-top:1px;}
+  .cost-label{font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--accent2); padding-top:1px;}
   .cost-value{font-size:14px; font-weight:700; color:var(--text); letter-spacing:-0.01em; font-family:var(--font-mono);}
-  .cost-detail{font-size:11.5px; color:var(--muted); line-height:1.5;}
+  .cost-detail{font-size:12px; color:var(--muted); line-height:1.5;}
   @media (max-width:700px){ .cost-row{grid-template-columns:1fr;} }
   .tier-table{width:100%; border-collapse:collapse; font-size:12px;}
   .tier-table th{text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:0.04em; color:var(--muted); font-weight:700; padding:6px 8px; border-bottom:1px solid var(--border);}
@@ -449,18 +456,18 @@
   .tier-table tr:last-child td{border-bottom:none;}
   .gov-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(232px,1fr)); gap:10px;}
   .gov-block{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:13px;}
-  .gov-block h4{margin:0 0 8px; font-size:10.5px; text-transform:uppercase; letter-spacing:0.04em; color:var(--accent2); font-weight:700;}
+  .gov-block h4{margin:0 0 8px; font-size:12px; text-transform:uppercase; letter-spacing:0.04em; color:var(--accent2); font-weight:700;}
   .gov-block ul{margin:0; padding-left:16px; font-size:12px; color:var(--text); line-height:1.6;}
-  .assumption{font-size:11px; color:var(--muted); margin-top:9px; padding-top:9px; border-top:1px dashed var(--border); line-height:1.5;}
+  .assumption{font-size:12px; color:var(--muted); margin-top:9px; padding-top:9px; border-top:1px dashed var(--border); line-height:1.5;}
   .tradeoff-card{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px; margin-bottom:9px;}
   .tradeoff-card:last-child{margin-bottom:0;}
   .tradeoff-card .head{display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:2px;}
-  .tradeoff-card h3{margin:0; font-size:11.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.03em; font-weight:600;}
+  .tradeoff-card h3{margin:0; font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:0.03em; font-weight:600;}
   .tradeoff-card .rec{font-size:14.5px; font-weight:700; margin:3px 0 6px; color:var(--good); letter-spacing:-0.01em;}
   .tradeoff-card .why{font-size:12px; color:var(--text); line-height:1.5; margin-bottom:9px;}
   .tradeoff-card .when{font-size:12px; color:var(--muted); line-height:1.5; background:rgba(224,162,60,0.07); border:1px solid rgba(224,162,60,0.22); border-radius:var(--radius-sm); padding:8px 11px;}
   .tradeoff-card .when b{color:var(--warn); font-weight:700;}
-  .glossary{font-size:11.5px; color:var(--muted); line-height:1.55; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:11px 13px; margin-bottom:12px;}
+  .glossary{font-size:12px; color:var(--muted); line-height:1.55; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:11px 13px; margin-bottom:12px;}
   .vram-table{width:100%; border-collapse:collapse; font-size:11.5px;}
   .vram-table th{text-align:left; color:var(--accent2); font-size:10px; text-transform:uppercase; letter-spacing:0.03em; padding:7px 9px; border-bottom:1px solid var(--border); font-weight:700;}
   .vram-table td{padding:8px 9px; border-bottom:1px solid var(--border); color:var(--text); vertical-align:top; line-height:1.48;}
@@ -636,8 +643,8 @@
   .flow-popover .fp-close{position:absolute; top:6px; right:8px; cursor:pointer; color:var(--muted); font-size:12px;}
   .flow-popover .fp-cat{font-size:9px; text-transform:uppercase; color:var(--accent); font-weight:700; margin-bottom:4px;}
   .flow-popover .fp-title{font-size:13.5px; font-weight:700; margin-bottom:6px;}
-  .flow-popover .fp-why{font-size:11.5px; color:var(--muted); line-height:1.5;}
-  .flow-popover .fp-why ul{margin:0; padding-left:16px; color:var(--muted); font-size:11.5px; line-height:1.55;}
+  .flow-popover .fp-why{font-size:12px; color:var(--muted); line-height:1.5;}
+  .flow-popover .fp-why ul{margin:0; padding-left:16px; color:var(--muted); font-size:12px; line-height:1.55;}
   .flow-popover .fp-persona{font-size:9.5px; color:var(--accent2); text-transform:uppercase; font-weight:700; margin-top:8px;}
   .flow-hint{font-size:10.5px; color:var(--muted); margin-bottom:8px;}
 
@@ -684,13 +691,10 @@
   #screenMode.active{display:flex;}
   #screenFreetext{display:none;}
   #screenFreetext.active{display:block;}
-  .mode-eyebrow{
-    display:inline-flex; align-items:center; gap:7px; background:var(--chip); border:1px solid var(--border);
-    border-radius:999px; padding:6px 13px 6px 10px; font-size:11px; color:var(--muted2); font-weight:600; margin-bottom:16px;
-  }
-  .mode-eyebrow::before{content:''; width:6px; height:6px; border-radius:50%; background:var(--good); flex-shrink:0; box-shadow:0 0 6px rgba(52,201,138,0.7);}
   .mode-head h1{font-size:var(--fs-xl); margin:0 0 12px; font-weight:800; letter-spacing:-0.02em; line-height:1.15;}
-  .mode-head h1 .hl-accent{background:linear-gradient(135deg, var(--accent), var(--accent2)); -webkit-background-clip:text; background-clip:text; color:transparent;}
+  /* De-genericize pass: was a gradient text-clip effect — flattened to a plain accent
+     color, same rationale as the other three flattened gradients in this pass. */
+  .mode-head h1 .hl-accent{color:var(--accent);}
   .mode-head p{color:var(--muted); font-size:var(--fs-base); line-height:1.6; margin:0 0 26px; max-width:520px;}
   /* "Screenshot" framing for the hero preview — reuses real .stack-card/.conf components below,
      not a fabricated mockup, so this is an honest preview of actual output. */
@@ -775,7 +779,9 @@
   #screenWizard.active{display:block;}
   .wiz-progress{display:flex; align-items:center; gap:10px; margin-bottom:26px;}
   .wiz-track{flex:1; height:4px; background:var(--chip); border-radius:2px; overflow:hidden;}
-  .wiz-fill{width:100%; height:100%; background:linear-gradient(90deg, var(--accent), var(--accent2)); border-radius:2px; transform-origin:left; transition:transform .3s var(--ease);}
+  /* De-genericize pass: was a decorative two-hue gradient — flattened to a solid fill,
+     same rationale as the other three flattened gradients in this pass. */
+  .wiz-fill{width:100%; height:100%; background:var(--accent); border-radius:2px; transform-origin:left; transition:transform .3s var(--ease);}
   .wiz-step-label{font-size:11px; color:var(--muted); white-space:nowrap; font-variant-numeric:tabular-nums;}
   .wiz-step{display:none;}
   .wiz-step.active{display:block; animation:wizFadeIn .25s var(--ease);}
@@ -1043,7 +1049,11 @@
 <!-- ================= Mode picker (decision #3: equal weight, no default) ================= -->
 <div id="screenMode">
   <div class="mode-head">
-    <div class="mode-eyebrow">AI Stack Advisor</div>
+    <!-- De-genericize pass: removed the "AI Stack Advisor" eyebrow pill that sat above this
+         headline — a self-referential status badge (with a decorative pulsing dot implying
+         live status it never actually reported) is exactly the "marketing hero on a tool"
+         tell DESIGN-dashboard.md calls out. The headline+subhead already establish what the
+         product does; the badge added nothing but a fake-live-status vibe. -->
     <h1>Architecture recommendations, <span class="hl-accent">cited not guessed.</span></h1>
     <p>Cloud, database, LLM strategy, RAG, cost, and governance — every pick backed by a confidence rating and a cited reason.</p>
   </div>
@@ -1345,22 +1355,22 @@
         
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
           <div>
-            <label style="display:block; font-size:11px; font-weight:600; color:var(--muted); margin-bottom:4px;">Tech ID (kebab-case) *</label>
+            <label style="display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:4px;">Tech ID (kebab-case) *</label>
             <input type="text" id="ctId" required placeholder="e.g. internal-auth-gateway" style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
           </div>
           <div>
-            <label style="display:block; font-size:11px; font-weight:600; color:var(--muted); margin-bottom:4px;">Display Name *</label>
+            <label style="display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:4px;">Display Name *</label>
             <input type="text" id="ctName" required placeholder="e.g. Enterprise Auth Gateway" style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
           </div>
         </div>
 
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
           <div>
-            <label style="display:block; font-size:11px; font-weight:600; color:var(--muted); margin-bottom:4px;">Category *</label>
+            <label style="display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:4px;">Category *</label>
             <input type="text" id="ctCategory" required placeholder="e.g. identity-gateway" style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
           </div>
           <div>
-            <label style="display:block; font-size:11px; font-weight:600; color:var(--muted); margin-bottom:4px;">Domain *</label>
+            <label style="display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:4px;">Domain *</label>
             <select id="ctDomain" required style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
               <option value="identity">Identity</option>
               <option value="frontend">Frontend</option>
@@ -1380,22 +1390,22 @@
 
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
           <div>
-            <label style="display:block; font-size:11px; font-weight:600; color:var(--muted); margin-bottom:4px;">Signal Keywords (comma-separated) *</label>
+            <label style="display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:4px;">Signal Keywords (comma-separated) *</label>
             <input type="text" id="ctKeywords" required placeholder="e.g. auth gateway, internal auth, sso proxy" style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
           </div>
           <div>
-            <label style="display:block; font-size:11px; font-weight:600; color:var(--muted); margin-bottom:4px;">License *</label>
+            <label style="display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:4px;">License *</label>
             <input type="text" id="ctLicense" required placeholder="e.g. Proprietary / Internal / Apache-2.0" value="Proprietary / Internal" style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
           </div>
         </div>
 
         <div style="margin-bottom:12px;">
-          <label style="display:block; font-size:11px; font-weight:600; color:var(--muted); margin-bottom:4px;">Best When (comma-separated) *</label>
+          <label style="display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:4px;">Best When (comma-separated) *</label>
           <input type="text" id="ctBestWhen" required placeholder="e.g. internal corporate zero-trust network, high compliance" style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
         </div>
 
         <div style="margin-bottom:16px;">
-          <label style="display:block; font-size:11px; font-weight:600; color:var(--muted); margin-bottom:4px;">Avoid When (comma-separated) *</label>
+          <label style="display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:4px;">Avoid When (comma-separated) *</label>
           <input type="text" id="ctAvoidWhen" required placeholder="e.g. public b2c registration without VPN" style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
         </div>
 
@@ -3696,10 +3706,10 @@ function renderRecommendations(s, rec){
           ${opps.map(o => `
             <div style="background:rgba(224,162,60,0.06); border:1px solid rgba(224,162,60,0.25); border-radius:6px; padding:7px 9px;">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
-                <strong style="font-size:11.5px; color:var(--text);">${o.name}</strong>
+                <strong style="font-size:12px; color:var(--text);">${o.name}</strong>
                 <span class="conf conf-${o.complexity === 'Low' ? 'high' : o.complexity === 'Medium' ? 'medium' : 'low'}" style="font-size:9.5px; padding:1px 5px;">${o.complexity}</span>
               </div>
-              <div style="font-size:11px; color:var(--muted); line-height:1.4;">${o.rationale}</div>
+              <div style="font-size:12px; color:var(--muted); line-height:1.4;">${o.rationale}</div>
               <div style="font-size:10.5px; color:var(--accent); margin-top:3px;"><b>Tech:</b> ${o.tech}</div>
               ${o.prerequisites && o.prerequisites.length ? `<div style="font-size:10px; color:#e0a23c; margin-top:2px;">⚠️ <b>Prereqs:</b> ${o.prerequisites.join(' · ')}</div>` : ''}
             </div>
@@ -4624,7 +4634,7 @@ function showFlowPopover(id){
               <strong style="font-size:12px; color:var(--text);">${o.name}</strong>
               <span class="conf conf-${o.complexity === 'Low' ? 'high' : o.complexity === 'Medium' ? 'medium' : 'low'}" style="font-size:10px; padding:1px 6px;">${o.complexity} Complexity</span>
             </div>
-            <div style="font-size:11px; color:var(--muted); margin-bottom:4px;">${o.rationale}</div>
+            <div style="font-size:12px; color:var(--muted); margin-bottom:4px;">${o.rationale}</div>
             <div style="font-size:10.5px; color:var(--accent); font-weight:600;">🛠️ Tech: <span style="color:var(--text); font-weight:400;">${o.tech}</span></div>
             ${o.prerequisites && o.prerequisites.length ? `<div style="font-size:10px; color:#e0a23c; margin-top:3px;">⚠️ <b>Prerequisites:</b> ${o.prerequisites.join(' · ')}</div>` : ''}
           </div>
