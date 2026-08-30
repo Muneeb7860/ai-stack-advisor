@@ -25,18 +25,13 @@ picking it *from real usage data* is the point of running this plan, not a preco
 (Section 8) says "track disagreement rate once feedback capture exists" — as of the "Challenge
 This Pick" widget (merged), it exists. This plan is the first chance to actually use it.
 
-## Real prerequisite this plan can't skip past
+## Deployment status (Resolved)
 
-**There is no live deployment anywhere.** Confirmed directly: no `vercel.json`, `netlify.toml`,
-or any deploy config in the repo. `landing.html` and `index.html` are real, finished, static
-files sitting in a git repo — not reachable by a URL yet. Every week-by-week item below that
-says "point people at the tool" is blocked on this one decision, which is genuinely yours to
-make (static host choice, domain name, whether to use a free tier or a real domain) — not
-something to silently pick on your behalf. Suggested options, lowest-effort first: GitHub Pages
-(zero cost, `index.html`/`landing.html` work as-is, no build step per NFR-5), Cloudflare Pages,
-Vercel/Netlify static hosting. All four serve static files with zero backend — the v2 backend
-(refine/ask/share) stays opt-in exactly as it is now; nothing about static hosting requires
-deploying `backend/` too.
+**The site is live on GitHub Pages.** Served directly from the master branch root:
+- **Landing page**: `https://muneeb7860.github.io/ai-stack-advisor/landing.html`
+- **App**: `https://muneeb7860.github.io/ai-stack-advisor/index.html`
+
+Both `landing.html` and `index.html` run 100% client-side with zero backend dependencies, satisfying NFR-5. The v2 backend (refine/ask/share) remains optional and opt-in. Week 1's deployment prerequisite is complete.
 
 ## The metrics constraint this plan has to respect
 
@@ -81,9 +76,7 @@ standing there, not something to prescribe generically.
 
 ## Suggested cadence (adjust freely — this is pacing, not a commitment)
 
-**Week 1** — Deploy (pick a host from the list above), confirm `landing.html`'s CTA actually
-resolves, do a final read-through of the landing copy yourself (already flagged as pending from
-an earlier session).
+**Week 1** — Deploy (**Done**: live on GitHub Pages at `muneeb7860.github.io/ai-stack-advisor`), confirm `landing.html`'s CTA resolves to `index.html`, and do a final read-through of the landing copy.
 
 **Weeks 2-3** — Direct, warm outreach only: people you already know across the three segments.
 Goal: 10-15 real analyses run, each followed up with "did anything feel wrong or generic?" —
