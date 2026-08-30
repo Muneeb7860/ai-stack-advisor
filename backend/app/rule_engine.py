@@ -617,6 +617,8 @@ def detect_signals(text: str) -> dict:
         "dynatraceMentioned": has(["dynatrace"]),
         "newrelicMentioned": has(["new relic", "newrelic"]),
         "elkMentioned": has(["elk stack", "elasticsearch", "opensearch"]),
+        "axiomMentioned": has(["axiom"]),
+        "betterStackMentioned": has(["better stack", "betterstack", "better uptime"]),
         "sonarqubeMentioned": has(["sonarqube", "sonar", "sonarcloud"]),
         "jprofilerMentioned": has(["jprofiler"]),
         "visualvmMentioned": has(["visualvm"]),
@@ -1072,6 +1074,8 @@ OBSERVABILITY_VENDORS = [
     {"id": "signoz", "name": "SigNoz", "cat": "Open-source, OTel-first", "bestFor": "Teams wanting a single OSS product covering metrics+logs+traces as a Datadog alternative", "strength": "Most OpenTelemetry-centric of the researched platforms, self-hosted or cloud", "drawback": "Smaller ecosystem than established players; younger product", "pricing": "Free (OSS) + competitive cloud pricing"},
     {"id": "splunk", "name": "Splunk", "cat": "Enterprise SIEM/log platform", "bestFor": "Heavy compliance/audit log-management needs, usually paired with a dedicated APM tool", "strength": "Deep log search/analysis and compliance-reporting maturity many APM-only tools lack", "drawback": "Log-ingestion cost scales steeply at volume; not a full APM replacement on its own — not independently sourced/priced in this research pass", "pricing": "Usage-based, ingestion-volume-driven — not sourced in this research pass"},
     {"id": "dynatrace", "name": "Dynatrace", "cat": "Enterprise APM (AI-assisted)", "bestFor": "Large, complex enterprise scale wanting automatic root-cause analysis", "strength": "Strong AI-assisted automatic root-cause analysis (Davis AI)", "drawback": "Premium enterprise pricing; steep to adopt for smaller teams — not independently sourced/priced in this research pass", "pricing": "Usage-based, enterprise-tier — not sourced in this research pass"},
+    {"id": "axiom", "name": "Axiom", "cat": "Log-native, cost-efficient SaaS", "bestFor": "Teams that want generous log/event ingestion without the per-GB sticker shock of Datadog/Splunk", "strength": "Very high free-tier ingestion (500GB/mo) on a columnar, low-cost storage engine; full-featured query language (APL) and OpenTelemetry-native ingestion even on the free tier", "drawback": "Primarily a logs/events platform, not a full APM suite — deep distributed tracing/APM correlation is thinner than Datadog/New Relic/Dynatrace; enterprise SSO/RBAC/audit-log are separate paid add-ons", "pricing": "Free: 500GB/mo ingestion, 25GB storage, 30-day retention · Cloud: $25/mo platform fee + usage, 1TB/mo included · SSO/Directory Sync/RBAC/Audit Log add-ons $50-100/mo each"},
+    {"id": "betterstack", "name": "Better Stack", "cat": "Logs + uptime + incident management, unified", "bestFor": "Small-to-mid teams that want logs, uptime monitoring, status pages, and on-call/incident response in one product instead of stitching together separate tools", "strength": "Genuinely unifies 3 categories (telemetry, uptime monitoring, incident management) most competitors sell separately; usable free tier for small projects (10 monitors, 3GB logs)", "drawback": "Telemetry (logs/traces/metrics) pricing is a separate bundle on top of uptime/incident pricing ($45-750/mo by volume tier) — a heavy-logging team pays for multiple bundles, not a single number; less deep APM/distributed-tracing correlation than Datadog/Dynatrace", "pricing": "Free: 10 monitors, 3GB logs/3-day retention · Uptime: +$25/50 monitors/mo · Incident mgmt: $9/responder/mo · Telemetry: $45/mo (Nano, 40GB) to $750/mo (Tera, 700GB)"},
 ]
 
 
@@ -1083,6 +1087,10 @@ def pick_observability_vendor(s, obs):
         primary_id = "dynatrace"
     elif "Grafana" in v:
         primary_id = "grafanastack"
+    elif "Axiom" in v:
+        primary_id = "axiom"
+    elif "Better Stack" in v:
+        primary_id = "betterstack"
     else:
         primary_id = "datadog"
     return {"v": obs["v"], "why": obs["why"], "primaryId": primary_id, "conf": obs["conf"]}
@@ -1550,6 +1558,10 @@ def pick_observability(s):
         apm, why, conf = "New Relic", "Your team already knows New Relic — sticking with it avoids a vendor migration with no workload-driven reason to switch.", "high"
     elif s["elkMentioned"]:
         apm, why, conf = "Elastic Stack (Elasticsearch + Kibana)", "Your team already runs the Elastic Stack — a solid self-hosted or Elastic Cloud log/observability platform, no need to introduce a second one.", "high"
+    elif s["axiomMentioned"]:
+        apm, why, conf = "Axiom", "Your team already uses Axiom — matching existing familiarity over evaluating a new vendor. Note Axiom is a log-native platform, not a full APM suite; pair it with a dedicated tracing tool if deep distributed-tracing correlation becomes a need.", "high"
+    elif s["betterStackMentioned"]:
+        apm, why, conf = "Better Stack", "Your team already uses Better Stack — matching existing familiarity. It uniquely bundles logs, uptime monitoring, status pages, and incident management in one product, which is worth knowing if you're currently paying for those separately elsewhere.", "high"
     elif s["huaweiShop"]:
         apm, why, conf = "Huawei Cloud Eye (CES) + LTS (Log Tank Service)", "Explicit Huawei Cloud usage detected — Cloud Eye covers metrics/health monitoring and LTS covers centralized logging natively on Huawei Cloud, matching your existing footprint rather than adding an external SaaS vendor.", "high"
     elif s["startupMvp"]:
