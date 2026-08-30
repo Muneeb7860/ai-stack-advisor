@@ -148,6 +148,24 @@ def test_sidebar_focused_input_css_exists():
     assert re.search(r"\.app-sidebar\.sidebar-focused-input\{[^}]*width:168px", text)
 
 
+def test_sidebar_focused_input_rule_is_guarded_above_the_mobile_breakpoint():
+    """Found in review, not the original implementation: an UNGUARDED
+    `.app-sidebar.sidebar-focused-input{width:168px}` has HIGHER specificity (two classes) than
+    the existing 860px breakpoint's `.app-sidebar{width:0}` collapse rule (one class) —
+    specificity wins regardless of media-query nesting or source order. Since
+    sidebar-focused-input is present by default in the static HTML, this made the sidebar
+    render at 168px on a fresh MOBILE page load too, instead of collapsing to the bottom nav —
+    reproduced live by actually resizing to a mobile viewport, not assumed safe from the CSS.
+    The rule must sit inside a min-width media query matching (861px, one above) the existing
+    860px mobile breakpoint so it never applies below it at all."""
+    text = _text()
+    m = re.search(
+        r"@media \(min-width:861px\)\{\s*\.app-sidebar\.sidebar-focused-input\{[^}]*width:168px[^}]*\}\s*\}",
+        text,
+    )
+    assert m, "the focused-input rule must be wrapped in @media (min-width:861px)"
+
+
 def test_sidebar_starts_with_the_focused_class_in_static_html():
     text = _text()
     assert re.search(r'<aside class="app-sidebar sidebar-focused-input">', text)
@@ -177,11 +195,19 @@ def test_sidebar_unfocuses_when_an_analysis_becomes_visible_and_refocuses_when_c
 
 # --------------------------------------------------------------------------- #11 static checks
 
-@pytest.mark.parametrize("selector", [".sig-stated", ".sig-known", ".sig-excluded", ".why-sig"])
+@pytest.mark.parametrize("selector", [".sig-stated", ".sig-known", ".sig-excluded"])
 def test_chip_category_css_rule_exists(selector):
     text = _text()
     escaped = re.escape(selector)
     assert re.search(rf"{escaped}\{{[^}}]*border-left", text), f"{selector} rule not found"
+
+
+def test_why_sig_reuses_its_own_pre_existing_treatment_not_a_duplicate_rule():
+    """.why-sig already had its own full border+tint+text-color rule from an earlier pass
+    (near .why-signals) — this pass must not add a second .why-sig{} rule whose properties
+    would just be shadowed by the existing one (same specificity, source order decides)."""
+    text = _text()
+    assert len(re.findall(r"\.why-sig\{", text)) == 1, "exactly one .why-sig rule must exist"
 
 
 def test_active_signal_chips_use_the_stated_class():

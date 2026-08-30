@@ -166,8 +166,19 @@
      live testing (reproduced in isolation, unrelated to this app's own markup — removing either
      `position:sticky` or the transition on its own fixed it, the combination did not resolve
      itself even a second after the transition's own duration had elapsed). Not worth the risk
-     for a purely cosmetic width animation. */
-  .app-sidebar.sidebar-focused-input{width:168px; flex:0 0 168px;}
+     for a purely cosmetic width animation.
+     Guarded to widths above the existing 860px mobile breakpoint (below) — a bare, unguarded
+     compound-class selector here has HIGHER specificity (two classes) than that breakpoint's
+     own `.app-sidebar{width:0; flex:0 0 0}` collapse rule (one class), and specificity wins
+     regardless of media-query nesting or source order. Since `sidebar-focused-input` is present
+     by default in the static HTML, an unguarded rule here made the sidebar render at 168px on
+     every fresh MOBILE page load too, instead of collapsing to the bottom nav — a real
+     regression, caught by actually resizing to a mobile viewport and looking, not assumed safe
+     from reading the CSS. The focused-input concept is meaningless below 861px anyway, since the
+     sidebar collapses to zero width there regardless of this class. */
+  @media (min-width:861px){
+    .app-sidebar.sidebar-focused-input{width:168px; flex:0 0 168px;}
+  }
   .app-sidebar-brand{
     font-size:13px; font-weight:700; letter-spacing:-0.01em; color:var(--text);
     padding:6px 8px 14px;
@@ -518,11 +529,15 @@
      something explicitly ruled out), making the signals row hard to scan at a glance. A left
      border + a faint category tint is additive to .sig above, not a replacement, so nothing
      that already keys off .sig (the click-to-toggle handlers, the strike-through override
-     style) needs to change. */
+     style) needs to change.
+     .why-sig is deliberately NOT given a rule here — it already has its own full border+tint+
+     text-color treatment further down (search .why-sig, near .why-signals), added in an earlier
+     pass. An earlier draft of this change duplicated a rule for it here, whose `background`
+     was silently shadowed by that later, more complete rule anyway (same specificity, source
+     order decides) — caught in review, removed rather than left as dead, confusing weight. */
   .sig-stated{border-left:2px solid var(--accent); background:color-mix(in srgb, var(--accent) 8%, var(--chip));}
   .sig-known{border-left:2px solid var(--good); background:color-mix(in srgb, var(--good) 8%, var(--chip));}
   .sig-excluded{border-left:2px solid var(--warn); background:color-mix(in srgb, var(--warn) 8%, var(--chip));}
-  .why-sig{border-left:2px solid var(--accent2); background:color-mix(in srgb, var(--accent2) 8%, var(--chip));}
   .footer-note{color:var(--muted); font-size:12px; margin-top:24px; line-height:1.55; border-top:1px solid var(--border); padding-top:13px;}
   .docs-row{display:flex; gap:8px; flex-wrap:wrap; margin-top:5px;}
   .doc-chip{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 11px; font-size:12px; flex:1; min-width:145px;}
