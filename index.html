@@ -1707,12 +1707,25 @@ const PASSIVE_NEGATION_PHRASES = [
 ];
 const PASSIVE_NEGATION_ALT = PASSIVE_NEGATION_PHRASES.join('|');
 
+// Found via a comprehensive live-QA testing pass across the whole session's work: unlike the
+// active-voice negators (which stop at NEGATION_CLAUSE_END), the passive-negation prefix had NO
+// boundary at all — "We need an agentic system but Kubernetes is off the table." wiped out the
+// ENTIRE sentence, erasing "agentic" even though it has nothing to do with the Kubernetes
+// exclusion. The bug predates "off the table" (idiomatic-negator fix) — it affects every
+// passive phrase back to the original passive-voice fix ("must not be used" has the exact same
+// failure) — but "off the table" made it far more likely to trigger, since it commonly follows
+// a "but"-style contrast. Two guards: (?<!\w) stops the match from starting mid-word (so it
+// can't sneak in partway through "but"), and the per-character negative lookahead stops it from
+// crossing a subordinating/contrasting conjunction at all — the backward-looking equivalent of
+// NEGATION_CLAUSE_END, which achieves the same thing looking forward.
+const PASSIVE_NEGATION_PREFIX = '(?<!\\w)(?:(?!\\b(?:because|since|but|however|whereas|although|while)\\b)[^.!?;\\n]){0,300}?';
+
 // Passive-voice clauses are stripped FIRST: "Kubernetes must not be used" would otherwise have
 // its "not be used" tail consumed by the active-voice pass below (which fires on the bare word
 // "not"), leaving nothing left for the passive pattern to match against and "Kubernetes" behind
 // in the text.
 function stripNegations(text){
-  text = text.replace(new RegExp('[^.!?;\\n]{0,300}?\\b(?:' + PASSIVE_NEGATION_ALT + ')\\b', 'gi'), ' ');
+  text = text.replace(new RegExp(PASSIVE_NEGATION_PREFIX + '\\b(?:' + PASSIVE_NEGATION_ALT + ')\\b', 'gi'), ' ');
   // "Neither Java nor Python" — the excluded items sit AFTER "neither", but the active-voice
   // pass below never fires on "neither" at all (not in its negator list), so without this,
   // both names survive to be read as positive mentions. See NEITHER_NOR_CLAUSE below.
@@ -1785,7 +1798,7 @@ function findExclusions(text, termsByKey){
   // Same clause shape stripNegations() removes, but capturing the clause instead of dropping it.
   const NEG = new RegExp('\\b(?:no|not|without|avoid|skip|ditch|steer clear of|don\'t|doesn\'t|isn\'t|won\'t|never|excluding|except for|except)\\b([^.!?;\\n]{0,300}?)' + NEGATION_CLAUSE_END, 'gi');
   // Passive voice ("Kubernetes must not be used") — see PASSIVE_NEGATION_PHRASES above.
-  const PASSIVE_NEG = new RegExp('([^.!?;\\n]{0,300}?)\\b(?:' + PASSIVE_NEGATION_ALT + ')\\b', 'gi');
+  const PASSIVE_NEG = new RegExp('(' + PASSIVE_NEGATION_PREFIX + ')\\b(?:' + PASSIVE_NEGATION_ALT + ')\\b', 'gi');
   // "Neither Java nor Python" — a correlating conjunction, not a single negator word, so it
   // needs its own pattern rather than folding into NEG above. Capturing straight through to the
   // clause boundary naturally includes everything after "nor" too, comma lists included.
@@ -2572,6 +2585,12 @@ function pickRealtimeAnalyticsVendor(s){
   if(!(s.dataHeavy && s.realtime)){
     return {v:'Not applicable — no real-time/streaming analytics requirement in this stack', why:'Tinybird and ClickHouse Cloud exist specifically for sub-second queries over continuously-streaming data. A batch/interactive analytics need without a real-time requirement is well served by a conventional cloud data warehouse (BigQuery/Snowflake/Redshift — see the Database card above if that fired) instead, which trades real-time freshness for a more mature BI-tool ecosystem.', primaryId:null, conf:'high'};
   }
+  if(s.onPrem){
+    // Found via live QA testing (same class of bug as the Neon/Turso on-prem fix): both catalog
+    // entries here are fully-managed SaaS products with no air-gapped deployment option —
+    // unlike the underlying open-source ClickHouse engine itself, which IS self-hostable.
+    return {v:'Self-hosted ClickHouse (OSS) — not ClickHouse Cloud or Tinybird', why:'ClickHouse Cloud and Tinybird are both fully-managed SaaS products with no air-gapped deployment option. The open-source ClickHouse engine itself is self-hostable and gives you the same real-time OLAP performance entirely inside your network boundary.', primaryId:null, conf:'high'};
+  }
   if(s.tinybirdMentioned) return {v:'Tinybird', why:'Explicit Tinybird mention detected — matching existing familiarity over evaluating a new platform.', primaryId:'tinybird', conf:'high'};
   if(s.clickhouseMentioned) return {v:'ClickHouse Cloud', why:'Explicit ClickHouse mention detected — matching existing familiarity. Note Tinybird is built on managed ClickHouse too, so if you want a developer-first API layer on top rather than direct database access, it\'s a complementary, not competing, option.', primaryId:'clickhouse', conf:'high'};
   if(s.startupMvp || s.smallTeam){
@@ -3130,9 +3149,17 @@ function pickDatabase(s){
   if(s.mysqlMentioned){ rdbmsName = 'MySQL'; rdbmsSkillNote = ' — matches your team\'s existing MySQL experience'; }
   else if(s.sqlServerMentioned){ rdbmsName = 'Microsoft SQL Server'; rdbmsSkillNote = ' — matches your team\'s existing SQL Server experience'; }
   else if(s.oracleDbMentioned){ rdbmsName = 'Oracle Database'; rdbmsSkillNote = ' — matches your team\'s existing Oracle experience'; }
-  else if(s.neonMentioned){ rdbmsName = 'Neon (serverless Postgres, instant branching)'; rdbmsSkillNote = ' — matches your team\'s existing Neon experience; still Postgres-wire-compatible underneath'; }
-  else if(s.tursoMentioned){ rdbmsName = 'Turso (distributed SQLite/libSQL, edge-native)'; rdbmsSkillNote = ' — matches your team\'s existing Turso experience; note this is SQLite-family, not Postgres-compatible'; }
-  const rdbmsSkillHit = s.mysqlMentioned || s.sqlServerMentioned || s.oracleDbMentioned || s.neonMentioned || s.tursoMentioned;
+  else if(s.neonMentioned && !s.onPrem){ rdbmsName = 'Neon (serverless Postgres, instant branching)'; rdbmsSkillNote = ' — matches your team\'s existing Neon experience; still Postgres-wire-compatible underneath'; }
+  else if(s.tursoMentioned && !s.onPrem){ rdbmsName = 'Turso (distributed SQLite/libSQL, edge-native)'; rdbmsSkillNote = ' — matches your team\'s existing Turso experience; note this is SQLite-family, not Postgres-compatible'; }
+  else if((s.neonMentioned || s.tursoMentioned) && s.onPrem){
+    // Found via live QA testing: Neon and Turso are both fully-managed cloud services with no
+    // air-gapped/on-prem deployment option (unlike MySQL/SQL Server/Oracle above, which all have
+    // real self-hosted editions) — recommending either for an on-prem requirement would steer
+    // the user toward a product that structurally cannot satisfy their own hard constraint. Fall
+    // back to plain self-hosted PostgreSQL instead, and say why explicitly.
+    rdbmsName = 'PostgreSQL'; rdbmsSkillNote = ' — Neon/Turso are fully-managed cloud services with no air-gapped deployment option, so self-hosted PostgreSQL is the realistic substitute here';
+  }
+  const rdbmsSkillHit = s.mysqlMentioned || s.sqlServerMentioned || s.oracleDbMentioned || (s.neonMentioned && !s.onPrem) || (s.tursoMentioned && !s.onPrem);
   if(s.structured || s.finance || s.postgresMentioned || rdbmsSkillHit || (!s.unstructured && !warehouseNeed && !s.mongoMentioned)){ picks.push(`${rdbmsName} (primary transactional store)${rdbmsSkillNote}`); if(s.structured||s.finance||s.postgresMentioned||rdbmsSkillHit) hits++; }
   if(s.unstructured || s.chatbot || s.ragNeed || s.mongoMentioned){ picks.push('MongoDB (flexible schema for content, chat history, documents)'); if(s.unstructured||s.mongoMentioned) hits++; }
   if(s.iot || (s.highScale && s.dataHeavy)){ picks.push('Cassandra (write-heavy, high-scale, multi-region time-series/event data)'); hits++; }

@@ -59,6 +59,18 @@ _PASSIVE_NEGATION_PHRASES = (
 )
 _PASSIVE_NEGATION_ALT = "|".join(_PASSIVE_NEGATION_PHRASES)
 
+# Found via a comprehensive live-QA testing pass across the whole session's work: unlike the
+# active-voice negators (which stop at _CLAUSE_END), the passive-negation prefix below had NO
+# boundary at all — "We need an agentic system but Kubernetes is off the table." wiped out the
+# ENTIRE sentence (stripNegations returned " ."), erasing "agentic" even though it has nothing
+# to do with the Kubernetes exclusion. The bug predates "off the table" (PR #39) — it affects
+# every passive phrase back to PR #32 ("must not be used" has the exact same failure) — but
+# "off the table" made it far more likely to trigger in practice, since it commonly follows a
+# "but"-style contrast. Each character position must not be the START of a subordinating/
+# contrasting conjunction (negative lookahead per position) — this is the backward-looking
+# equivalent of _CLAUSE_END, which achieves the same thing looking forward.
+_PASSIVE_NEGATION_PREFIX = r"(?<!\w)(?:(?!\b(?:because|since|but|however|whereas|although|while)\b)[^.!?;\n]){0,300}?"
+
 
 def strip_negations(text: str) -> str:
     """Mirrors index.html's stripNegations() exactly.
@@ -69,7 +81,7 @@ def strip_negations(text: str) -> str:
     behind in the text.
     """
     text = re.sub(
-        r"[^.!?;\n]{0,300}?\b(?:" + _PASSIVE_NEGATION_ALT + r")\b",
+        _PASSIVE_NEGATION_PREFIX + r"\b(?:" + _PASSIVE_NEGATION_ALT + r")\b",
         " ",
         text,
         flags=re.IGNORECASE,
@@ -124,7 +136,7 @@ _NEGATION_CLAUSE = re.compile(
     re.I,
 )
 _PASSIVE_NEGATION_CLAUSE = re.compile(
-    r"([^.!?;\n]{0,300}?)\b(?:" + _PASSIVE_NEGATION_ALT + r")\b",
+    r"(" + _PASSIVE_NEGATION_PREFIX + r")\b(?:" + _PASSIVE_NEGATION_ALT + r")\b",
     re.I,
 )
 # "Neither Java nor Python" — a correlating conjunction, not a single negator word, so it needs
@@ -980,6 +992,13 @@ def pick_realtime_analytics_vendor(s):
     (BigQuery/Snowflake/Redshift) instead, which isn't replaced or duplicated here."""
     if not (s["dataHeavy"] and s["realtime"]):
         return {"v": "Not applicable — no real-time/streaming analytics requirement in this stack", "why": "Tinybird and ClickHouse Cloud exist specifically for sub-second queries over continuously-streaming data. A batch/interactive analytics need without a real-time requirement is well served by a conventional cloud data warehouse (BigQuery/Snowflake/Redshift — see the Database card above if that fired) instead, which trades real-time freshness for a more mature BI-tool ecosystem.", "primaryId": None, "conf": "high"}
+    if s["onPrem"]:
+        # Found via live QA testing (same class of bug as the Neon/Turso on-prem fix): both
+        # catalog entries here are fully-managed SaaS products with no air-gapped deployment
+        # option — unlike the underlying open-source ClickHouse engine itself, which IS
+        # self-hostable. Neither ClickHouse Cloud nor Tinybird is the right pick here, so
+        # primaryId stays None rather than highlighting either.
+        return {"v": "Self-hosted ClickHouse (OSS) — not ClickHouse Cloud or Tinybird", "why": "ClickHouse Cloud and Tinybird are both fully-managed SaaS products with no air-gapped deployment option. The open-source ClickHouse engine itself is self-hostable and gives you the same real-time OLAP performance entirely inside your network boundary.", "primaryId": None, "conf": "high"}
     if s["tinybirdMentioned"]:
         return {"v": "Tinybird", "why": "Explicit Tinybird mention detected — matching existing familiarity over evaluating a new platform.", "primaryId": "tinybird", "conf": "high"}
     if s["clickhouseMentioned"]:
@@ -1575,11 +1594,19 @@ def pick_database(s):
         rdbms_name, rdbms_skill_note = "Microsoft SQL Server", " — matches your team's existing SQL Server experience"
     elif s["oracleDbMentioned"]:
         rdbms_name, rdbms_skill_note = "Oracle Database", " — matches your team's existing Oracle experience"
-    elif s["neonMentioned"]:
+    elif s["neonMentioned"] and not s["onPrem"]:
         rdbms_name, rdbms_skill_note = "Neon (serverless Postgres, instant branching)", " — matches your team's existing Neon experience; still Postgres-wire-compatible underneath"
-    elif s["tursoMentioned"]:
+    elif s["tursoMentioned"] and not s["onPrem"]:
         rdbms_name, rdbms_skill_note = "Turso (distributed SQLite/libSQL, edge-native)", " — matches your team's existing Turso experience; note this is SQLite-family, not Postgres-compatible"
-    rdbms_skill_hit = s["mysqlMentioned"] or s["sqlServerMentioned"] or s["oracleDbMentioned"] or s["neonMentioned"] or s["tursoMentioned"]
+    elif (s["neonMentioned"] or s["tursoMentioned"]) and s["onPrem"]:
+        # Found via live QA testing: Neon and Turso are both fully-managed cloud services with no
+        # air-gapped/on-prem deployment option (unlike MySQL/SQL Server/Oracle above, which all
+        # have real self-hosted editions) — recommending either for an on-prem requirement would
+        # steer the user toward a product that structurally cannot satisfy their own hard
+        # constraint. Fall back to plain self-hosted PostgreSQL instead, and say why explicitly
+        # rather than silently ignoring the mention.
+        rdbms_name, rdbms_skill_note = "PostgreSQL", " — Neon/Turso are fully-managed cloud services with no air-gapped deployment option, so self-hosted PostgreSQL is the realistic substitute here"
+    rdbms_skill_hit = s["mysqlMentioned"] or s["sqlServerMentioned"] or s["oracleDbMentioned"] or (s["neonMentioned"] and not s["onPrem"]) or (s["tursoMentioned"] and not s["onPrem"])
 
     if (s["structured"] or s["finance"] or s["postgresMentioned"] or rdbms_skill_hit
             or (not s["unstructured"] and not warehouse_need and not s["mongoMentioned"])):
@@ -1604,7 +1631,8 @@ def pick_database(s):
         why += " Included because your team already knows " + " and ".join(
             [n for n in [s["postgresMentioned"] and "Postgres", s["mysqlMentioned"] and "MySQL",
                          s["sqlServerMentioned"] and "SQL Server", s["oracleDbMentioned"] and "Oracle",
-                         s["neonMentioned"] and "Neon", s["tursoMentioned"] and "Turso",
+                         (s["neonMentioned"] and not s["onPrem"]) and "Neon",
+                         (s["tursoMentioned"] and not s["onPrem"]) and "Turso",
                          s["mongoMentioned"] and "MongoDB"] if n]
         ) + " — matching existing skills beats a theoretically-better choice on most timelines."
     if s["geospatial"]:
