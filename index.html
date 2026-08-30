@@ -2217,6 +2217,8 @@ function detectSignals(text){
     dynatraceMentioned: has(['dynatrace']),
     newrelicMentioned: has(['new relic','newrelic']),
     elkMentioned: has(['elk stack','elasticsearch','opensearch']),
+    axiomMentioned: has(['axiom']),
+    betterStackMentioned: has(['better stack','betterstack','better uptime']),
     sonarqubeMentioned: has(['sonarqube','sonar','sonarcloud']),
     jprofilerMentioned: has(['jprofiler']),
     visualvmMentioned: has(['visualvm']),
@@ -2648,6 +2650,8 @@ const OBSERVABILITY_VENDORS = [
   // qualitative rather than sourced, since it wasn't part of the sourced research pass.
   {id:'splunk', name:'Splunk', cat:'Enterprise SIEM/log platform', bestFor:'Heavy compliance/audit log-management needs, usually paired with a dedicated APM tool', strength:'Deep log search/analysis and compliance-reporting maturity many APM-only tools lack', drawback:'Log-ingestion cost scales steeply at volume; not a full APM replacement on its own — not independently sourced/priced in this research pass', pricing:'Usage-based, ingestion-volume-driven — not sourced in this research pass'},
   {id:'dynatrace', name:'Dynatrace', cat:'Enterprise APM (AI-assisted)', bestFor:'Large, complex enterprise scale wanting automatic root-cause analysis', strength:'Strong AI-assisted automatic root-cause analysis (Davis AI)', drawback:'Premium enterprise pricing; steep to adopt for smaller teams — not independently sourced/priced in this research pass', pricing:'Usage-based, enterprise-tier — not sourced in this research pass'},
+  {id:'axiom', name:'Axiom', cat:'Log-native, cost-efficient SaaS', bestFor:'Teams that want generous log/event ingestion without the per-GB sticker shock of Datadog/Splunk', strength:'Very high free-tier ingestion (500GB/mo) on a columnar, low-cost storage engine; full-featured query language (APL) and OpenTelemetry-native ingestion even on the free tier', drawback:'Primarily a logs/events platform, not a full APM suite — deep distributed tracing/APM correlation is thinner than Datadog/New Relic/Dynatrace; enterprise SSO/RBAC/audit-log are separate paid add-ons', pricing:'Free: 500GB/mo ingestion, 25GB storage, 30-day retention · Cloud: $25/mo platform fee + usage, 1TB/mo included · SSO/Directory Sync/RBAC/Audit Log add-ons $50-100/mo each'},
+  {id:'betterstack', name:'Better Stack', cat:'Logs + uptime + incident management, unified', bestFor:'Small-to-mid teams that want logs, uptime monitoring, status pages, and on-call/incident response in one product instead of stitching together separate tools', strength:'Genuinely unifies 3 categories (telemetry, uptime monitoring, incident management) most competitors sell separately; usable free tier for small projects (10 monitors, 3GB logs)', drawback:'Telemetry (logs/traces/metrics) pricing is a separate bundle on top of uptime/incident pricing ($45-750/mo by volume tier) — a heavy-logging team pays for multiple bundles, not a single number; less deep APM/distributed-tracing correlation than Datadog/Dynatrace', pricing:'Free: 10 monitors, 3GB logs/3-day retention · Uptime: +$25/50 monitors/mo · Incident mgmt: $9/responder/mo · Telemetry: $45/mo (Nano, 40GB) to $750/mo (Tera, 700GB)'},
 ];
 function pickObservabilityVendor(s, obs){
   // NOTE (audit fix): previously mapped Splunk and Dynatrace picks onto 'newrelic' — a vendor the
@@ -2657,6 +2661,8 @@ function pickObservabilityVendor(s, obs){
   const primaryId = v.includes('Splunk') ? 'splunk'
     : v.includes('Dynatrace') ? 'dynatrace'
     : v.includes('Grafana') ? 'grafanastack'
+    : v.includes('Axiom') ? 'axiom'
+    : v.includes('Better Stack') ? 'betterstack'
     : 'datadog';
   return {v: obs.v, why: obs.why, primaryId, conf: obs.conf};
 }
@@ -3107,6 +3113,8 @@ function pickObservability(s){
   else if(s.dynatraceMentioned){ apm='Dynatrace'; why='Your team already has Dynatrace experience — matching existing familiarity over evaluating a new vendor.'; conf='high'; }
   else if(s.newrelicMentioned){ apm='New Relic'; why='Your team already knows New Relic — sticking with it avoids a vendor migration with no workload-driven reason to switch.'; conf='high'; }
   else if(s.elkMentioned){ apm='Elastic Stack (Elasticsearch + Kibana)'; why='Your team already runs the Elastic Stack — a solid self-hosted or Elastic Cloud log/observability platform, no need to introduce a second one.'; conf='high'; }
+  else if(s.axiomMentioned){ apm='Axiom'; why='Your team already uses Axiom — matching existing familiarity over evaluating a new vendor. Note Axiom is a log-native platform, not a full APM suite; pair it with a dedicated tracing tool if deep distributed-tracing correlation becomes a need.'; conf='high'; }
+  else if(s.betterStackMentioned){ apm='Better Stack'; why='Your team already uses Better Stack — matching existing familiarity. It uniquely bundles logs, uptime monitoring, status pages, and incident management in one product, which is worth knowing if you\'re currently paying for those separately elsewhere.'; conf='high'; }
   else if(s.huaweiShop){ apm='Huawei Cloud Eye (CES) + LTS (Log Tank Service)'; why='Explicit Huawei Cloud usage detected — Cloud Eye covers metrics/health monitoring and LTS covers centralized logging natively on Huawei Cloud, matching your existing footprint rather than adding an external SaaS vendor.'; conf='high'; }
   else if(s.startupMvp){ apm='Grafana + Prometheus (OSS) or Datadog free tier'; why='Lower cost for a small team; upgrade to Datadog/Dynatrace as scale and budget grow.'; conf='medium'; }
   return {v:`OpenTelemetry (instrumentation standard) + ${apm}`, why:`Instrument everything with OpenTelemetry (vendor-neutral) and ship to ${apm.split(' ')[0]}. ${why}`, conf};
@@ -7216,6 +7224,7 @@ function buildAdrInput(s){
     gitlabCiMentioned:'gitlab ci', circleciMentioned:'circleci', azureDevopsMentioned:'azure devops',
     datadogMentioned:'datadog', prometheusMentioned:'prometheus/grafana', splunkMentioned:'splunk',
     dynatraceMentioned:'dynatrace', newrelicMentioned:'new relic', elkMentioned:'elastic stack',
+    axiomMentioned:'axiom', betterStackMentioned:'better stack',
     oktaMentioned:'okta', entraMentioned:'microsoft entra id', pingMentioned:'ping identity',
     forgerockMentioned:'forgerock', jumpcloudMentioned:'jumpcloud',
   };
