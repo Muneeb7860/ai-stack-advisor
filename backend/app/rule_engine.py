@@ -31,15 +31,50 @@ import re
 # ---------- Signal detection ----------
 
 
+# Clause boundary shared by the active-voice negation regexes and stripNegations(): allow
+# comma-separated lists ("no website, API, database, cloud, ...") to stay inside ONE clause —
+# stopping at the first comma (the old behavior) truncated "I do not need a website, API,
+# database, ..., or a vector database." after just "website", leaving every later item to be
+# read as a positive mention. Stop only at a true sentence end, or at a subordinating/
+# contrasting conjunction, so a later, unrelated positive requirement in the SAME sentence
+# ("...but we do need Postgres for durability") is never swept into the negated clause.
+_CLAUSE_END = r"(?=\s+(?:because|since|but|however|whereas|although|while)\b|[.!?;\n]|$)"
+
+# Passive-voice negation phrases ("Kubernetes must not be used") — the excluded subject sits
+# BEFORE the negation phrase here, which the active-voice "no|not|..." regexes can never see
+# (they only look forward from the negator word). Handled as a second, independent pattern
+# rather than folded into the active one, since the grammar runs the opposite direction.
+_PASSIVE_NEGATION_PHRASES = (
+    "must not be used", "cannot be used", "can't be used", "should not be used",
+    "is not allowed", "are not allowed", "is not needed", "are not needed",
+    "is not required", "are not required", "is excluded", "are excluded",
+    "not permitted", "not to be used", "is ruled out", "are ruled out",
+)
+_PASSIVE_NEGATION_ALT = "|".join(_PASSIVE_NEGATION_PHRASES)
+
+
 def strip_negations(text: str) -> str:
-    """Mirrors index.html's stripNegations() exactly."""
-    return re.sub(
-        r"\b(no|not|without|don't|doesn't|isn't|won't|never|excluding|except for|except)\b"
-        r"[^.,;!?]{0,60}",
+    """Mirrors index.html's stripNegations() exactly.
+
+    Passive-voice clauses are stripped FIRST: "Kubernetes must not be used" would otherwise have
+    its "not be used" tail consumed by the active-voice pass (which fires on the bare word
+    "not"), leaving nothing left for the passive pattern to match against and "Kubernetes"
+    behind in the text.
+    """
+    text = re.sub(
+        r"[^.!?;\n]{0,300}?\b(?:" + _PASSIVE_NEGATION_ALT + r")\b",
         " ",
         text,
         flags=re.IGNORECASE,
     )
+    text = re.sub(
+        r"\b(no|not|without|don't|doesn't|isn't|won't|never|excluding|except for|except)\b"
+        r"[^.!?;\n]{0,300}?" + _CLAUSE_END,
+        " ",
+        text,
+        flags=re.IGNORECASE,
+    )
+    return text
 
 
 EXCLUSION_TERMS = {
@@ -61,7 +96,12 @@ EXCLUSION_TERMS = {
 }
 
 _NEGATION_CLAUSE = re.compile(
-    r"\b(?:no|not|without|don't|doesn't|isn't|won't|never|excluding|except for|except)\b([^.,;!?]{0,60})",
+    r"\b(?:no|not|without|don't|doesn't|isn't|won't|never|excluding|except for|except)\b"
+    r"([^.!?;\n]{0,300}?)" + _CLAUSE_END,
+    re.I,
+)
+_PASSIVE_NEGATION_CLAUSE = re.compile(
+    r"([^.!?;\n]{0,300}?)\b(?:" + _PASSIVE_NEGATION_ALT + r")\b",
     re.I,
 )
 
@@ -85,10 +125,17 @@ def detect_exclusions(text: str) -> dict:
     what they DON'T want, which is why "we must not use Kubernetes" still returned Kubernetes.
     """
     out = {}
-    for m in _NEGATION_CLAUSE.finditer(str(text or "").lower()):
+    t = str(text or "").lower()
+    for m in _NEGATION_CLAUSE.finditer(t):
         clause = m.group(1) or ""
         if clause.strip().startswith(NON_EXCLUSION_QUALIFIERS):
             continue
+        for key, terms in EXCLUSION_TERMS.items():
+            if any(re.search(r"\b" + re.escape(term) + r"\b", clause) for term in terms):
+                out[key] = True
+    # Passive voice ("Kubernetes must not be used") — see _PASSIVE_NEGATION_PHRASES above.
+    for m in _PASSIVE_NEGATION_CLAUSE.finditer(t):
+        clause = m.group(1) or ""
         for key, terms in EXCLUSION_TERMS.items():
             if any(re.search(r"\b" + re.escape(term) + r"\b", clause) for term in terms):
                 out[key] = True
