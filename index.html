@@ -2142,6 +2142,8 @@ function detectSignals(text){
     awsShop: has(['aws','amazon web services']),
     azureShop: has(['azure','microsoft']),
     gcpShop: has(['gcp','google cloud']),
+    coolifyMentioned: has(['coolify']),
+    dokployMentioned: has(['dokploy']),
     huaweiShop: has(['huawei','huawei cloud']),
     oktaMentioned: has(['okta']),
     entraMentioned: has(['entra id','entra','azure ad','azure active directory']),
@@ -2443,9 +2445,13 @@ const COMPUTE_VENDORS = [
   {id:'cloudfn', name:'Google Cloud Functions', cat:'FaaS', bestFor:'GCP/Firebase-integrated projects', strength:'2M free invocations/mo (highest of the FaaS options), HTTP triggers included free', drawback:'200-800ms cold start', pricing:'2M invocations free/mo'},
   {id:'azurefn', name:'Azure Functions', cat:'FaaS', bestFor:'Microsoft/.NET shops, enterprise Azure integration', strength:'1M free invocations/mo, native Azure AD/VNet integration', drawback:'Lowest per-function memory ceiling (1.5GB) on the Consumption tier', pricing:'1M invocations free/mo'},
   {id:'cfworkers', name:'Cloudflare Workers', cat:'FaaS (edge)', bestFor:'Edge computing, globally distributed APIs, I/O-heavy workloads', strength:'<5ms cold start (V8 isolates); CPU-time-only billing makes I/O-heavy workloads reportedly 10-50x cheaper than wall-clock-billed platforms', drawback:'10ms CPU cap per invocation on free tier (30s on paid)', pricing:'100K requests/day free'},
+  {id:'coolify', name:'Coolify', cat:'Self-hosted PaaS (Docker Compose-based)', bestFor:'Teams wanting a Heroku/Vercel-style git-push deploy experience (managed TLS, one-click databases, preview deployments) entirely on their own servers', strength:'Free and open source with no feature gating on the self-hosted version; connects any server from any provider (Hetzner, AWS, bare metal); removes most of the daily-ops overhead of running raw Docker Compose or Kubernetes by hand', drawback:'You still own the underlying server(s) — no managed infra, no SLA; smaller plugin/integration ecosystem than the SaaS PaaS options above; self-hosted-only support is community-based unless you pay for Coolify Cloud', pricing:'Self-hosted: free forever, open source, unlimited servers · Coolify Cloud (hosted control plane only): $5/mo (2 servers) + $3/mo per additional server'},
+  {id:'dokploy', name:'Dokploy', cat:'Self-hosted PaaS (Docker Compose-based)', bestFor:'Teams wanting a Coolify-equivalent self-hosted PaaS, evaluated as a direct alternative before settling on one', strength:'Open source and self-hostable for free; positions itself explicitly around "no vendor lock-in" and full control to modify/customize the platform itself, not just the apps deployed on it', drawback:'Younger and smaller community than Coolify; managed cloud-hosting pricing model is per-server rather than a flat platform fee, which scales less predictably for a fleet of many small servers', pricing:'Self-hosted: free, open source · Managed cloud hosting: Hobby $4.50/mo/server · Startup $15/mo (3 servers) · Enterprise custom'},
 ];
 function pickComputePlatform(s, compute){
-  if(s.onPrem) return {v:'N/A — self-hosted only, see Compute Model card above', why:'Serverless/PaaS platforms are public-cloud managed services and aren\'t available air-gapped — this comparison doesn\'t apply once on-prem is a hard requirement.', primaryId:null, conf:'high'};
+  if(s.coolifyMentioned) return {v:'Coolify', why:'Explicit Coolify mention detected — matching existing familiarity over evaluating a new self-hosted PaaS. Free and open source to self-host; the managed Coolify Cloud offering just hosts the control plane, your apps still deploy to servers you connect yourself.', primaryId:'coolify', conf:'high'};
+  if(s.dokployMentioned) return {v:'Dokploy', why:'Explicit Dokploy mention detected — matching existing familiarity. Open source and free to self-host; the paid cloud tiers are for Dokploy\'s own managed hosting of the control plane, not a requirement to use the tool.', primaryId:'dokploy', conf:'high'};
+  if(s.onPrem) return {v:'Coolify or Dokploy (self-hosted PaaS, Docker Compose-based) on top of your own infrastructure — or skip a PaaS layer entirely and run services directly on the self-managed Kubernetes from the Compute Model card above', why:'The managed PaaS/FaaS platforms in this comparison (Vercel, Lambda, Cloud Functions, ...) are public-cloud services and aren\'t available air-gapped, so this card doesn\'t just say "N/A": Coolify and Dokploy are free, open-source, self-hostable PaaS layers (Heroku/Vercel-style git-push deploys, managed TLS, one-click databases) that run entirely inside your own network boundary — a meaningfully easier day-to-day experience than raw Kubernetes manifests if your team wants that convenience without a public-cloud dependency.', primaryId:'coolify', conf:'medium'};
   // AUDIT FIX: this card previously picked a FaaS/PaaS vendor independently of the Compute Model
   // card above, which could disagree with it for the same signals (e.g. small team + high-scale/
   // realtime: Compute Model correctly says "Serverless containers", this card used to say
@@ -7228,6 +7234,7 @@ function buildAdrInput(s){
     pineconeMentioned:'pinecone', weaviateMentioned:'weaviate', qdrantMentioned:'qdrant',
     reactMentioned:'react', angularMentioned:'angular', vueMentioned:'vue',
     awsShop:'aws', azureShop:'azure', gcpShop:'gcp', huaweiShop:'huawei cloud',
+    coolifyMentioned:'coolify', dokployMentioned:'dokploy',
     dockerMentioned:'docker', kubernetesMentioned:'kubernetes', openshiftMentioned:'openshift',
     terraformMentioned:'terraform', githubActionsMentioned:'github actions', jenkinsMentioned:'jenkins',
     gitlabCiMentioned:'gitlab ci', circleciMentioned:'circleci', azureDevopsMentioned:'azure devops',
