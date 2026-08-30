@@ -155,3 +155,26 @@ class RecommendResponse(BaseModel):
     actionable_next_steps: list[dict]
     raw_recommendations: dict | None = None
 
+
+class DisagreementRequest(BaseModel):
+    """POST /api/analyses/{analysis_id}/disagreements body. See
+    docs/challenge-this-pick-spec.md. No anthropic_api_key/provider/model_validator here,
+    unlike RefineRequest/AskRequest — this endpoint never calls an LLM, it's pure CRUD."""
+
+    category: str = Field(..., min_length=1, max_length=64)
+    current_pick: str = Field(..., min_length=1, max_length=2_000)
+    proposed_alternative: str = Field(..., min_length=1, max_length=2_000)
+    reason: str = Field(..., min_length=1, max_length=2_000)
+
+
+class DisagreementResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    analysis_id: uuid.UUID
+    category: str
+    current_pick: str
+    proposed_alternative: str
+    reason: str
+    created_at: datetime
+
