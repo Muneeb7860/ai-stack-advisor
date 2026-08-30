@@ -145,19 +145,31 @@ NON_EXCLUSION_QUALIFIERS = (
 _QUANTITY_QUALIFIER_RE = re.compile(r"\b(?:another|a second|an additional|a different|one more)\s*$", re.I)
 
 
-def _record_exclusions(clause: str, out: dict) -> None:
+def _record_exclusions(clause: str, out: dict, terms_by_key: dict | None = None) -> None:
     """Shared by every negation pattern (active, passive, neither/nor) — records every
     EXCLUSION_TERMS key found in `clause`, skipping a match immediately preceded by a
-    quantity-qualifier ("another", "a second", ...)."""
+    quantity-qualifier ("another", "a second", ...). When `terms_by_key` is given, also
+    records exactly which literal term matched per key — detect_exclusions() itself never
+    needs this (a plain boolean is enough to decide whether to overwrite a pick), but picking
+    a real language ALTERNATIVE (see _pick_language_alternative) needs to know exactly which
+    language(s) were named, so as not to recommend one the user also just ruled out."""
     for key, terms in EXCLUSION_TERMS.items():
         for term in terms:
             m = re.search(r"\b" + re.escape(term) + r"\b", clause)
             if m and not _QUANTITY_QUALIFIER_RE.search(clause[: m.start()]):
                 out[key] = True
-                break
+                if terms_by_key is not None:
+                    terms_by_key.setdefault(key, set()).add(term)
+                # No `break` here: a single clause can legitimately name MULTIPLE distinct
+                # terms in the same category ("neither Java, Python, nor JavaScript") — found
+                # via review of this exact scenario, where an early break after the FIRST
+                # matching term ("java") silently dropped "javascript" from terms_by_key,
+                # letting the alternative-picker recommend a language the user also excluded.
+                # detect_exclusions()'s own boolean-only callers are unaffected either way
+                # (out[key] = True is idempotent), so this is free for them.
 
 
-def detect_exclusions(text: str) -> dict:
+def _find_exclusions(text: str, terms_by_key: dict | None = None) -> dict:
     """Mirrors index.html's detectExclusions(): keeps what strip_negations() throws away.
 
     strip_negations() deletes the negated clause so "no compliance requirements" cannot fire a
@@ -170,14 +182,28 @@ def detect_exclusions(text: str) -> dict:
         clause = m.group(1) or ""
         if clause.strip().startswith(NON_EXCLUSION_QUALIFIERS):
             continue
-        _record_exclusions(clause, out)
+        _record_exclusions(clause, out, terms_by_key)
     # Passive voice ("Kubernetes must not be used") — see _PASSIVE_NEGATION_PHRASES above.
     for m in _PASSIVE_NEGATION_CLAUSE.finditer(t):
-        _record_exclusions(m.group(1) or "", out)
+        _record_exclusions(m.group(1) or "", out, terms_by_key)
     # "Neither Java nor Python" — see _NEITHER_NOR_CLAUSE above.
     for m in _NEITHER_NOR_CLAUSE.finditer(t):
-        _record_exclusions(m.group(1) or "", out)
+        _record_exclusions(m.group(1) or "", out, terms_by_key)
     return out
+
+
+def detect_exclusions(text: str) -> dict:
+    """Public entry point — see _find_exclusions() above for the actual implementation."""
+    return _find_exclusions(text)
+
+
+def detect_excluded_language_terms(text: str) -> set:
+    """Which SPECIFIC language names (not just the "languages" category boolean) were named in
+    a negated clause — used by _pick_language_alternative() to avoid recommending a language the
+    user also explicitly ruled out, e.g. "neither Java, Python, nor Go"."""
+    terms_by_key: dict = {}
+    _find_exclusions(text, terms_by_key)
+    return terms_by_key.get("languages", set())
 
 
 KNOWN_TERMS = {
@@ -365,6 +391,27 @@ def domain_floor_pick(what: str, why: str) -> dict:
     return {"v": "Not applicable — " + what, "conf": "high", "excluded": True, "why": why}
 
 
+# Found via a manual "...but also not on-prem" QA scenario: soft on-prem detection used to fire
+# on the bare substring "on-prem"/"on premises" anywhere in the raw text, with zero awareness
+# that the phrase itself might be negated — "not on-prem" recommended ON-PREM hosting for a
+# requirement that explicitly ruled it out. strong_on_prem's own phrases ("no public cloud",
+# "cannot use any public cloud") are deliberately left alone: the negation IS the signal there,
+# by design, unlike the bare "on-prem" phrases here, where "on-prem" itself is the subject that
+# can be negated.
+_ON_PREM_NEGATED_BEFORE_RE = re.compile(
+    r"\b(?:not|no|never|isn't|won't be|will not be|don't want|do not want|"
+    r"doesn't want|does not want|avoid|without)\s*$", re.I
+)
+
+
+def _mentions_on_prem_unnegated(raw: str) -> bool:
+    for term in ("on-prem", "on premises", "on-premise"):
+        for m in re.finditer(re.escape(term), raw):
+            if not _ON_PREM_NEGATED_BEFORE_RE.search(raw[max(0, m.start() - 30): m.start()]):
+                return True
+    return False
+
+
 def detect_signals(text: str) -> dict:
     """Mirrors index.html's detectSignals() exactly (100+ signal dimensions as of the
     expansion pass — see KICKOFF_BRIEF.md Section 0)."""
@@ -398,7 +445,7 @@ def detect_signals(text: str) -> dict:
         "dedicated link", "private link to cloud", "colocation cross-connect",
         "cross-connect", "bgp peering", "transit gateway", "virtual wan", "enterprise router",
     ])
-    soft_on_prem = has_raw(["on-prem", "on premises", "on-premise"]) and not (
+    soft_on_prem = _mentions_on_prem_unnegated(raw) and not (
         dedicated_link_terms or (has_raw(["hybrid"]) and has_raw(["cloud"]))
     )
     hybrid_connectivity = dedicated_link_terms or (
@@ -420,6 +467,10 @@ def detect_signals(text: str) -> dict:
         "multiCloudMentioned": multi_cloud_mentioned,
         # Objects, not booleans — any consumer counting "active signals" must skip these.
         "excluded": _exclusions,
+        # Sorted list, not the raw set detect_excluded_language_terms() works with internally —
+        # this signals dict crosses a real JSON boundary (the /api/recommend router and the MCP
+        # tool both serialize it), and a bare Python set isn't JSON-serializable.
+        "excludedLanguageTerms": sorted(detect_excluded_language_terms(text)),
         "known": detect_known_tech(text, _exclusions),
         "latencyTarget": detect_latency_target(text),
         "concurrencyTarget": detect_concurrency_target(text),
@@ -1040,6 +1091,88 @@ def pick_frontend_vendor(s, fe):
 
 
 FRONTEND_NOTE = "React and Next.js are not competing siblings — Next.js is the meta-framework layer that gives React the SSR/routing/API capabilities Vue/Angular/SvelteKit ship natively. index.html's current pickFrontend() only returns React/Angular/Flutter (no Next.js opinion) — pairing React with a meta-framework choice is a reasonable next refinement, not an urgent fix. Source: docs/alternatives-research/04-devops-frontend-cicd-observability-frameworks.md."
+
+
+# Found via a manual "neither Java nor Python" QA scenario, per the user's own follow-up: a
+# bare "not recommended" stub isn't what a human architect would say when the two most common
+# defaults are ruled out — they'd name a real alternative. Keyed to the SAME literal strings
+# EXCLUSION_TERMS["languages"] can match (plus aliases folded to one entry — "typescript"/
+# "node.js"/"nodejs" all count as excluding the "javascript" alternative below), so a language
+# the user also explicitly ruled out is never the one suggested in its place.
+_LANGUAGE_ALTERNATIVE_ALIASES = {
+    "javascript": "javascript", "typescript": "javascript", "node.js": "javascript", "nodejs": "javascript",
+    "c#": "csharp", ".net": "csharp",
+    "kotlin": "kotlin", "swift": "swift", "rust": "rust", "ruby": "ruby", "php": "php",
+}
+_LANGUAGE_ALTERNATIVES = {
+    "javascript": "JavaScript / TypeScript (Node.js) — runs anywhere a browser does, huge ecosystem, a natural fit for a web-only stack",
+    "php": "PHP — fast to deploy, still a huge share of production web backends",
+    "ruby": "Ruby (Rails) — fast prototyping, elegant syntax for web apps",
+    "go": "Go — simple, fast, built-in concurrency; a strong default for APIs and infrastructure services",
+    "rust": "Rust — memory-safe systems performance, the modern choice when C/C++-level speed is the actual requirement",
+    "csharp": "C# (.NET) — enterprise-grade tooling and libraries, strong fit for Windows/Azure shops",
+    "kotlin": "Kotlin — modern JVM language, a native fit for Android and JVM backends alike",
+    "swift": "Swift — the native choice for iOS/macOS apps",
+}
+# "go" is deliberately absent from EXCLUSION_TERMS["languages"] (see that table's own comment —
+# the bare word is too common in ordinary English to trust as an exclusion trigger), so it can
+# never appear in excluded_terms and is always safe to fall back to.
+_LANGUAGE_ALTERNATIVE_FALLBACK_ORDER = ("go", "javascript", "csharp", "rust", "kotlin", "php", "ruby", "swift")
+
+
+def _pick_language_alternative(s, excluded_terms):
+    """Called when the user ruled out specific backend language(s) by name — recommends a
+    real, context-appropriate alternative instead of leaving the category as a bare "not
+    recommended" stub. `excluded_terms` is the set of literal EXCLUSION_TERMS["languages"]
+    strings that were actually named (see detect_excluded_language_terms), so an alternative
+    the user ALSO ruled out ("neither Java, Python, nor Go") is never the one suggested."""
+    excluded_alt_keys = {_LANGUAGE_ALTERNATIVE_ALIASES[t] for t in excluded_terms if t in _LANGUAGE_ALTERNATIVE_ALIASES}
+
+    def ok(key):
+        return key not in excluded_alt_keys
+
+    picks = []
+    if s.get("mobile"):
+        if ok("swift"):
+            picks.append(_LANGUAGE_ALTERNATIVES["swift"])
+        if ok("kotlin"):
+            picks.append(_LANGUAGE_ALTERNATIVES["kotlin"])
+    if s.get("enterprise") and not picks:
+        if ok("csharp"):
+            picks.append(_LANGUAGE_ALTERNATIVES["csharp"])
+        elif ok("kotlin"):
+            picks.append(_LANGUAGE_ALTERNATIVES["kotlin"])
+    if (s.get("highScale") or s.get("realtime")) and not picks:
+        if ok("go"):
+            picks.append(_LANGUAGE_ALTERNATIVES["go"])
+        elif ok("rust"):
+            picks.append(_LANGUAGE_ALTERNATIVES["rust"])
+    if s.get("web") and not picks:
+        for key in ("javascript", "go", "php", "ruby"):
+            if ok(key):
+                picks.append(_LANGUAGE_ALTERNATIVES[key])
+                break
+    if not picks:
+        for key in _LANGUAGE_ALTERNATIVE_FALLBACK_ORDER:
+            if ok(key):
+                picks.append(_LANGUAGE_ALTERNATIVES[key])
+                break
+
+    if not picks:
+        # Every alternative this tool knows about was ALSO explicitly excluded by name.
+        return {
+            "v": "Not recommended — every backend language this tool catalogs an alternative for was excluded",
+            "conf": "high", "excluded": True,
+            "why": "You ruled out every specific language this tool has a fallback for. Name one you would "
+                   "accept, or describe the workload (systems-level, enterprise, mobile, high-throughput) so "
+                   "a fit can be suggested.",
+        }
+    return {
+        "v": " · ".join(picks),
+        "conf": "medium", "excluded": True,
+        "why": "You ruled out the language(s) this tool would otherwise default to — this is a "
+               "context-appropriate alternative instead of leaving the category blank.",
+    }
 
 
 def pick_languages(s):
@@ -2184,7 +2317,7 @@ def apply_exclusions(rec: dict, s: dict) -> dict:
     if ex.get("observability"):
         rec["observability"] = excluded_pick("an observability vendor")
     if ex.get("languages"):
-        rec["languages"] = excluded_pick("a specific backend language")
+        rec["languages"] = _pick_language_alternative(s, s.get("excludedLanguageTerms") or set())
 
     # rag/llm carry different shapes from the {v, why, conf} cards.
     if ex.get("rag"):

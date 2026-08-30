@@ -68,10 +68,18 @@ def test_language_negation_phrasings_are_recognized(text):
 
 
 def test_neither_nor_flows_through_to_the_final_recommendation():
+    """As of the follow-up "so what do I use instead?" fix, this is no longer a bare "not
+    recommended" stub — it's a real, context-appropriate alternative (this text says
+    "browser-based only", so JavaScript/TypeScript is the expected fit)."""
+    import re as _re
     rec = recommend_stack(NEITHER_NOR_TEXT)["recommendations"]
-    assert "excluded" in rec["languages"]["v"].lower()
-    assert "Java" not in rec["languages"]["v"]
-    assert "Python" not in rec["languages"]["v"]
+    v = rec["languages"]["v"]
+    assert rec["languages"].get("excluded") is True
+    # Word-boundary check: "JavaScript" itself contains the substring "Java", so a naive
+    # `"Java" not in v` would wrongly fail on the correct answer.
+    assert not _re.search(r"\bJava\b", v)
+    assert "Python" not in v
+    assert "JavaScript" in v
 
 
 def test_avoid_is_only_recognized_together_with_something_excludable():

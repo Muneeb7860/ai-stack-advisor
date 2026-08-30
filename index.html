@@ -1768,7 +1768,12 @@ const NON_EXCLUSION_QUALIFIERS = [
 // per-term-match instead, against the text immediately preceding that specific match.
 const QUANTITY_QUALIFIER_RE = /\b(?:another|a second|an additional|a different|one more)\s*$/i;
 
-function detectExclusions(text){
+// Shared by detectExclusions() and detectExcludedLanguageTerms() — the former only ever needed
+// the boolean, but picking a real language ALTERNATIVE (see _pickLanguageAlternative) needs to
+// know exactly which language(s) were named, so both are computed together here instead of
+// re-deriving the same clauses twice. `termsByKey`, when passed, also collects exactly which
+// literal term matched per key.
+function findExclusions(text, termsByKey){
   const t = String(text || '').toLowerCase();
   // Same clause shape stripNegations() removes, but capturing the clause instead of dropping it.
   const NEG = new RegExp('\\b(?:no|not|without|avoid|don\'t|doesn\'t|isn\'t|won\'t|never|excluding|except for|except)\\b([^.!?;\\n]{0,300}?)' + NEGATION_CLAUSE_END, 'gi');
@@ -1786,7 +1791,16 @@ function detectExclusions(text){
         const hit = re.exec(clause);
         if (hit && !QUANTITY_QUALIFIER_RE.test(clause.slice(0, hit.index))){
           out[key] = true;
-          break;
+          if (termsByKey){
+            if (!termsByKey[key]) termsByKey[key] = new Set();
+            termsByKey[key].add(term);
+          }
+          // No `break` here: a single clause can legitimately name MULTIPLE distinct terms in
+          // the same category ("neither Java, Python, nor JavaScript") — found via review of
+          // this exact scenario, where an early break after the FIRST matching term ("java")
+          // silently dropped "javascript" from termsByKey, letting the alternative-picker
+          // recommend a language the user also excluded. detectExclusions()'s own boolean-only
+          // callers are unaffected either way (out[key] = true is idempotent), so this is free.
         }
       }
     }
@@ -1805,6 +1819,19 @@ function detectExclusions(text){
     recordFrom(m[1] || '');
   }
   return out;
+}
+
+function detectExclusions(text){
+  return findExclusions(text);
+}
+
+// Which SPECIFIC language names (not just the "languages" category boolean) were named in a
+// negated clause — used by _pickLanguageAlternative() to avoid recommending a language the user
+// also explicitly ruled out, e.g. "neither Java, Python, nor Go".
+function detectExcludedLanguageTerms(text){
+  const termsByKey = {};
+  findExclusions(text, termsByKey);
+  return termsByKey.languages ? Array.from(termsByKey.languages) : [];
 }
 
 // detectSignals() had no numeric parsing of any kind, so "the complete RAG answer must come
@@ -1992,7 +2019,25 @@ function detectSignals(text){
   // used in a negated way in this kind of input, unlike bare vendor names ("we don't use AWS"),
   // which is why this list is narrower than just checking for aws/azure/gcp mentions.
   const dedicatedLinkTerms = hasRaw(['direct connect','expressroute','express route','cloud interconnect','dedicated link','private link to cloud','colocation cross-connect','cross-connect','bgp peering','transit gateway','virtual wan','enterprise router']);
-  const softOnPrem = hasRaw(['on-prem','on premises','on-premise']) && !(dedicatedLinkTerms || (hasRaw(['hybrid']) && hasRaw(['cloud'])));
+  // Found via a manual "...but also not on-prem" QA scenario: the bare hasRaw(['on-prem',...])
+  // check below used to fire on the substring anywhere in the raw text, with zero awareness
+  // that the phrase itself might be negated — "not on-prem" recommended ON-PREM hosting for a
+  // requirement that explicitly ruled it out. strongOnPrem's own phrases ("no public cloud",
+  // "cannot use any public cloud") are deliberately left alone: the negation IS the signal
+  // there, by design, unlike this bare "on-prem" phrase, where "on-prem" itself is the subject
+  // that can be negated.
+  const ON_PREM_NEGATED_BEFORE_RE = /\b(?:not|no|never|isn't|won't be|will not be|don't want|do not want|doesn't want|does not want|avoid|without)\s*$/i;
+  const mentionsOnPremUnnegated = (text) => {
+    for (const term of ['on-prem','on premises','on-premise']){
+      const re = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+      let m;
+      while ((m = re.exec(text)) !== null){
+        if (!ON_PREM_NEGATED_BEFORE_RE.test(text.slice(Math.max(0, m.index - 30), m.index))) return true;
+      }
+    }
+    return false;
+  };
+  const softOnPrem = mentionsOnPremUnnegated(raw) && !(dedicatedLinkTerms || (hasRaw(['hybrid']) && hasRaw(['cloud'])));
   // Explicit dedicated-link/hybrid-transit intent — distinct from onPrem (which means NO public
   // cloud reachability at all). This is the opposite case: some workloads on-prem, some in cloud,
   // needing a private/dedicated link between them (Direct Connect/ExpressRoute/Cloud Interconnect-
@@ -2013,6 +2058,7 @@ function detectSignals(text){
     // What the user ruled OUT (see detectExclusions). An object, not a boolean — every consumer
     // that counts "active signals" must skip it, which is why it is named distinctly.
     excluded: _exclusions,
+    excludedLanguageTerms: detectExcludedLanguageTerms(text),
     // Technologies the user named AND showed ownership of (see detectKnownTech). Distinct from
     // the `xxxMentioned` flags, which mean only "named" — never claim skill from those.
     known: detectKnownTech(text, _exclusions),
@@ -2628,6 +2674,74 @@ const CATEGORY_VENDORS = {
   containers: ORCHESTRATOR_VENDORS, observability: OBSERVABILITY_VENDORS,
   frontend: FRONTEND_VENDORS, cicd: CICD_VENDORS,
 };
+
+// Found via a manual "neither Java nor Python" QA scenario, per the user's own follow-up: a
+// bare "not recommended" stub isn't what a human architect would say when the two most common
+// defaults are ruled out — they'd name a real alternative. Keyed to the SAME literal strings
+// EXCLUSION_TERMS.languages can match (plus aliases folded to one entry — "typescript"/
+// "node.js"/"nodejs" all count as excluding the "javascript" alternative below), so a language
+// the user also explicitly ruled out is never the one suggested in its place.
+const LANGUAGE_ALTERNATIVE_ALIASES = {
+  javascript:'javascript', typescript:'javascript', 'node.js':'javascript', nodejs:'javascript',
+  'c#':'csharp', '.net':'csharp',
+  kotlin:'kotlin', swift:'swift', rust:'rust', ruby:'ruby', php:'php',
+};
+const LANGUAGE_ALTERNATIVES = {
+  javascript: 'JavaScript / TypeScript (Node.js) — runs anywhere a browser does, huge ecosystem, a natural fit for a web-only stack',
+  php: 'PHP — fast to deploy, still a huge share of production web backends',
+  ruby: 'Ruby (Rails) — fast prototyping, elegant syntax for web apps',
+  go: 'Go — simple, fast, built-in concurrency; a strong default for APIs and infrastructure services',
+  rust: 'Rust — memory-safe systems performance, the modern choice when C/C++-level speed is the actual requirement',
+  csharp: 'C# (.NET) — enterprise-grade tooling and libraries, strong fit for Windows/Azure shops',
+  kotlin: 'Kotlin — modern JVM language, a native fit for Android and JVM backends alike',
+  swift: 'Swift — the native choice for iOS/macOS apps',
+};
+// "go" is deliberately absent from EXCLUSION_TERMS.languages (see that table's own comment —
+// the bare word is too common in ordinary English to trust as an exclusion trigger), so it can
+// never appear in excludedTerms and is always safe to fall back to.
+const LANGUAGE_ALTERNATIVE_FALLBACK_ORDER = ['go','javascript','csharp','rust','kotlin','php','ruby','swift'];
+
+// Called when the user ruled out specific backend language(s) by name — recommends a real,
+// context-appropriate alternative instead of leaving the category as a bare "not recommended"
+// stub. `excludedTerms` is the array of literal EXCLUSION_TERMS.languages strings that were
+// actually named (see detectExcludedLanguageTerms), so an alternative the user ALSO ruled out
+// ("neither Java, Python, nor Go") is never the one suggested.
+function _pickLanguageAlternative(s, excludedTerms){
+  const excludedAltKeys = new Set((excludedTerms || []).map(t => LANGUAGE_ALTERNATIVE_ALIASES[t]).filter(Boolean));
+  const ok = (key) => !excludedAltKeys.has(key);
+  const picks = [];
+  if (s.mobile){
+    if (ok('swift')) picks.push(LANGUAGE_ALTERNATIVES.swift);
+    if (ok('kotlin')) picks.push(LANGUAGE_ALTERNATIVES.kotlin);
+  }
+  if (s.enterprise && !picks.length){
+    if (ok('csharp')) picks.push(LANGUAGE_ALTERNATIVES.csharp);
+    else if (ok('kotlin')) picks.push(LANGUAGE_ALTERNATIVES.kotlin);
+  }
+  if ((s.highScale || s.realtime) && !picks.length){
+    if (ok('go')) picks.push(LANGUAGE_ALTERNATIVES.go);
+    else if (ok('rust')) picks.push(LANGUAGE_ALTERNATIVES.rust);
+  }
+  if (s.web && !picks.length){
+    for (const key of ['javascript','go','php','ruby']){
+      if (ok(key)){ picks.push(LANGUAGE_ALTERNATIVES[key]); break; }
+    }
+  }
+  if (!picks.length){
+    for (const key of LANGUAGE_ALTERNATIVE_FALLBACK_ORDER){
+      if (ok(key)){ picks.push(LANGUAGE_ALTERNATIVES[key]); break; }
+    }
+  }
+  if (!picks.length){
+    return {v:'Not recommended — every backend language this tool catalogs an alternative for was excluded',
+      conf:'high', excluded:true,
+      why:'You ruled out every specific language this tool has a fallback for. Name one you would accept, ' +
+          'or describe the workload (systems-level, enterprise, mobile, high-throughput) so a fit can be suggested.'};
+  }
+  return {v: picks.join(' · '), conf:'medium', excluded:true,
+    why:'You ruled out the language(s) this tool would otherwise default to — this is a context-appropriate ' +
+        'alternative instead of leaving the category blank.'};
+}
 
 function pickLanguages(s){
   const picks=[]; let hits=0;
@@ -3806,7 +3920,7 @@ function applyExclusions(rec, s){
   if (ex.mesh)          rec.mesh  = excludedPick('a service mesh');
   if (ex.iam)           rec.iam   = excludedPick('a managed identity provider');
   if (ex.observability) rec.obs   = excludedPick('an observability vendor');
-  if (ex.languages)     rec.lang  = excludedPick('a specific backend language');
+  if (ex.languages)     rec.lang  = _pickLanguageAlternative(s, s.excludedLanguageTerms || []);
 
   // rag/llm carry different shapes from the {v,why,conf} cards — handle each explicitly rather
   // than assuming a uniform pick shape.
