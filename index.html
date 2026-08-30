@@ -2119,6 +2119,8 @@ function detectSignals(text){
     compliance: has(['soc2','hipaa','pci','gdpr','compliance','regulated','audit']),
     security: has(['security','pii','sensitive data','encryption','zero trust']),
     dataHeavy: has(['big data','analytics','data pipeline','data lake','etl','warehouse']),
+    tinybirdMentioned: has(['tinybird']),
+    clickhouseMentioned: has(['clickhouse']),
     structured: has(['structured data','relational','transactional','sql','ledger','orders']),
     unstructured: has(['unstructured','documents','pdf','images','logs','text data']),
     iot: has(['iot','sensor','device telemetry','edge device']),
@@ -2550,6 +2552,34 @@ function pickDatabaseVendor(db){
   return {v: db.v, why: db.why, primaryId, conf: db.conf};
 }
 const DATABASE_NOTE = 'CockroachDB and DynamoDB aren\'t drop-in swaps for Postgres/MongoDB — CockroachDB trades operational simplicity for horizontal-scale-by-default, and DynamoDB trades query flexibility for AWS-native zero-ops. Source: docs/alternatives-research/02-data-layer-database-cache-messaging.md.';
+
+// Distinct from pickDatabase's generic "warehouseNeed" branch (BigQuery/Snowflake/Redshift):
+// that fires on ANY analytics-heavy workload regardless of latency, and those three trade
+// real-time freshness for a mature batch-ETL/BI-tool ecosystem. This category only fires when
+// the requirement is ALSO explicitly real-time/streaming (dataHeavy AND realtime) — sub-second
+// queries over continuously-arriving data is a genuinely different tool category, not a fancier
+// warehouse. Tinybird is itself built on managed ClickHouse (not an independent competitor to
+// it) — its own docs describe it as "a managed ClickHouse platform" — so the `cat`/drawback
+// fields say so explicitly rather than presenting these as two unrelated options.
+const REALTIME_ANALYTICS_VENDORS = [
+  {id:'clickhouse', name:'ClickHouse Cloud', cat:'Fully managed real-time OLAP (the underlying engine)', bestFor:'Teams wanting maximum control over schema/query tuning with sub-second performance at scale, across AWS/GCP/Azure', strength:'Sub-second queries via columnar storage + vectorized execution; ClickPipes for managed ingestion from Kafka/S3/Postgres/MongoDB; separates storage/compute for automatic elastic scaling; reported ~70% cost reduction vs. comparable warehouses in published case studies', drawback:'Still a database you design schemas/materialized views for — more operational modeling work than a fully-abstracted API layer; open-source ClickHouse is also self-hostable if you want zero vendor spend and can own the ops yourself', pricing:'Pay-for-use, autoscaling compute/storage — no fixed published free tier; self-hosted OSS ClickHouse is free'},
+  {id:'tinybird', name:'Tinybird', cat:'Managed ClickHouse platform with a developer-first API layer', bestFor:'Developers wanting to ship a real-time analytics API (not just a queryable database) fast, without hand-building the ingestion+API layer on top of raw ClickHouse', strength:'Built on managed ClickHouse but adds an Events API for ingestion, instant SQL-to-REST-API "pipes," zero-copy data branches for dev/staging, and built-in connectors (Kafka/S3/GCS/DynamoDB) — meaningfully less to build than wiring the same pipeline yourself on ClickHouse Cloud directly', drawback:'An abstraction layer over ClickHouse, not a different underlying engine — if you already have deep ClickHouse expertise and want direct control, ClickHouse Cloud itself may be the more natural fit; advanced features (connectors, data branches, horizontal scaling) are gated to paid/enterprise tiers', pricing:'Free: 10GB storage, 1,000 requests/day, shared 0.25 vCPU · Developer: from $49/mo, 25GB storage · Enterprise: custom, compute overage ~$0.0002/sec'},
+];
+// Gated on dataHeavy AND realtime both firing — a batch/interactive analytics need alone
+// (dataHeavy without realtime) is well served by pickDatabase's own warehouseNeed branch
+// instead, which isn't replaced or duplicated here.
+function pickRealtimeAnalyticsVendor(s){
+  if(!(s.dataHeavy && s.realtime)){
+    return {v:'Not applicable — no real-time/streaming analytics requirement in this stack', why:'Tinybird and ClickHouse Cloud exist specifically for sub-second queries over continuously-streaming data. A batch/interactive analytics need without a real-time requirement is well served by a conventional cloud data warehouse (BigQuery/Snowflake/Redshift — see the Database card above if that fired) instead, which trades real-time freshness for a more mature BI-tool ecosystem.', primaryId:null, conf:'high'};
+  }
+  if(s.tinybirdMentioned) return {v:'Tinybird', why:'Explicit Tinybird mention detected — matching existing familiarity over evaluating a new platform.', primaryId:'tinybird', conf:'high'};
+  if(s.clickhouseMentioned) return {v:'ClickHouse Cloud', why:'Explicit ClickHouse mention detected — matching existing familiarity. Note Tinybird is built on managed ClickHouse too, so if you want a developer-first API layer on top rather than direct database access, it\'s a complementary, not competing, option.', primaryId:'clickhouse', conf:'high'};
+  if(s.startupMvp || s.smallTeam){
+    return {v:'Tinybird', why:'A small team building a real-time analytics feature gets more value from Tinybird\'s ready-made ingestion API and instant SQL-to-REST "pipes" than from standing up the same pipeline on raw ClickHouse Cloud yourself — the API-layer convenience matters more than direct engine control at this stage.', primaryId:'tinybird', conf:'medium'};
+  }
+  return {v:'ClickHouse Cloud (or Tinybird if you want a developer-first API layer built on top of it)', why:'Direct ClickHouse Cloud access is the safer default absent a specific reason to prefer Tinybird\'s API-layer convenience — both are free/OSS-rooted, production-grade real-time OLAP options built on the same underlying engine.', primaryId:'clickhouse', conf:'medium'};
+}
+const REALTIME_ANALYTICS_NOTE = 'Tinybird is a managed ClickHouse platform, not an independent competitor to ClickHouse Cloud — this is an API-layer-convenience-vs-direct-engine-control decision, not a maturity or cost one. Neither replaces pickDatabase\'s generic BigQuery/Snowflake/Redshift warehouse pick, which serves batch/interactive analytics without a real-time requirement.';
 
 const CACHE_VENDORS = [
   {id:'redis', name:'Redis', cat:'Single-threaded', bestFor:'Shared state, pub/sub, rich data structures, Lua scripting', strength:'15+ years production-proven, massive ecosystem, richest data-type support', drawback:'Single-threaded throughput ceiling; license moved to SSPL/RSALv2 (not OSI-approved open source)', pricing:'Free self-hosted under SSPL/RSALv2'},
@@ -4042,7 +4072,16 @@ function applyExclusions(rec, s){
   }
   if (ex.messaging)     rec.msg   = excludedPick('messaging/streaming');
   if (ex.cache)         rec.cache = excludedPick('caching');
-  if (ex.database)      rec.db    = excludedPick('a database');
+  if (ex.database){
+    rec.db = excludedPick('a database');
+    // Real-time analytics (Tinybird/ClickHouse) is itself a specialized database — same "no
+    // separate underlying pick to fall back to" situation as gitops, so the PRIMARY text needs
+    // replacing outright, not just suppressing the vendor comparison.
+    rec.realtimeAnalytics = {v:'Not applicable — you excluded databases', conf:'high', excluded:true,
+      why:'Tinybird and ClickHouse Cloud are themselves specialized (real-time OLAP) databases — ' +
+          'with databases excluded from your stack entirely, there is nothing for this category to recommend.'};
+    rec.realtimeAnalyticsVendorPick = Object.assign({}, rec.realtimeAnalytics, {primaryId:null, suppressed:true});
+  }
   // Found via a manual "on-premises... no public cloud" QA scenario: BOTH s.onPrem and
   // ex.cloud can fire on the same sentence at once ("on-premises" triggers the former, "no
   // public cloud" separately matches EXCLUSION_TERMS.cloud). Since this function runs after
@@ -4100,6 +4139,9 @@ function computeRecommendations(s){
         cicd = pickCICD(s), dns = pickDNS(s), docs = pickDocs(s), hybridConnectivity = pickHybridConnectivity(s, cloud),
         auditLogging = pickAuditLogging(s), privilegedAccess = pickPrivilegedAccess(s), testingStrategy = pickTestingStrategy(s),
         networkBoundary = pickNetworkBoundary(s), multiCloudBridging = pickMultiCloudBridging(s), securityGates = pickSecurityGates(s);
+  // No separate "base" pick exists (same shape as pickGitopsVendor) — pickRealtimeAnalyticsVendor()
+  // produces the recommendation and the vendor primaryId together.
+  const realtimeAnalyticsVendorPick = pickRealtimeAnalyticsVendor(s);
 
   const cost = pickCostOptimization(s), throughput = pickConcurrency(s), gov = pickGovernance(s), tradeoffs = pickTradeoffs(s);
   const orchestration = pickModelOrchestration(s), hosting = pickHostingLocation(s), computeTier = pickComputeTier(s),
@@ -4136,12 +4178,13 @@ function computeRecommendations(s){
     auditLogging, privilegedAccess, testingStrategy, networkBoundary, multiCloudBridging, securityGates,
     cloudVendorPick, computePlatformPick, orchestratorPick, gatewayVendorPick, dbVendorPick, msgVendorPick,
     llmProviderPick, vectorDbVendorPick, guardrailsVendorPick, cicdVendorPick, gitopsVendorPick, obsVendorPick, feVendorPick,
-    agentFrameworkVendorPick, inferenceServingVendorPick,
-    // No separate "base" GitOps pick exists (unlike cicd/compute) — pickGitopsVendor() produces
-    // the recommendation and the vendor primaryId together. Aliased under a plain `gitops` key
-    // too so STACK_CARD_CATEGORY / the refine-ask-challenge UI can look it up the same way every
+    agentFrameworkVendorPick, inferenceServingVendorPick, realtimeAnalyticsVendorPick,
+    // No separate "base" GitOps/RealtimeAnalytics pick exists (unlike cicd/compute) —
+    // pickGitopsVendor()/pickRealtimeAnalyticsVendor() each produce the recommendation and the
+    // vendor primaryId together. Aliased under plain `gitops`/`realtimeAnalytics` keys too so
+    // STACK_CARD_CATEGORY / the refine-ask-challenge UI can look them up the same way every
     // other card's category key works (see the Python twin for the identical dual-key rationale).
-    gitops: gitopsVendorPick};
+    gitops: gitopsVendorPick, realtimeAnalytics: realtimeAnalyticsVendorPick};
 
   // Domain floors run BEFORE exclusions: if the requirement both describes a domain floor (e.g.
   // a CLI tool) AND explicitly excludes something (e.g. "no logging"), the more specific,
@@ -4187,7 +4230,7 @@ function renderRecommendations(s, rec){
     auditLogging, privilegedAccess, testingStrategy, networkBoundary, multiCloudBridging, securityGates,
     cloudVendorPick, computePlatformPick, orchestratorPick, gatewayVendorPick, dbVendorPick, msgVendorPick,
     llmProviderPick, vectorDbVendorPick, guardrailsVendorPick, cicdVendorPick, gitopsVendorPick, obsVendorPick, feVendorPick,
-    agentFrameworkVendorPick, inferenceServingVendorPick} = rec;
+    agentFrameworkVendorPick, inferenceServingVendorPick, realtimeAnalyticsVendorPick} = rec;
 
   // `v === true`, not `v`: signals is no longer all-booleans — excluded/known/latencyTarget are
   // objects, and `{}` is truthy, so a plain truthiness filter would list them as detected signals.
@@ -4217,6 +4260,7 @@ function renderRecommendations(s, rec){
     ['Service Mesh', mesh.v, mesh.why, mesh.conf, 'Enterprise Architect', '', getCardBasis('mesh', mesh.conf)],
     ['Caching', cache.v, cache.why, cache.conf, 'SDE', renderAltToggle(CACHE_VENDORS, 'redis', CACHE_NOTE), getCardBasis('cache', cache.conf)],
     ['Primary Database(s)', db.v, db.why, db.conf, 'Application Architect', altToggle(DATABASE_VENDORS, dbVendorPick, DATABASE_NOTE), getCardBasis('database', db.conf)],
+    ['Real-Time Analytics', realtimeAnalyticsVendorPick.v, realtimeAnalyticsVendorPick.why, realtimeAnalyticsVendorPick.conf, 'Application Architect', altToggle(REALTIME_ANALYTICS_VENDORS, realtimeAnalyticsVendorPick, REALTIME_ANALYTICS_NOTE), getCardBasis('realtimeanalytics', realtimeAnalyticsVendorPick.conf)],
     ['Containers / Orchestration', containers.v, containers.why, containers.conf, 'SDE', altToggle(ORCHESTRATOR_VENDORS, orchestratorPick, ORCHESTRATOR_NOTE), getCardBasis('containers', containers.conf)],
     ['Observability', obs.v, obs.why, obs.conf, 'SDE / TPM', altToggle(OBSERVABILITY_VENDORS, obsVendorPick, OBSERVABILITY_NOTE), getCardBasis('observability', obs.conf)],
     ['Frontend', fe.v, fe.why, fe.conf, 'Application Architect', altToggle(FRONTEND_VENDORS, feVendorPick, FRONTEND_NOTE), getCardBasis('frontend', fe.conf)],
@@ -6062,7 +6106,7 @@ const STACK_CARD_CATEGORY = {
   'Cloud Provider':'cloud', 'API Gateway / Edge':'gateway', 'Identity & Access (IAM)':'iam',
   'Backend Language(s)':'languages', 'Architecture Style':'architecture', 'Compute Model':'compute',
   'Messaging / Streaming':'messaging', 'Service Mesh':'mesh', 'Caching':'cache',
-  'Primary Database(s)':'database', 'Containers / Orchestration':'containers',
+  'Primary Database(s)':'database', 'Real-Time Analytics':'realtimeanalytics', 'Containers / Orchestration':'containers',
   'Observability':'observability', 'Frontend':'frontend', 'CI/CD & Deployment':'cicd',
   'GitOps / Continuous Deployment':'gitops', 'DNS':'dns',
   // Was missing entirely, including for the pre-existing Hybrid Connectivity card — its refine
