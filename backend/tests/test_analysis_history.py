@@ -171,6 +171,44 @@ def test_open_history_entry_replays_via_set_analysis_not_a_new_code_path():
 
 # -------------------------------------------------------- doesn't break the one-funnel contract
 
+# --------------------------------------------------------- sidebar label HTML-escaping (TC-16)
+
+@requires_node
+def test_sidebar_history_label_escapes_html_instead_of_executing_it():
+    """renderSidebarHistory() used to interpolate the user's own requirement text straight into
+    innerHTML unescaped — a pasted '<img src=x onerror=...>' (a real, plausible paste target,
+    since "Paste your own description" explicitly invites pasting external documents) executed
+    the instant the sidebar rendered. Confirmed live in a real browser before this fix existed:
+    window.__xssProof flipped to true. escapeHtml() must turn '<', '>', '&', '"', ''' into
+    entities so the browser only ever displays the text, never executes it.
+    """
+    out = _js("""
+      // dummyEl is shared across EVERY element id in this file's own stub — init-time code
+      // (e.g. the theme-toggle icon sync) also writes innerHTML onto that same shared object,
+      // so reading it back after the fact would race against unrelated writes. Give
+      // 'sidebarHistoryList' its own dedicated node instead, the same way 'input' and
+      // 'stackKbData' already get their own (inputNode/kbNode) in this file's _STUBS.
+      const historyListNode = Object.assign({}, dummyEl, { innerHTML: '' });
+      const origGetById = document.getElementById;
+      document.getElementById = (id) => id === 'sidebarHistoryList' ? historyListNode : origGetById(id);
+      runAnalyze('<img src=x onerror="window.__xssProof=true">');
+      console.log(JSON.stringify({ rendered: historyListNode.innerHTML }));
+    """)
+    rendered = out["rendered"]
+    assert "<img" not in rendered, "raw <img> tag must never reach innerHTML"
+    assert "&lt;img" in rendered, "the tag must be HTML-entity-escaped instead"
+    assert 'onerror="window' not in rendered, (
+        "the onerror handler must not survive as a live, unescaped attribute — "
+        "only its HTML-entity-escaped form (onerror=&quot;window...) is acceptable"
+    )
+
+
+@requires_node
+def test_escape_html_handles_all_five_special_characters():
+    out = _js("""console.log(JSON.stringify({escaped: escapeHtml(`<a href="x">'&'</a>`)}));""")
+    assert out["escaped"] == "&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;"
+
+
 def test_set_analysis_signature_and_last_raw_signals_assignment_count_unchanged():
     """Static regression lock mirroring test_review_findings.py's
     test_every_analysis_path_goes_through_one_funnel — the history-save hook must live INSIDE
