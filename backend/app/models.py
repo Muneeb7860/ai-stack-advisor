@@ -73,6 +73,25 @@ class ConversationMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class Disagreement(Base):
+    """Captures BRD Section 7's "disagreement rate" success metric — see
+    docs/challenge-this-pick-spec.md for the full feature spec. Append-only, same rationale as
+    RefinementResult above: a disagreement is a fact about a moment, editing it later would
+    corrupt the rate calculation, not just the record. No update/delete route exists or should.
+    Wired to POST /api/analyses/{analysis_id}/disagreements (see app/routers/disagreements.py).
+    """
+
+    __tablename__ = "disagreements"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    analysis_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("analyses.id"), nullable=False, index=True)
+    category: Mapped[str] = mapped_column(String(64), nullable=False)
+    current_pick: Mapped[str] = mapped_column(Text, nullable=False)
+    proposed_alternative: Mapped[str] = mapped_column(Text, nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class McpInvocation(Base):
     """analysis_id is nullable on purpose (DDD 4.4) — an MCP-originated call is logged the
     instant the tool is called, before Analysis Context has necessarily produced a row yet.

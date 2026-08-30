@@ -1031,6 +1031,37 @@
     border-radius:7px; font-size:11.5px; font-weight:600; cursor:pointer;
   }
 
+  /* ---- "Challenge This Pick" (docs/challenge-this-pick-spec.md) ---- */
+  .challenge-toggle-btn{
+    background:transparent; border:1px solid var(--border); color:var(--muted);
+    padding:6px 11px; border-radius:7px; font-size:11.5px; font-weight:600; cursor:pointer;
+    transition:border-color .15s var(--ease), color .15s var(--ease);
+  }
+  .challenge-toggle-btn:hover{border-color:var(--warn); color:var(--text);}
+  .challenge-toggle-btn.active{border-color:var(--warn); color:var(--warn);}
+  .challenge-box{margin-top:10px; display:none;}
+  .challenge-box.show{display:block;}
+  .challenge-field-label{font-size:10.5px; color:var(--muted); margin:8px 0 4px; font-weight:600;}
+  .challenge-field-label:first-child{margin-top:0;}
+  .challenge-box select, .challenge-box input, .challenge-box textarea{
+    width:100%; background:var(--surface); border:1px solid var(--border); border-radius:7px;
+    color:var(--text); padding:7px 9px; font-size:13px; font-family:inherit; margin-bottom:6px;
+  }
+  .challenge-box select:focus, .challenge-box input:focus, .challenge-box textarea:focus{
+    outline:none; border-color:var(--warn);
+  }
+  .challenge-box textarea{min-height:56px; resize:vertical;}
+  .challenge-actions{display:flex; gap:6px; margin-top:2px;}
+  .challenge-submit-btn{
+    background:var(--warn); border:none; color:#1a1200; padding:7px 12px; border-radius:7px;
+    font-size:11.5px; font-weight:700; cursor:pointer;
+  }
+  .challenge-cancel-btn{
+    background:transparent; border:1px solid var(--border); color:var(--muted); padding:7px 12px;
+    border-radius:7px; font-size:11.5px; font-weight:600; cursor:pointer;
+  }
+  .challenge-confirm{margin-top:7px; font-size:11px; color:var(--good);}
+
   /* ---- Share button + shared read-only banner (decisions #12-13) ---- */
   .results-header{display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:4px; flex-wrap:wrap;}
   .share-btn{
@@ -2449,6 +2480,20 @@ function pickFrontendVendor(s, fe){
   return {v: fe.v, why: fe.why, primaryId, conf: fe.conf};
 }
 const FRONTEND_NOTE = 'React and Next.js are not competing siblings — Next.js is the meta-framework layer that gives React the SSR/routing/API capabilities Vue/Angular/SvelteKit ship natively. index.html\'s current pickFrontend() only returns React/Angular/Flutter (no Next.js opinion) — pairing React with a meta-framework choice is a reasonable next refinement, not an urgent fix. Source: docs/alternatives-research/04-devops-frontend-cicd-observability-frameworks.md.';
+
+// "Challenge This Pick" widget (docs/challenge-this-pick-spec.md) — reuses these SAME vendor
+// arrays for its "what would you choose instead?" dropdown, rather than maintaining a second,
+// separately-curated list. Only maps the categories that actually HAVE a vendor array —
+// STACK_CARD_CATEGORY (defined further down) has 21 category keys, but only these 11 have a
+// corresponding _VENDORS array; the other 10 (languages, architecture, mesh, dns,
+// hybridconnectivity, auditlogging, privilegedaccess, testingstrategy, networkboundary,
+// multicloudbridging, securitygates) get free-text-only in the widget, not a fabricated list.
+const CATEGORY_VENDORS = {
+  cloud: CLOUD_VENDORS, gateway: GATEWAY_VENDORS, iam: IAM_VENDORS, compute: COMPUTE_VENDORS,
+  cache: CACHE_VENDORS, messaging: MESSAGING_VENDORS, database: DATABASE_VENDORS,
+  containers: ORCHESTRATOR_VENDORS, observability: OBSERVABILITY_VENDORS,
+  frontend: FRONTEND_VENDORS, cicd: CICD_VENDORS,
+};
 
 function pickLanguages(s){
   const picks=[]; let hits=0;
@@ -5609,6 +5654,11 @@ function attachRefineUI(){
 // #contextPanelTitle needs this at open time, and by then the trigger button (the only thing
 // still living on the card itself) has no easy path back to the card's own label text.
 let cardLabelByKey = {};
+// "Challenge This Pick" widget (docs/challenge-this-pick-spec.md) — the actual recommended
+// value (e.g. "AWS"), distinct from cardLabelByKey's category display name (e.g. "Cloud
+// Provider"). Captured once here from the card's own .pick element rather than re-querying
+// the DOM every time the challenge form opens.
+let cardPickByKey = {};
 
 function attachRefineToCard(card, category, label, cardKey){
   // "Why this pick" signal chips — stack cards only (STACK_CARD_SIGNALS has no entries for
@@ -5617,6 +5667,7 @@ function attachRefineToCard(card, category, label, cardKey){
   if (whyHtml) card.insertAdjacentHTML('beforeend', whyHtml);
 
   cardLabelByKey[cardKey] = label || '';
+  cardPickByKey[cardKey] = card.querySelector('.pick')?.textContent?.trim() || '';
 
   // Trigger row stays a child of the card — it's what the user actually clicks to bring this
   // card's AI features into view. Kept as its own element (not folded into the zone below) so
@@ -5626,6 +5677,7 @@ function attachRefineToCard(card, category, label, cardKey){
   triggerRow.innerHTML = `
     <button class="refine-btn icon-btn" onclick="openContextPanelFor('${cardKey}'); onRefineClick('${cardKey}', this)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z"/></svg> Refine with AI</button>
     <button class="ask-toggle-btn icon-btn" id="askToggleBtn-${cardKey}" onclick="openContextPanelFor('${cardKey}'); onAskToggleClick('${cardKey}')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z"/></svg> Ask a question</button>
+    <button class="challenge-toggle-btn icon-btn" id="challengeToggleBtn-${cardKey}" onclick="openContextPanelFor('${cardKey}'); onChallengeToggleClick('${cardKey}')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v17.25m0-17.25c-1.472 0-2.882.265-4.185.75M12 3c1.472 0 2.882.265 4.185.75M18.75 4.97l-4.5 1.63m4.5-1.63 1.5 6.75c-.5 1-1.5 1.5-2.5 1.5s-2-.5-2.5-1.5l1.5-6.75m-13.5 0-1.5 6.75c.5 1 1.5 1.5 2.5 1.5s2-.5 2.5-1.5l-1.5-6.75m0 0-4.5-1.63"/></svg> Challenge this pick</button>
   `;
   card.appendChild(triggerRow);
 
@@ -5638,6 +5690,18 @@ function attachRefineToCard(card, category, label, cardKey){
   // /api/refine call can adjust several categories' cards at once, so every card's result slot
   // needs to exist even while its own zone isn't the one currently on screen); only the active
   // one is display:block, via the .context-zone/.active pair in the CSS above.
+  // "Challenge This Pick" (docs/challenge-this-pick-spec.md): the dropdown only exists when
+  // this category has a real vendor-alternatives array (CATEGORY_VENDORS, defined above the
+  // vendor arrays) — free-text-only otherwise, not a fabricated 3-option list. "Other" is
+  // always the last option so a real alternative not in the KB can still be named.
+  const categoryVendors = CATEGORY_VENDORS[category];
+  const challengeSelectHtml = categoryVendors
+    ? `<select id="challengeSelect-${cardKey}">
+         ${categoryVendors.map(v => `<option value="${v.name}">${v.name}</option>`).join('')}
+         <option value="">Other (specify below)</option>
+       </select>`
+    : '';
+
   const zone = document.createElement('div');
   zone.className = 'refine-zone context-zone';
   zone.dataset.cardKey = cardKey;
@@ -5650,6 +5714,18 @@ function attachRefineToCard(card, category, label, cardKey){
         <input type="text" id="askInput-${cardKey}" placeholder="Ask a follow-up about this recommendation...">
         <button onclick="onAskClick('${cardKey}')">Send</button>
       </div>
+    </div>
+    <div class="challenge-box" id="challengeBox-${cardKey}">
+      <div class="challenge-field-label">What would you choose instead?</div>
+      ${challengeSelectHtml}
+      <input type="text" id="challengeAltInput-${cardKey}" placeholder="${categoryVendors ? 'If “Other”, name it here' : 'Name an alternative'}">
+      <div class="challenge-field-label">Why is this a better fit for your case?</div>
+      <textarea id="challengeReason-${cardKey}" placeholder="e.g. For our 20k/sec real-time volume, a dedicated pub/sub tier is overkill..."></textarea>
+      <div class="challenge-actions">
+        <button class="challenge-submit-btn" onclick="onChallengeSubmit('${cardKey}')">Submit</button>
+        <button class="challenge-cancel-btn" onclick="onChallengeToggleClick('${cardKey}')">Cancel</button>
+      </div>
+      <div class="challenge-confirm" id="challengeConfirm-${cardKey}"></div>
     </div>
   `;
   document.getElementById('contextPanelBody').appendChild(zone);
@@ -5733,6 +5809,67 @@ async function onAskToggleClick(cardKey){
   askBox.classList.add('show');
   btn?.classList.add('active');
   document.getElementById(`askInput-${cardKey}`).focus();
+}
+
+// "Challenge This Pick" (docs/challenge-this-pick-spec.md) — a plain show/hide toggle, unlike
+// onAskToggleClick's backend-readiness gate: challenging a pick never needs an API key or a
+// live backend (it's pure capture, optionally synced later), so there's nothing to await here.
+function onChallengeToggleClick(cardKey){
+  const box = document.getElementById(`challengeBox-${cardKey}`);
+  const btn = document.getElementById(`challengeToggleBtn-${cardKey}`);
+  if (box.classList.contains('show')){
+    box.classList.remove('show');
+    btn?.classList.remove('active');
+    return;
+  }
+  box.classList.add('show');
+  btn?.classList.add('active');
+}
+
+// Local save always happens; the backend POST is best-effort, fire-and-forget — matching
+// probeBackendHealth's posture elsewhere in this file. A disagreement about a pick from an
+// analysis that was never sent to the backend (currentAnalysisId still null) simply stays
+// local-only; this deliberately does NOT call ensureAnalysisId() to force-create a row just to
+// log a disagreement, per the spec's NFR-1 reasoning.
+async function onChallengeSubmit(cardKey){
+  const zone = document.querySelector(`.refine-zone[data-card-key="${cardKey}"]`);
+  const category = zone?.dataset.category || '';
+  const select = document.getElementById(`challengeSelect-${cardKey}`);
+  const altInput = document.getElementById(`challengeAltInput-${cardKey}`);
+  const reasonEl = document.getElementById(`challengeReason-${cardKey}`);
+  const reason = reasonEl.value.trim();
+  const proposedAlt = (select && select.value ? select.value : altInput.value.trim());
+  const confirmEl = document.getElementById(`challengeConfirm-${cardKey}`);
+
+  if (!proposedAlt || !reason){
+    confirmEl.textContent = 'Please name an alternative and say why.';
+    return;
+  }
+
+  const entry = {
+    cardKey, category,
+    currentPick: cardPickByKey[cardKey] || '',
+    proposedAlt, reason,
+    analysisText: lastRequirementText || '',
+  };
+  saveChallengeEntry(entry);
+
+  if (currentAnalysisId){
+    try {
+      await fetch(`${API_BASE}/api/analyses/${currentAnalysisId}/disagreements`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          category, current_pick: entry.currentPick,
+          proposed_alternative: proposedAlt, reason,
+        }),
+      });
+    } catch(e) { /* best-effort — the local save above already succeeded regardless */ }
+  }
+
+  confirmEl.textContent = 'Noted — thanks.';
+  reasonEl.value = '';
+  altInput.value = '';
+  if (select) select.value = select.options[0]?.value || '';
 }
 
 async function onRefineClick(cardKey, btnEl){
@@ -6006,6 +6143,30 @@ function deleteCustomKbTech(techId){
 // is a pure function of `text` alone, so storing just {id, text, ts} per entry is enough to
 // exactly reconstruct any past analysis; no upload-specific data needs separate capture.
 const ANALYSIS_HISTORY_MAX = 20;
+
+// "Challenge This Pick" (docs/challenge-this-pick-spec.md) — captures BRD Section 7's
+// "disagreement rate" metric, which had zero instrumentation anywhere before this. Same
+// try/catch-wrapped flat-array-under-one-key pattern as getAnalysisHistory below. Always
+// saved locally regardless of backend reachability (NFR-1: v1 works with zero network calls) —
+// the optional POST to /api/analyses/{id}/disagreements in onChallengeSubmit is a best-effort
+// addition on top of this, never a replacement for it.
+function getChallengeLog(){
+  try {
+    const raw = localStorage.getItem('stack_challenges');
+    return raw ? JSON.parse(raw) : [];
+  } catch(e) {
+    return [];
+  }
+}
+function saveChallengeEntry(entry){
+  try {
+    const list = getChallengeLog();
+    list.unshift({id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, ts: Date.now(), ...entry});
+    localStorage.setItem('stack_challenges', JSON.stringify(list));
+  } catch(e) {
+    console.error('Failed to save challenge entry', e);
+  }
+}
 
 function getAnalysisHistory(){
   try {
