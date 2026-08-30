@@ -14,7 +14,7 @@ children.push(...coverTitle(
   'Product Requirements Document',
   'Functional & technical specification',
   [
-    ['Document Version', '1.6'],
+    ['Document Version', '1.7'],
     ['Status', 'v1 and v2 shipped, frontend actually wired to the backend — see Section 7.7, Section 9.2, and Release Plan (Section 11). Hexagonal diagram-export architecture, AI Opportunity Layer, technology-catalog unification, Huawei Cloud vendor support, and Hybrid Connectivity added in a later session — see Section 7.2, 7.7, 9.4, and Release Plan.'],
     ['Prepared by', 'Muneeb, with Claude (Cowork)'],
     ['Date', new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })],
@@ -35,6 +35,7 @@ children.push(reqTable(
     ['1.4', 'Resolved Open Questions in Section 13 (target segment hypothesis, telemetry privacy policy, low-overhead feedback mechanism) and formalized Flow View as FR-31a with cross-reference to v1.5 Release Plan.'],
     ['1.5', 'Later session: refactored diagram export (Flow View, Mermaid, Draw.io, SVG) onto a single hexagonal-architecture domain core (Section 9.4) — fixed a real inconsistency where exporters showed 5-8 nodes against Flow View\'s 18-20. Added the AI Opportunity & Leverage Layer (FR-32), unified the technology catalog into one source of truth with a maintainer CLI and client-side custom overlay (FR-33), added Huawei Cloud vendor support (FR-34) and a new Hybrid Connectivity core category (FR-6a, 16th category). Corrected stale counts: signal dimensions 65+ -> 100+, pickX() functions 45 -> 47, KB technologies now 243. Two real bugs found and fixed during this work, not just features added — see Section 12.'],
     ['1.6', 'Later session: added the Enterprise v2.0 shell — persistent sidebar, 3-column results layout, localStorage-backed analysis history, a refine/ask context-panel drawer, and a full mobile responsive treatment (Section 7.8, FR-35 through FR-41). Documented 8 accessibility/interaction fixes and the completion of the emoji-to-icon migration (FR-42, FR-43). See BRD Section 8.2 for the user-facing feature summary.'],
+    ['1.7', 'Later session: added the "Challenge This Pick" widget (FR-44) — the first real instrumentation for BRD Section 7\'s disagreement-rate metric. New backend Disagreement aggregate (DDD Section 4.5), POST /api/analyses/{analysis_id}/disagreements endpoint, and a per-card frontend form reusing the existing per-category vendor-alternatives data. See BRD Section 8.2 for the user-facing summary.'],
   ]
 ));
 
@@ -157,6 +158,7 @@ children.push(reqTable(['ID', 'Requirement', 'Status'], [1000, 5600, 1800], [
   ['FR-32', 'AI Opportunity & Leverage Layer: a 12-pattern catalog across all 6 architecture tiers (client/edge/compute/data/ai/ops), attached to Flow View nodes as "New AI Leverage Point" (gap — no AI touchpoint yet) or "AI Optimization Point" (an existing AI touchpoint could be upgraded). Text-to-SQL specifically enforces High complexity and mandatory read-only-replica/PII-tokenization/audit-trail prerequisites when finance/healthcare/compliance/onPrem signals are present, so regulated environments are never advised to expose transactional tables to unconstrained LLMs.', 'Shipped — client-side only, no backend dependency'],
   ['FR-33', 'Technology catalog unified into a single source of truth (#stackKbData.technologies, 243 entries) powering citations/ADR export, with a maintainer CLI (scripts/add_tech.py) that validates schema/domain/maturity-ring/duplicates before any entry is added, and a client-side localStorage overlay letting a user add a custom technology without editing the shipped catalog.', 'Shipped — client-side + a Python authoring script, no backend dependency for the app itself'],
   ['FR-34', 'Huawei Cloud vendor support: signal detection plus vendor-specific recommendations across cloud provider, API gateway (APIG + ROMA Connect), containers (CCE), DNS, observability (Cloud Eye + LTS), and CI/CD (CodeArts) — the same 6 categories AWS/Azure/GCP already branch on.', 'Shipped — client-side (index.html); backend rule_engine.py has the detection signal only, not the pick-logic branches — see Section 12 for why'],
+  ['FR-44', '"Challenge This Pick": a per-card widget letting a user name a preferred alternative (pre-populated from the same per-category vendor data the card\'s own "See N alternatives" disclosure already uses, free-text-only for the categories with no such data) and a required reason. Always captured to localStorage; additionally POSTed to a new backend endpoint, best-effort, only when the current analysis already has a persisted analysis_id (never force-created for this purpose). First real instrumentation for BRD Section 7\'s disagreement-rate metric.', 'Shipped — POST /api/analyses/{analysis_id}/disagreements, new Disagreement table (DDD Section 4.5)'],
 ]));
 
 children.push(h2('7.8 Enterprise Shell & Responsive Layout'));
@@ -215,6 +217,7 @@ children.push(reqTable(['Release', 'Contents', 'Status'], [1600, 6000, 1800], [
   ['v2.1', 'Frontend wiring: guided-input wizard, per-card Refine/Ask buttons actually calling the v2.0 backend, share button, ?shared=SLUG read-only view, why-this-pick signal inspection, refinement-pass history, real LLM cost display', 'Shipped'],
   ['v2.2', 'Hexagonal diagram-export refactor (Section 9.4) — fixed Flow View/exporter node-count inconsistency; AI Opportunity & Leverage Layer (FR-32) — fixed a phantom-signal-key bug that had silently disabled the compliance guardrail it shipped with; technology catalog unified to one source of truth with maintainer CLI + custom overlay (FR-33); Huawei Cloud vendor support (FR-34); Hybrid Connectivity category (FR-6a) — fixed a pre-existing onPrem false-positive this work surfaced (see Section 12)', 'Shipped'],
   ['v2.3', 'Enterprise v2.0 shell (FR-35 through FR-41) — persistent sidebar, 3-column results layout, localStorage-backed analysis history, refine/ask context-panel drawer, full mobile responsive treatment (bottom nav, full-screen overlays, Flow View mobile tuning); 8 accessibility/interaction fixes and completion of the emoji-to-icon migration (FR-42, FR-43)', 'Shipped'],
+  ['v2.4', '"Challenge This Pick" widget (FR-44) — first real instrumentation for BRD Section 7\'s disagreement-rate metric. New Disagreement backend aggregate + endpoint, per-card feedback form reusing existing vendor-alternatives data', 'Shipped'],
 ]));
 
 // ---------- Known limitations ----------

@@ -14,7 +14,7 @@ children.push(...coverTitle(
   'Domain-Driven Design Document',
   'Bounded contexts, ubiquitous language, and aggregates for v2',
   [
-    ['Document Version', '1.2'],
+    ['Document Version', '1.3'],
     ['Status', 'Implemented — all v2 contexts (Analysis, Refinement, Sharing, Integration) built and tested, including RAG grounding for the Refinement Context'],
     ['Prepared by', 'Muneeb, with Claude (Cowork)'],
     ['Date', new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })],
@@ -85,6 +85,11 @@ children.push(bulletBold('Invariant: ', 'every message belongs to exactly one An
 children.push(h2('4.4 McpInvocation (aggregate root — Integration Context)'));
 children.push(bulletBold('Invariant: ', 'exists independently of whether the resulting Analysis is ever persisted or viewed in the web app — an MCP-originated call is a first-class usage path, not a side effect of the web app\'s existence. This is why analysis_id is nullable: the invocation is logged the instant the tool is called, before the Analysis Context has necessarily run to completion.'));
 
+children.push(h2('4.5 Disagreement (aggregate root — Refinement Context)'));
+children.push(p('Added later session for the "Challenge This Pick" widget (PRD FR-44) — the first real instrumentation for BRD Section 7\'s disagreement-rate metric. Placed in the Refinement Context, not a new context of its own: both RefinementResult and Disagreement are "a second opinion on a pick," one from an LLM and one from a human, so they share a bounded context rather than inventing a fourth.', { italics: true, color: MUTED, size: 19 }));
+children.push(bulletBold('Invariant: ', 'append-only, same rationale as RefinementResult (Section 4.2) — a disagreement is a fact about a moment; editing it later would corrupt the rate calculation, not just the record. No update/delete route exists.'));
+children.push(bulletBold('Boundary: ', 'references an analysis_id but is not a child Analysis owns internally, matching every other aggregate\'s relationship to Analysis in this document. Requires the referenced Analysis to already exist server-side — the client never creates an Analysis row purely to log a disagreement about it; a disagreement about an Analysis that was never persisted stays client-side-only (localStorage), consistent with NFR-1.'));
+
 // ---------- Domain events ----------
 children.push(h1('5. Domain Events'));
 children.push(p('Named for a future event-driven implementation, though v2 as designed is a simple synchronous request/response system — these are documented now so that if the system later needs to react to its own state changes (e.g. triggering an eval run per BRD\'s open questions), the vocabulary already exists.'));
@@ -98,6 +103,7 @@ children.push(reqTable(
     ['RefinementCompleted', 'Refinement Context', 'The LLM returned adjusted picks, a rationale, and any open questions'],
     ['FollowUpAsked', 'Refinement Context', 'A user submitted a question scoped to an existing Analysis'],
     ['McpToolInvoked', 'Integration Context', 'An external MCP client called recommend_stack()'],
+    ['DisagreementLogged', 'Refinement Context', 'A user stated a preferred alternative to a specific pick and why, on an Analysis that already exists server-side'],
   ]
 ));
 
