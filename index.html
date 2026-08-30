@@ -1706,7 +1706,11 @@ const PASSIVE_NEGATION_ALT = PASSIVE_NEGATION_PHRASES.join('|');
 // in the text.
 function stripNegations(text){
   text = text.replace(new RegExp('[^.!?;\\n]{0,300}?\\b(?:' + PASSIVE_NEGATION_ALT + ')\\b', 'gi'), ' ');
-  text = text.replace(new RegExp('\\b(no|not|without|don\'t|doesn\'t|isn\'t|won\'t|never|excluding|except for|except)\\b[^.!?;\\n]{0,300}?' + NEGATION_CLAUSE_END, 'gi'), ' ');
+  // "Neither Java nor Python" — the excluded items sit AFTER "neither", but the active-voice
+  // pass below never fires on "neither" at all (not in its negator list), so without this,
+  // both names survive to be read as positive mentions. See NEITHER_NOR_CLAUSE below.
+  text = text.replace(new RegExp('\\bneither\\b[^.!?;\\n]{0,300}?' + NEGATION_CLAUSE_END, 'gi'), ' ');
+  text = text.replace(new RegExp('\\b(no|not|without|avoid|don\'t|doesn\'t|isn\'t|won\'t|never|excluding|except for|except)\\b[^.!?;\\n]{0,300}?' + NEGATION_CLAUSE_END, 'gi'), ' ');
   return text;
 }
 
@@ -1738,6 +1742,12 @@ const EXCLUSION_TERMS = {
   mesh:          ['service mesh','istio','linkerd'],
   iam:           ['sso','okta','identity provider','auth0'],
   observability: ['observability','monitoring','datadog','splunk'],
+  // Found via a manual "neither Java nor Python" QA scenario: no language terms existed in
+  // this table at all, so no phrasing of "don't use Java" could ever exclude it, independent
+  // of how well the negation-clause regex itself worked. Deliberately excludes the bare word
+  // "go" — too common in ordinary English ("we don't want to go slow") to safely treat as a
+  // language-exclusion trigger.
+  languages: ['java','python','javascript','typescript','ruby','php','kotlin','swift','rust','c#','.net','node.js','nodejs'],
 };
 
 // A negator followed by one of these does NOT prohibit what comes next — it qualifies it.
@@ -1750,17 +1760,34 @@ const NON_EXCLUSION_QUALIFIERS = [
   'more than', 'less than', 'fewer than', 'later than', 'earlier than', 'greater than',
 ];
 
+// Found via a manual "we already use Postgres, don't need ANOTHER database" QA scenario: this
+// phrase means "one already exists, decline a second" — the opposite of "exclude the category
+// entirely" — but the qualifying word sits immediately before the EXCLUDED TERM itself
+// ("another database"), not at the start of the whole clause like NON_EXCLUSION_QUALIFIERS
+// ("not only a website..."), so a clause-level startsWith() check can't catch it. Checked
+// per-term-match instead, against the text immediately preceding that specific match.
+const QUANTITY_QUALIFIER_RE = /\b(?:another|a second|an additional|a different|one more)\s*$/i;
+
 function detectExclusions(text){
   const t = String(text || '').toLowerCase();
   // Same clause shape stripNegations() removes, but capturing the clause instead of dropping it.
-  const NEG = new RegExp('\\b(?:no|not|without|don\'t|doesn\'t|isn\'t|won\'t|never|excluding|except for|except)\\b([^.!?;\\n]{0,300}?)' + NEGATION_CLAUSE_END, 'gi');
+  const NEG = new RegExp('\\b(?:no|not|without|avoid|don\'t|doesn\'t|isn\'t|won\'t|never|excluding|except for|except)\\b([^.!?;\\n]{0,300}?)' + NEGATION_CLAUSE_END, 'gi');
   // Passive voice ("Kubernetes must not be used") — see PASSIVE_NEGATION_PHRASES above.
   const PASSIVE_NEG = new RegExp('([^.!?;\\n]{0,300}?)\\b(?:' + PASSIVE_NEGATION_ALT + ')\\b', 'gi');
+  // "Neither Java nor Python" — a correlating conjunction, not a single negator word, so it
+  // needs its own pattern rather than folding into NEG above. Capturing straight through to the
+  // clause boundary naturally includes everything after "nor" too, comma lists included.
+  const NEITHER_NOR = new RegExp('\\bneither\\b([^.!?;\\n]{0,300}?)' + NEGATION_CLAUSE_END, 'gi');
   const out = {};
   const recordFrom = (clause) => {
     for (const key in EXCLUSION_TERMS){
-      if (EXCLUSION_TERMS[key].some(term => new RegExp('\\b' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b').test(clause))){
-        out[key] = true;
+      for (const term of EXCLUSION_TERMS[key]){
+        const re = new RegExp('\\b' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b');
+        const hit = re.exec(clause);
+        if (hit && !QUANTITY_QUALIFIER_RE.test(clause.slice(0, hit.index))){
+          out[key] = true;
+          break;
+        }
       }
     }
   };
@@ -1772,6 +1799,9 @@ function detectExclusions(text){
     recordFrom(clause);
   }
   while ((m = PASSIVE_NEG.exec(t)) !== null){
+    recordFrom(m[1] || '');
+  }
+  while ((m = NEITHER_NOR.exec(t)) !== null){
     recordFrom(m[1] || '');
   }
   return out;
@@ -3763,11 +3793,20 @@ function applyExclusions(rec, s){
   if (ex.messaging)     rec.msg   = excludedPick('messaging/streaming');
   if (ex.cache)         rec.cache = excludedPick('caching');
   if (ex.database)      rec.db    = excludedPick('a database');
-  if (ex.cloud)         rec.cloud = excludedPick('cloud hosting');
+  // Found via a manual "on-premises... no public cloud" QA scenario: BOTH s.onPrem and
+  // ex.cloud can fire on the same sentence at once ("on-premises" triggers the former, "no
+  // public cloud" separately matches EXCLUSION_TERMS.cloud). Since this function runs after
+  // pickCloud, an unconditional overwrite here clobbered pickCloud's own, more useful
+  // on-prem-specific answer ("On-premises / private infrastructure...") with the generic "Not
+  // recommended — you excluded cloud hosting" stub — the phrasing that gave the tool MORE
+  // information produced the LESS useful answer. Skip the generic overwrite when pickCloud's
+  // on-prem branch already produced a real answer for the same intent.
+  if (ex.cloud && !s.onPrem) rec.cloud = excludedPick('cloud hosting');
   if (ex.frontend)      rec.fe    = excludedPick('a web/mobile frontend');
   if (ex.mesh)          rec.mesh  = excludedPick('a service mesh');
   if (ex.iam)           rec.iam   = excludedPick('a managed identity provider');
   if (ex.observability) rec.obs   = excludedPick('an observability vendor');
+  if (ex.languages)     rec.lang  = excludedPick('a specific backend language');
 
   // rag/llm carry different shapes from the {v,why,conf} cards — handle each explicitly rather
   // than assuming a uniform pick shape.

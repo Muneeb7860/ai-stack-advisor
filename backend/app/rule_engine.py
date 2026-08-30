@@ -67,8 +67,17 @@ def strip_negations(text: str) -> str:
         text,
         flags=re.IGNORECASE,
     )
+    # "Neither Java nor Python should be used" — the excluded items sit AFTER "neither", but
+    # the active-voice pass above never fires on "neither" at all (not in its negator list), so
+    # without this, both names survive to be read as positive mentions. See _NEITHER_NOR_CLAUSE.
     text = re.sub(
-        r"\b(no|not|without|don't|doesn't|isn't|won't|never|excluding|except for|except)\b"
+        r"\bneither\b[^.!?;\n]{0,300}?" + _CLAUSE_END,
+        " ",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"\b(no|not|without|avoid|don't|doesn't|isn't|won't|never|excluding|except for|except)\b"
         r"[^.!?;\n]{0,300}?" + _CLAUSE_END,
         " ",
         text,
@@ -93,10 +102,17 @@ EXCLUSION_TERMS = {
     "mesh": ["service mesh", "istio", "linkerd"],
     "iam": ["sso", "okta", "identity provider", "auth0"],
     "observability": ["observability", "monitoring", "datadog", "splunk"],
+    # Found via a manual "neither Java nor Python" QA scenario: no language terms existed in
+    # this table at all, so no phrasing of "don't use Java" could ever exclude it, independent
+    # of how well the negation-clause regex itself worked. Deliberately excludes the bare word
+    # "go" (unlike KNOWN_TERMS's own careful padded " go " — every use here already runs through
+    # \b...\b, which wouldn't respect padding anyway) — "go" alone is too common in ordinary
+    # English ("we don't want to go slow") to safely treat as a language-exclusion trigger.
+    "languages": ["java", "python", "javascript", "typescript", "ruby", "php", "kotlin", "swift", "rust", "c#", ".net", "node.js", "nodejs"],
 }
 
 _NEGATION_CLAUSE = re.compile(
-    r"\b(?:no|not|without|don't|doesn't|isn't|won't|never|excluding|except for|except)\b"
+    r"\b(?:no|not|without|avoid|don't|doesn't|isn't|won't|never|excluding|except for|except)\b"
     r"([^.!?;\n]{0,300}?)" + _CLAUSE_END,
     re.I,
 )
@@ -104,6 +120,10 @@ _PASSIVE_NEGATION_CLAUSE = re.compile(
     r"([^.!?;\n]{0,300}?)\b(?:" + _PASSIVE_NEGATION_ALT + r")\b",
     re.I,
 )
+# "Neither Java nor Python" — a correlating conjunction, not a single negator word, so it needs
+# its own pattern rather than folding into _NEGATION_CLAUSE above. Capturing straight through to
+# the clause boundary naturally includes everything after "nor" too, comma lists included.
+_NEITHER_NOR_CLAUSE = re.compile(r"\bneither\b([^.!?;\n]{0,300}?)" + _CLAUSE_END, re.I)
 
 
 # A negator followed by one of these qualifies what comes next rather than prohibiting it.
@@ -115,6 +135,26 @@ NON_EXCLUSION_QUALIFIERS = (
     "only", "just", "merely", "simply", "solely", "exclusively",
     "more than", "less than", "fewer than", "later than", "earlier than", "greater than",
 )
+
+# Found via a manual "we already use Postgres, don't need ANOTHER database" QA scenario: this
+# phrase means "one already exists, decline a second" — the opposite of "exclude the category
+# entirely" — but the qualifying word sits immediately before the EXCLUDED TERM itself ("another
+# database"), not at the start of the whole clause like NON_EXCLUSION_QUALIFIERS above ("not
+# only a website..."), so a clause-level startswith() check can't catch it. Checked per-term-
+# match instead, against the text immediately preceding that specific match.
+_QUANTITY_QUALIFIER_RE = re.compile(r"\b(?:another|a second|an additional|a different|one more)\s*$", re.I)
+
+
+def _record_exclusions(clause: str, out: dict) -> None:
+    """Shared by every negation pattern (active, passive, neither/nor) — records every
+    EXCLUSION_TERMS key found in `clause`, skipping a match immediately preceded by a
+    quantity-qualifier ("another", "a second", ...)."""
+    for key, terms in EXCLUSION_TERMS.items():
+        for term in terms:
+            m = re.search(r"\b" + re.escape(term) + r"\b", clause)
+            if m and not _QUANTITY_QUALIFIER_RE.search(clause[: m.start()]):
+                out[key] = True
+                break
 
 
 def detect_exclusions(text: str) -> dict:
@@ -130,15 +170,13 @@ def detect_exclusions(text: str) -> dict:
         clause = m.group(1) or ""
         if clause.strip().startswith(NON_EXCLUSION_QUALIFIERS):
             continue
-        for key, terms in EXCLUSION_TERMS.items():
-            if any(re.search(r"\b" + re.escape(term) + r"\b", clause) for term in terms):
-                out[key] = True
+        _record_exclusions(clause, out)
     # Passive voice ("Kubernetes must not be used") — see _PASSIVE_NEGATION_PHRASES above.
     for m in _PASSIVE_NEGATION_CLAUSE.finditer(t):
-        clause = m.group(1) or ""
-        for key, terms in EXCLUSION_TERMS.items():
-            if any(re.search(r"\b" + re.escape(term) + r"\b", clause) for term in terms):
-                out[key] = True
+        _record_exclusions(m.group(1) or "", out)
+    # "Neither Java nor Python" — see _NEITHER_NOR_CLAUSE above.
+    for m in _NEITHER_NOR_CLAUSE.finditer(t):
+        _record_exclusions(m.group(1) or "", out)
     return out
 
 
@@ -2127,7 +2165,15 @@ def apply_exclusions(rec: dict, s: dict) -> dict:
         rec["cache"] = excluded_pick("caching")
     if ex.get("database"):
         rec["database"] = excluded_pick("a database")
-    if ex.get("cloud"):
+    # Found via a manual "on-premises... no public cloud" QA scenario: BOTH s.onPrem and
+    # ex.cloud can fire on the same sentence at once ("on-premises" triggers the former,
+    # "no public cloud" separately matches EXCLUSION_TERMS["cloud"]). Since this block runs
+    # after pick_cloud, an unconditional overwrite here clobbered pick_cloud's own, more useful
+    # on-prem-specific answer ("On-premises / private infrastructure...") with the generic
+    # "Not recommended — you excluded cloud hosting" stub — the phrasing that gave the tool
+    # MORE information produced the LESS useful answer. Skip the generic overwrite when
+    # pick_cloud's on-prem branch already produced a real answer for the same intent.
+    if ex.get("cloud") and not s.get("onPrem"):
         rec["cloud"] = excluded_pick("cloud hosting")
     if ex.get("frontend"):
         rec["frontend"] = excluded_pick("a web/mobile frontend")
@@ -2137,6 +2183,8 @@ def apply_exclusions(rec: dict, s: dict) -> dict:
         rec["iam"] = excluded_pick("a managed identity provider")
     if ex.get("observability"):
         rec["observability"] = excluded_pick("an observability vendor")
+    if ex.get("languages"):
+        rec["languages"] = excluded_pick("a specific backend language")
 
     # rag/llm carry different shapes from the {v, why, conf} cards.
     if ex.get("rag"):
