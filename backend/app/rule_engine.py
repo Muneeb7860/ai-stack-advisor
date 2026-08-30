@@ -549,6 +549,9 @@ def detect_signals(text: str) -> dict:
         "azureShop": has(["azure", "microsoft"]),
         "gcpShop": has(["gcp", "google cloud"]),
         "coolifyMentioned": has(["coolify"]),
+        "argocdMentioned": has(["argocd", "argo cd"]),
+        "fluxcdMentioned": has(["fluxcd", "flux cd"]),
+        "gitopsMentioned": has(["gitops", "git-ops", "git ops"]),
         "dokployMentioned": has(["dokploy"]),
         "huaweiShop": has(["huawei", "huawei cloud"]),
         "oktaMentioned": has(["okta"]),
@@ -1081,6 +1084,38 @@ def pick_cicd_vendor(s, cicd):
 
 
 CICD_NOTE = "Jenkins and Buildkite's self-hosted-agent model is a fundamentally different cost shape than the SaaS-runner tools — cost trades from \"per-minute usage\" to \"infra you already run.\" Route by ops-capacity signal (has existing infra vs. wants zero infra to manage), not brand familiarity. Source: docs/alternatives-research/04-devops-frontend-cicd-observability-frameworks.md."
+
+# GitOps continuous-deployment tools are a distinct job from the CI (build/test) tools above:
+# ArgoCD/Flux reconcile a Git repo's desired state against a running Kubernetes cluster — they
+# don't build or test anything themselves, and only make sense once a Kubernetes-family
+# orchestrator is actually in the picture (see pick_gitops_vendor's "not applicable" branch
+# below). CICD_VENDORS deliberately does not include them for that reason.
+GITOPS_VENDORS = [
+    {"id": "argocd", "name": "ArgoCD", "cat": "Kubernetes-native GitOps CD (UI-first)", "bestFor": "Teams wanting GitOps CD with a built-in web UI for visualizing sync status, drift, and multi-cluster deployments at a glance", "strength": "Real-time web UI with visual diff/drift detection; built-in multi-cluster and multi-tenancy support with RBAC and broad SSO (OIDC/SAML/GitHub/GitLab/LDAP); works with Kustomize, Helm, Jsonnet, or plain YAML", "drawback": "The richer feature surface (UI, RBAC, multi-tenancy) is more to configure and secure than Flux's toolkit approach; the UI itself is another component to keep patched and available", "pricing": "Free (OSS, CNCF-graduated project) — commercial support/hosting available via third parties (e.g. Akuity)"},
+    {"id": "fluxcd", "name": "Flux CD", "cat": "Kubernetes-native GitOps CD (toolkit)", "bestFor": "Teams wanting a lighter-weight, composable GitOps toolkit that integrates cleanly into existing tooling rather than a standalone UI-first platform", "strength": "Pull-based reconciliation with a least-privilege security posture; true Kubernetes-native RBAC via impersonation; tight integration with Flagger for canary/progressive delivery", "drawback": "No built-in web UI by default (a separate optional UI exists) — day-to-day operation leans more on kubectl/CLI/Git than a dashboard, a real workflow difference from ArgoCD", "pricing": "Free (OSS, CNCF-graduated project)"},
+]
+
+
+def pick_gitops_vendor(s, containers):
+    """GitOps CD is a distinct, separately-comparable pick from the CI (build/test) card above
+    and the Orchestrator card — it only applies once a real Kubernetes-family orchestrator is
+    actually in the stack; a serverless-containers or no-orchestrator outcome has nothing for
+    ArgoCD/Flux to reconcile against."""
+    v = containers["v"]
+    if "No orchestrator needed" in v or "serverless containers" in v:
+        return {"v": "Not applicable — no Kubernetes-style orchestrator in this stack", "why": "GitOps continuous-deployment tools (ArgoCD, Flux) reconcile a Git repo's desired state against a running Kubernetes cluster — without a Kubernetes-family orchestrator in the picture, there is nothing for them to reconcile against. Revisit this once/if you introduce Kubernetes.", "primaryId": None, "conf": "high"}
+    if s["argocdMentioned"]:
+        return {"v": "ArgoCD", "why": "Explicit ArgoCD mention detected — matching existing familiarity over evaluating a new GitOps tool.", "primaryId": "argocd", "conf": "high"}
+    if s["fluxcdMentioned"]:
+        return {"v": "Flux CD", "why": "Explicit Flux CD mention detected — matching existing familiarity over evaluating a new GitOps tool.", "primaryId": "fluxcd", "conf": "high"}
+    if s["enterprise"] or s["largeTeam"]:
+        return {"v": "ArgoCD", "why": "Largest ecosystem and the richest built-in web UI for multi-team, multi-cluster visibility — the safer default when many people across an organization need to see deployment/sync state at a glance, not just the platform team.", "primaryId": "argocd", "conf": "medium"}
+    if s["gitopsMentioned"]:
+        return {"v": "ArgoCD (or Flux CD if you want a lighter-weight, UI-less toolkit)", "why": "GitOps was named explicitly without a specific tool — ArgoCD is the safer default given its larger ecosystem and built-in UI; pick Flux CD instead if the team prefers a minimal, CLI/Git-driven workflow over a dashboard.", "primaryId": "argocd", "conf": "medium"}
+    return {"v": "ArgoCD (or Flux CD if you want a lighter-weight, UI-less toolkit)", "why": "A Kubernetes-family orchestrator is in your stack — GitOps (declarative, auditable, Git-driven deployment) is the standard pattern once you're past manually applying manifests. ArgoCD is the safer default given its larger ecosystem and built-in UI; Flux CD is the pick if the team prefers a minimal, CLI/Git-driven workflow over a dashboard.", "primaryId": "argocd", "conf": "low"}
+
+
+GITOPS_NOTE = "ArgoCD and Flux CD are both CNCF-graduated, free, open-source projects solving the same reconciliation problem with different architectural philosophies (UI-first platform vs. composable toolkit) — this is a workflow-preference decision, not a maturity or cost one. Neither is a CI tool: they deploy what a CI pipeline already built and tested, they don't build or test anything themselves."
 
 OBSERVABILITY_VENDORS = [
     {"id": "datadog", "name": "Datadog", "cat": "Enterprise SaaS", "bestFor": "Orgs prioritizing breadth + correlation depth across metrics/traces/logs", "strength": "One-click metric-anomaly → trace → log correlation, AI-assisted analysis, 15+ integrated sub-products", "drawback": "High cost trajectory — mid-size enterprises commonly report $500K-2M+/yr; no self-hosted option", "pricing": "Usage-based, scales with data volume"},
@@ -2333,6 +2368,20 @@ def apply_exclusions(rec: dict, s: dict) -> dict:
                    "want to avoid containers entirely, say so and this drops to plain VM/PaaS deployment."}
     if ex.get("containers"):
         rec["containers"] = excluded_pick("containers")
+    # GitOps (ArgoCD/Flux) has no separate underlying pick to fall back to the way "containers"
+    # does above — pick_gitops_vendor() computed its recommendation from the PRE-exclusion
+    # containers pick, so without this, excluding Kubernetes/containers still leaves the GitOps
+    # card recommending a tool to manage a cluster the user just ruled out. Replace the primary
+    # text outright (not just _suppress, which only hides the alt-toggle comparison table below).
+    if ex.get("containers") or ex.get("kubernetes"):
+        rec["gitops"] = {
+            "v": "Not applicable — you excluded containers/Kubernetes",
+            "conf": "high", "excluded": True,
+            "why": "GitOps tools (ArgoCD, Flux) reconcile a Git repo's desired state against a "
+                   "running Kubernetes cluster — with containers/Kubernetes excluded from your "
+                   "stack, there is nothing for them to manage.",
+        }
+        rec["gitops_vendor"] = dict(rec["gitops"], primaryId=None, suppressed=True)
     if ex.get("microservices"):
         rec["architecture"] = {
             "v": "Modular monolith (single deployable, module boundaries enforced in-code)",
@@ -2407,6 +2456,9 @@ def apply_exclusions(rec: dict, s: dict) -> dict:
         _suppress("compute_platform_vendor")
     if ex.get("api"):
         _suppress("gateway_vendor")
+    # gitops_vendor is handled earlier (alongside "containers"), not here — it needs its PRIMARY
+    # text replaced, not just suppressed, since (unlike every other *_vendor key) there is no
+    # separate underlying pick supplying its v/why text.
     return rec
 
 
@@ -2432,6 +2484,14 @@ def recommend_stack(requirement_text: str) -> dict:
     gw = pick_gateway(s)
     cicd = pick_cicd(s)
     hosting = pick_hosting_location(s)
+    # No separate "base" GitOps pick exists (unlike cicd/compute, which have a base pick AND a
+    # vendor-comparison wrapper) — pick_gitops_vendor() produces the recommendation and the
+    # vendor primaryId together. Computed once and stored under both "gitops" (for STACK_CARD_
+    # CATEGORY / the refine/ask/challenge UI, which looks up recommendations[category] the same
+    # way every other card does) and "gitops_vendor" (for the vendor-comparison suppress logic,
+    # matching every other *_vendor key's naming convention) — see the JS twin for the identical
+    # dual-key rationale.
+    gitops = pick_gitops_vendor(s, containers)
 
     recommendations = {
         "cloud": cloud,
@@ -2448,6 +2508,7 @@ def recommend_stack(requirement_text: str) -> dict:
         "observability": obs,
         "frontend": fe,
         "cicd": cicd,
+        "gitops": gitops,
         "dns": pick_dns(s),
         "hybrid_connectivity": pick_hybrid_connectivity(s, cloud),
         "audit_logging": pick_audit_logging(s),
@@ -2486,6 +2547,7 @@ def recommend_stack(requirement_text: str) -> dict:
         "vector_db_vendor": pick_vector_db_vendor(s, pick_vector_db_placement(s, rag)),
         "guardrails_vendor": pick_guardrails_vendor(s),
         "cicd_vendor": pick_cicd_vendor(s, cicd),
+        "gitops_vendor": gitops,
         "observability_vendor": pick_observability_vendor(s, obs),
         "frontend_vendor": pick_frontend_vendor(s, fe),
     }

@@ -132,9 +132,13 @@ def test_recommend_stack_returns_all_expected_categories():
     parity gap they'd been sitting in was closed (see tests/test_engine_parity.py). Six more
     categories (audit_logging, privileged_access, testing_strategy, network_boundary,
     multi_cloud_bridging, security_gates) were added when docs 12/13/15/16/17/18 in
-    docs/use-case-knowledge-base were promoted from target-design to implemented. If this test
-    needs updating again, cross-check against the actual index.html analyze() assembly, not
-    against what an MCP client currently expects.
+    docs/use-case-knowledge-base were promoted from target-design to implemented. gitops and
+    gitops_vendor were added for the new GitOps CD (ArgoCD/Flux) category — gitops is the plain
+    key used by STACK_CARD_CATEGORY/refine (no separate "base" pick exists for this category,
+    unlike cicd/compute), and gitops_vendor is the *_vendor-convention alias used by the
+    alt-toggle/suppress machinery; both hold the same object. If this test needs updating again,
+    cross-check against the actual index.html analyze() assembly, not against what an MCP client
+    currently expects.
 
     Note this list is hand-maintained, so it only catches a key added on the PYTHON side — it is
     not a substitute for test_engine_parity.py, which is what catches a category that landed in
@@ -151,7 +155,7 @@ def test_recommend_stack_returns_all_expected_categories():
         "gateway_vendor", "database_vendor", "messaging_vendor", "llm_provider_vendor",
         "vector_db_vendor", "guardrails_vendor", "cicd_vendor", "observability_vendor",
         "frontend_vendor", "audit_logging", "privileged_access", "testing_strategy",
-        "network_boundary", "multi_cloud_bridging", "security_gates",
+        "network_boundary", "multi_cloud_bridging", "security_gates", "gitops", "gitops_vendor",
     }
     assert set(result["recommendations"].keys()) == expected_categories
 

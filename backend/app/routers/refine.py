@@ -139,7 +139,7 @@ MODEL = "claude-sonnet-5"
 # card, with the user only ever seeing "No change suggested" and no signal anything was wrong.
 VALID_CATEGORIES = [
     "cloud", "gateway", "iam", "languages", "architecture", "compute", "messaging", "mesh",
-    "cache", "database", "containers", "observability", "frontend", "cicd", "dns",
+    "cache", "database", "containers", "observability", "frontend", "cicd", "gitops", "dns",
     "hybridconnectivity", "auditlogging", "privilegedaccess", "testingstrategy",
     "networkboundary", "multicloudbridging", "securitygates", "tradeoffs",
 ]
