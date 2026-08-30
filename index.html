@@ -1632,8 +1632,35 @@ function clearAll(){
 // ---------- Signal detection ----------
 // Strip short negated clauses ("no document search", "don't have compliance requirements yet")
 // before keyword matching, so stated non-requirements don't get read as requirements.
+// Clause boundary shared by the active-voice negation regexes and stripNegations(): allow
+// comma-separated lists ("no website, API, database, cloud, ...") to stay inside ONE clause —
+// stopping at the first comma (the old behavior) truncated "I do not need a website, API,
+// database, ..., or a vector database." after just "website", leaving every later item to be
+// read as a positive mention. Stop only at a true sentence end, or at a subordinating/
+// contrasting conjunction, so a later, unrelated positive requirement in the SAME sentence
+// ("...but we do need Postgres for durability") is never swept into the negated clause.
+const NEGATION_CLAUSE_END = '(?=\\s+(?:because|since|but|however|whereas|although|while)\\b|[.!?;\\n]|$)';
+
+// Passive-voice negation phrases ("Kubernetes must not be used") — the excluded subject sits
+// BEFORE the negation phrase here, which the active-voice "no|not|..." regexes can never see
+// (they only look forward from the negator word). Handled as a second, independent pattern
+// rather than folded into the active one, since the grammar runs the opposite direction.
+const PASSIVE_NEGATION_PHRASES = [
+  'must not be used', 'cannot be used', "can't be used", 'should not be used',
+  'is not allowed', 'are not allowed', 'is not needed', 'are not needed',
+  'is not required', 'are not required', 'is excluded', 'are excluded',
+  'not permitted', 'not to be used', 'is ruled out', 'are ruled out',
+];
+const PASSIVE_NEGATION_ALT = PASSIVE_NEGATION_PHRASES.join('|');
+
+// Passive-voice clauses are stripped FIRST: "Kubernetes must not be used" would otherwise have
+// its "not be used" tail consumed by the active-voice pass below (which fires on the bare word
+// "not"), leaving nothing left for the passive pattern to match against and "Kubernetes" behind
+// in the text.
 function stripNegations(text){
-  return text.replace(/\b(no|not|without|don't|doesn't|isn't|won't|never|excluding|except for|except)\b[^.,;!?]{0,60}/gi, ' ');
+  text = text.replace(new RegExp('[^.!?;\\n]{0,300}?\\b(?:' + PASSIVE_NEGATION_ALT + ')\\b', 'gi'), ' ');
+  text = text.replace(new RegExp('\\b(no|not|without|don\'t|doesn\'t|isn\'t|won\'t|never|excluding|except for|except)\\b[^.!?;\\n]{0,300}?' + NEGATION_CLAUSE_END, 'gi'), ' ');
+  return text;
 }
 
 // stripNegations() deletes the negated clause so a phrase like "no compliance requirements"
@@ -1679,18 +1706,26 @@ const NON_EXCLUSION_QUALIFIERS = [
 function detectExclusions(text){
   const t = String(text || '').toLowerCase();
   // Same clause shape stripNegations() removes, but capturing the clause instead of dropping it.
-  const NEG = /\b(?:no|not|without|don't|doesn't|isn't|won't|never|excluding|except for|except)\b([^.,;!?]{0,60})/gi;
+  const NEG = new RegExp('\\b(?:no|not|without|don\'t|doesn\'t|isn\'t|won\'t|never|excluding|except for|except)\\b([^.!?;\\n]{0,300}?)' + NEGATION_CLAUSE_END, 'gi');
+  // Passive voice ("Kubernetes must not be used") — see PASSIVE_NEGATION_PHRASES above.
+  const PASSIVE_NEG = new RegExp('([^.!?;\\n]{0,300}?)\\b(?:' + PASSIVE_NEGATION_ALT + ')\\b', 'gi');
   const out = {};
-  let m;
-  while ((m = NEG.exec(t)) !== null){
-    const clause = m[1] || '';
-    const lead = clause.trim();
-    if (NON_EXCLUSION_QUALIFIERS.some(q => lead.startsWith(q))) continue;
+  const recordFrom = (clause) => {
     for (const key in EXCLUSION_TERMS){
       if (EXCLUSION_TERMS[key].some(term => new RegExp('\\b' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b').test(clause))){
         out[key] = true;
       }
     }
+  };
+  let m;
+  while ((m = NEG.exec(t)) !== null){
+    const clause = m[1] || '';
+    const lead = clause.trim();
+    if (NON_EXCLUSION_QUALIFIERS.some(q => lead.startsWith(q))) continue;
+    recordFrom(clause);
+  }
+  while ((m = PASSIVE_NEG.exec(t)) !== null){
+    recordFrom(m[1] || '');
   }
   return out;
 }
