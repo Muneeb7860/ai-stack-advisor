@@ -580,6 +580,8 @@ def detect_signals(text: str) -> dict:
         "mysqlMentioned": has(["mysql"]),
         "oracleDbMentioned": has(["oracle database", "oracle db", "oracle sql"]),
         "sqlServerMentioned": has(["sql server", "mssql", "microsoft sql server"]),
+        "neonMentioned": has(["neon"]),
+        "tursoMentioned": has(["turso", "libsql"]),
         "reactMentioned": bool(re.search(r"\breact\b", t)) and not has(["reaction", "reactive"]),
         "angularMentioned": has(["angular"]),
         "vueMentioned": has(["vue.js", "vuejs"]) or bool(re.search(r"\bvue\b", t)),
@@ -911,6 +913,8 @@ DATABASE_VENDORS = [
     {"id": "dynamodb", "name": "DynamoDB (AWS)", "cat": "Key-value / serverless", "bestFor": "Gaming leaderboards, shopping carts, AWS-native serverless apps", "strength": "Fully managed, automatic scaling, single-digit ms latency, global tables", "drawback": "AWS lock-in; limited query flexibility (no ad-hoc joins)", "pricing": "On-demand pay-per-request or provisioned capacity"},
     {"id": "cassandra", "name": "Cassandra", "cat": "Wide-column", "bestFor": "Time-series/IoT, transaction logs, high-availability multi-DC", "strength": "Linear scalability via masterless ring architecture, tunable consistency", "drawback": "Operational complexity; eventual-consistency model needs app-level awareness", "pricing": "OSS free · managed via DataStax Astra"},
     {"id": "warehouse", "name": "Cloud data warehouse (BigQuery/Snowflake/Redshift)", "cat": "Analytics/OLAP", "bestFor": "Analytics/ETL/reporting-centric workloads, not transactional apps", "strength": "Built for large scans, aggregations, BI-tool integration — Postgres/Mongo/Cassandra aren't optimized for this", "drawback": "Wrong tool for OLTP/transactional workloads", "pricing": "Usage-based (per-query or per-slot)"},
+    {"id": "neon", "name": "Neon", "cat": "Serverless Postgres, branch-per-PR", "bestFor": "Teams wanting real Postgres with instant, copy-on-write database branching (one branch per PR/preview environment) and true scale-to-zero", "strength": "Postgres-wire-compatible (no query-layer rewrite needed); branching a multi-GB database is near-instant via copy-on-write storage; compute suspends to zero when idle, so a preview-environment fleet doesn't idle-bill", "drawback": "Storage/compute separation adds latency on cold-start (scale-from-zero) that a warm dedicated Postgres instance doesn't have; egress/storage costs are metered separately from compute, so a naive cost comparison against a flat-rate managed Postgres plan can mislead", "pricing": "Free: 100 CU-hours/mo, 0.5GB storage, 10 branches, 60,000 MAU (built-in auth) · Launch: pay-as-you-go from $0.106/CU-hour + $0.35/GB-mo storage · Scale: $0.222/CU-hour, adds HIPAA/SOC2/SLA"},
+    {"id": "turso", "name": "Turso", "cat": "Distributed SQLite (libSQL), edge-native", "bestFor": "Read-heavy, latency-sensitive apps that want a SQLite database replicated close to every edge region instead of one central Postgres round-trip per request", "strength": "Embedded-SQLite-class read latency at the edge; \"unlimited databases\" model fits a database-per-tenant/per-user architecture cheaply; built on open-source libSQL, so the engine itself avoids vendor lock-in even though migrating off it isn't a drop-in path", "drawback": "SQLite-family, not Postgres-compatible — no native JSONB/window-function parity, and existing Postgres-specific tooling/extensions (PostGIS, pgvector, etc.) don't carry over; write-heavy or highly relational workloads fit Postgres/Neon better", "pricing": "Free: 100 databases, 5GB storage, 500M rows read/mo, 10M rows written/mo · Developer: $4.99/mo, 9GB storage · Scaler: $24.92/mo, 24GB storage, team support · Pro: $416.58/mo, adds SSO/BYOK/HIPAA/SOC2"},
 ]
 
 
@@ -922,6 +926,10 @@ def pick_database_vendor(db):
         primary_id = "cassandra"
     elif "MongoDB" in db["v"]:
         primary_id = "mongodb"
+    elif "Neon" in db["v"]:
+        primary_id = "neon"
+    elif "Turso" in db["v"]:
+        primary_id = "turso"
     else:
         primary_id = "postgres"
     return {"v": db["v"], "why": db["why"], "primaryId": primary_id, "conf": db["conf"]}
@@ -1481,7 +1489,11 @@ def pick_database(s):
         rdbms_name, rdbms_skill_note = "Microsoft SQL Server", " — matches your team's existing SQL Server experience"
     elif s["oracleDbMentioned"]:
         rdbms_name, rdbms_skill_note = "Oracle Database", " — matches your team's existing Oracle experience"
-    rdbms_skill_hit = s["mysqlMentioned"] or s["sqlServerMentioned"] or s["oracleDbMentioned"]
+    elif s["neonMentioned"]:
+        rdbms_name, rdbms_skill_note = "Neon (serverless Postgres, instant branching)", " — matches your team's existing Neon experience; still Postgres-wire-compatible underneath"
+    elif s["tursoMentioned"]:
+        rdbms_name, rdbms_skill_note = "Turso (distributed SQLite/libSQL, edge-native)", " — matches your team's existing Turso experience; note this is SQLite-family, not Postgres-compatible"
+    rdbms_skill_hit = s["mysqlMentioned"] or s["sqlServerMentioned"] or s["oracleDbMentioned"] or s["neonMentioned"] or s["tursoMentioned"]
 
     if (s["structured"] or s["finance"] or s["postgresMentioned"] or rdbms_skill_hit
             or (not s["unstructured"] and not warehouse_need and not s["mongoMentioned"])):
@@ -1506,6 +1518,7 @@ def pick_database(s):
         why += " Included because your team already knows " + " and ".join(
             [n for n in [s["postgresMentioned"] and "Postgres", s["mysqlMentioned"] and "MySQL",
                          s["sqlServerMentioned"] and "SQL Server", s["oracleDbMentioned"] and "Oracle",
+                         s["neonMentioned"] and "Neon", s["tursoMentioned"] and "Turso",
                          s["mongoMentioned"] and "MongoDB"] if n]
         ) + " — matching existing skills beats a theoretically-better choice on most timelines."
     if s["geospatial"]:
