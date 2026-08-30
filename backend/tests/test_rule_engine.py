@@ -136,9 +136,12 @@ def test_recommend_stack_returns_all_expected_categories():
     gitops_vendor were added for the new GitOps CD (ArgoCD/Flux) category — gitops is the plain
     key used by STACK_CARD_CATEGORY/refine (no separate "base" pick exists for this category,
     unlike cicd/compute), and gitops_vendor is the *_vendor-convention alias used by the
-    alt-toggle/suppress machinery; both hold the same object. If this test needs updating again,
-    cross-check against the actual index.html analyze() assembly, not against what an MCP client
-    currently expects.
+    alt-toggle/suppress machinery; both hold the same object. agent_framework_vendor was added
+    for the new Agent Framework (LangGraph/Pydantic AI/FastMCP) category — a bespoke, non-"stack"
+    section like vector_db_vendor (has its own altToggle but no STACK_CARD_CATEGORY entry, since
+    it doesn't render as a refine/ask/challenge-enabled stack card), so it needs no plain-key
+    alias the way gitops does. If this test needs updating again, cross-check against the actual
+    index.html analyze() assembly, not against what an MCP client currently expects.
 
     Note this list is hand-maintained, so it only catches a key added on the PYTHON side — it is
     not a substitute for test_engine_parity.py, which is what catches a category that landed in
@@ -156,6 +159,7 @@ def test_recommend_stack_returns_all_expected_categories():
         "vector_db_vendor", "guardrails_vendor", "cicd_vendor", "observability_vendor",
         "frontend_vendor", "audit_logging", "privileged_access", "testing_strategy",
         "network_boundary", "multi_cloud_bridging", "security_gates", "gitops", "gitops_vendor",
+        "agent_framework_vendor",
     }
     assert set(result["recommendations"].keys()) == expected_categories
 

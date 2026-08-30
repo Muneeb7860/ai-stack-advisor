@@ -506,6 +506,9 @@ def detect_signals(text: str) -> dict:
         "chatbot": has(["chatbot", "conversational", "customer support bot", "assistant", "virtual agent"]),
         "knowledgeBase": has(["knowledge base", "internal documents", "policy documents", "confluence", "wiki", "document search", "faq"]),
         "agentic": has(["agentic", "multi-agent", "take actions", "automate workflow", "autonomous", "tool use", "function calling"]),
+        "langgraphMentioned": has(["langgraph"]),
+        "pydanticAiMentioned": has(["pydantic ai", "pydanticai"]),
+        "fastmcpMentioned": has(["fastmcp", "fast mcp"]),
         "mobile": has(["mobile", "flutter", "ios", "android", "react native"]),
         "web": has(["web app", "website", "web application", "react", "angular", "vue"]),
         # Domain floors (docs/manual-qa-test-matrix.csv TC-05/06/07/09) — mirrors index.html
@@ -1670,6 +1673,55 @@ def pick_mcp(s):
     return picks
 
 
+# LangGraph and Pydantic AI compete on the same job (orchestrating an agent's own reasoning/
+# tool-use loop); FastMCP solves a genuinely different one (exposing tools/servers via the MCP
+# protocol so an agent — built with LangGraph, Pydantic AI, or anything else — can call them).
+# Grouped in one category anyway, same as GATEWAY_VENDORS mixing open-source/commercial or
+# CACHE_VENDORS mixing single/multi-threaded stores — the `cat` field on each entry says which
+# job it does, and FastMCP's own drawback text says so explicitly, so a reader isn't misled into
+# treating it as a fourth competing agent-orchestration option.
+AGENT_FRAMEWORK_VENDORS = [
+    {"id": "langgraph", "name": "LangGraph", "cat": "Stateful multi-agent orchestration (graph-based)", "bestFor": "Complex, branching, or long-running multi-agent workflows needing durable checkpoints and human-in-the-loop review", "strength": "Explicit graph-based state machine mixes deterministic, auditable steps with model-driven decisions in one flow; agents persist and resume from checkpoints rather than restarting on failure; deep LangSmith integration for tracing/observability", "drawback": "Intentionally low-level — the graph abstraction itself is more to learn and maintain than a simple agent loop, and it's overkill for a single-agent, non-branching workflow", "pricing": "Free (OSS) — LangSmith observability is a separate paid product"},
+    {"id": "pydanticai", "name": "Pydantic AI", "cat": "Type-safe agent SDK (single-agent-loop-first)", "bestFor": "Python teams wanting a lighter-weight, type-safe agent loop without LangChain's larger ecosystem surface area", "strength": "Type safety throughout (structured outputs, dependency injection, tool definitions) built on familiar Pydantic validation; model-agnostic — swap providers with a string; built-in OpenTelemetry/Logfire observability with no extra config", "drawback": "Younger project with a smaller ecosystem/plugin surface than LangChain/LangGraph; less mature tooling for genuinely complex, branching multi-agent graphs", "pricing": "Free (OSS)"},
+    {"id": "fastmcp", "name": "FastMCP", "cat": "MCP server/tool-exposition framework (not an agent-orchestration framework)", "bestFor": "Python teams building MCP servers/tools without hand-rolling the protocol themselves", "strength": "Automatic schema generation and validation from plain Python functions (decorator-based); FastMCP's high-level API was incorporated into the official MCP Python SDK in 2024, so it's not a fringe alternative to the standard — it effectively became part of it", "drawback": "Solves tool-exposition, not agent orchestration — it doesn't compete with LangGraph/Pydantic AI, it complements whichever one (or neither) you use for the agent's own reasoning loop", "pricing": "Free (OSS)"},
+]
+
+
+def pick_agent_framework_vendor(s):
+    """Gated on the `agentic` signal — a non-agentic requirement has no multi-step tool-use loop
+    for a framework like this to orchestrate, same gating shape as pick_gitops_vendor's
+    Kubernetes-orchestrator check."""
+    if not s["agentic"]:
+        return {"v": "Not applicable — no agentic/multi-step tool-use workflow in this stack", "why": "LangGraph, Pydantic AI, and FastMCP all exist to build/orchestrate an agent's own reasoning or tool-calling loop — without an agentic/multi-step tool-use requirement, there's no such loop for a framework to structure. Revisit this once/if you add one.", "primaryId": None, "conf": "high"}
+    if s["langgraphMentioned"]:
+        return {"v": "LangGraph", "why": "Explicit LangGraph mention detected — matching existing familiarity over evaluating a new framework.", "primaryId": "langgraph", "conf": "high"}
+    if s["pydanticAiMentioned"]:
+        return {"v": "Pydantic AI", "why": "Explicit Pydantic AI mention detected — matching existing familiarity over evaluating a new framework.", "primaryId": "pydanticai", "conf": "high"}
+    if s["fastmcpMentioned"]:
+        return {"v": "FastMCP", "why": "Explicit FastMCP mention detected. Note this solves a different problem than LangGraph/Pydantic AI — it exposes tools via MCP, it doesn't orchestrate the agent's own reasoning loop — you likely still want one of those alongside it for the agent itself.", "primaryId": "fastmcp", "conf": "high"}
+    mcp_also_relevant = s["knowledgeBase"] or s["ragNeed"] or s["enterprise"]
+    fastmcp_note = (
+        " Since you're also likely exposing tools via MCP, FastMCP is the standard choice for building "
+        "those servers — a complementary, not competing, choice (its high-level API was incorporated "
+        "into the official MCP Python SDK in 2024)."
+        if mcp_also_relevant else ""
+    )
+    if s["enterprise"] or s["largeTeam"]:
+        return {
+            "v": "LangGraph" + (" (+ FastMCP for MCP servers)" if mcp_also_relevant else ""),
+            "why": "Complex, multi-step, or multi-agent workflows at team/enterprise scale benefit from LangGraph's explicit graph-based state machine — durable checkpoints, human-in-the-loop interrupts, and precise control over branching logic that a simpler single-agent-loop SDK doesn't give you." + fastmcp_note,
+            "primaryId": "langgraph", "conf": "medium",
+        }
+    return {
+        "v": "Pydantic AI" + (" (+ FastMCP for MCP servers)" if mcp_also_relevant else ""),
+        "why": "A type-safe, lighter-weight agent SDK is the better default absent a specific need for LangGraph's graph-based multi-agent complexity — Pydantic AI's familiar Pydantic validation/typing catches errors at development time, and it's model-agnostic without LangChain's larger surface area. Move to LangGraph if the workflow grows into genuinely branching, multi-agent, or long-running/durable territory." + fastmcp_note,
+        "primaryId": "pydanticai", "conf": "medium",
+    }
+
+
+AGENT_FRAMEWORK_NOTE = "LangGraph and Pydantic AI compete on the same job (orchestrating an agent's own reasoning/tool-use loop); FastMCP solves a different one (exposing tools via the MCP protocol so an agent — built with either of those, or anything else — can call them). Grouped here for convenience, not because all three compete head-to-head."
+
+
 def pick_integration_guidance(s):
     # Pattern #2 (omnichannel) is architecturally different from pattern #1 (chatbot-only), not
     # a bigger version of it — the hard part isn't the model, it's a channel-routing/session-
@@ -2520,6 +2572,7 @@ def recommend_stack(requirement_text: str) -> dict:
         "docs": pick_docs(s),
         "llm": llm,
         "mcp_servers": pick_mcp(s),
+        "agent_framework_vendor": pick_agent_framework_vendor(s),
         "rag": rag,
         "guardrails": pick_guardrails(s),
         "integration_guidance": pick_integration_guidance(s),
