@@ -548,6 +548,13 @@ def detect_signals(text: str) -> dict:
         "searchRecommendation": has(["search bar", "product search", "site search", "search relevance", "autocomplete", "instant search", "faceted search", "recommendations", "recommended for you", "you may also like", "personalized feed", "for you page", "discovery feed", "similar items", "related products"]),
         "routingGuardrailService": has(["route between models", "multiple llm providers", "cost-optimize llm calls", "model selection per task", "different models per task", "llm gateway", "llm proxy", "ai gateway", "centralized guardrails", "prompt injection", "jailbreak", "pii redaction", "content policy enforcement", "semantic router", "model router", "fall back to a stronger model"]),
         "selfHostInfra": has(["docker", "kubernetes", "k8s", "self-hosted", "self hosted", "own gpu", "own gpus", "own servers", "own infrastructure", "own hardware", "on our own hardware", "ollama"]),
+        "vllmMentioned": has(["vllm"]),
+        "sglangMentioned": has(["sglang", "sg-lang"]),
+        # Bare "tgi" deliberately excluded (too short/common a substring to trust) — only the
+        # full name triggers this, same discipline as EXCLUSION_TERMS["languages"] excluding
+        # bare "go". See pick_inference_serving_vendor's TGI branch for why this is detected at
+        # all despite the project being in maintenance mode.
+        "tgiMentioned": has(["text generation inference"]),
         "awsShop": has(["aws", "amazon web services"]),
         "azureShop": has(["azure", "microsoft"]),
         "gcpShop": has(["gcp", "google cloud"]),
@@ -1967,6 +1974,39 @@ def pick_runtime(s):
     return {"rec": "Direct provider SDK to start; move to OpenRouter if you need multi-model flexibility, or Ollama once self-hosting infrastructure and steady volume both exist", "why": "Absent a specific driver (data sensitivity, existing self-host infra, or a concrete need for many model families at once), the simplest option — calling your chosen provider's SDK directly — has the least moving parts. Add OpenRouter's routing layer or Ollama's self-hosting only when a concrete requirement calls for it.", "conf": "low"}
 
 
+# Text Generation Inference (TGI) is deliberately NOT a competing option here despite being
+# named by the user — verified live against huggingface.co/docs/text-generation-inference:
+# Hugging Face put it in maintenance mode and its own docs now recommend migrating to vLLM or
+# SGLang. tgiMentioned is still detected (see detect_signals) specifically so a team naming it
+# gets steered off a project its own maintainer is deprecating, rather than the tool staying
+# silent about a real, checkable fact.
+INFERENCE_SERVING_VENDORS = [
+    {"id": "vllm", "name": "vLLM", "cat": "Continuous-batching inference server (community-led)", "bestFor": "Production self-hosted serving at real request volume, especially multi-GPU deployments", "strength": "Continuous batching + PagedAttention deliver state-of-the-art throughput; OpenAI-compatible API; tensor/pipeline/data/expert parallelism for multi-GPU scaling; supports 200+ model architectures", "drawback": "More operational complexity than Ollama — real GPU/CUDA tuning and capacity planning, not a single-binary install; only worth it once you have steady, predictable production volume", "pricing": "Free (OSS, Apache 2.0)"},
+    {"id": "sglang", "name": "SGLang", "cat": "High-performance inference server (RadixAttention)", "bestFor": "Teams wanting the newest performance techniques (prefix caching, speculative decoding) or needing non-NVIDIA hardware support (AMD, Intel Xeon, Google TPU, Ascend NPU)", "strength": "RadixAttention prefix caching and speculative decoding for low-latency, high-throughput serving; broader accelerator hardware support than vLLM; proven at massive scale (reported hundreds of thousands of GPUs in production across its user base)", "drawback": "Smaller community/ecosystem than vLLM's; less universally the default choice teams reach for first", "pricing": "Free (OSS, Apache 2.0)"},
+]
+
+
+def pick_inference_serving_vendor(s):
+    """Gated on self-hosting actually being at PRODUCTION scale — this is a genuinely different
+    tier from pick_runtime's Ollama recommendation, not a restatement of it: Ollama (llama.cpp-
+    based) is the right tool for dev-machine prototyping and light self-hosting, while vLLM/
+    SGLang's continuous-batching architecture is what production serving at real request volume
+    actually runs on. Below that scale, recommending vLLM would be over-engineering the same way
+    recommending Kubernetes for a single-instance hobby project would be."""
+    sensitive = s["compliance"] or s["healthcare"] or s["security"] or (s["security"] and s["finance"])
+    self_hosting_at_all = s["onPrem"] or sensitive or s["selfHostInfra"]
+    production_scale = s["highScale"] or s["enterprise"]
+    if not (self_hosting_at_all and production_scale):
+        return {"v": "Not applicable — not self-hosting an LLM at production scale", "why": "vLLM and SGLang exist to serve real production request volume efficiently — Ollama (see the Runtime card above) is the right fit for dev-machine prototyping or lighter self-hosting below that scale. Revisit this once self-hosted request volume becomes steady and production-grade.", "primaryId": None, "conf": "high"}
+    if s["vllmMentioned"]:
+        return {"v": "vLLM", "why": "Explicit vLLM mention detected — matching existing familiarity over evaluating a new serving engine.", "primaryId": "vllm", "conf": "high"}
+    if s["sglangMentioned"]:
+        return {"v": "SGLang", "why": "Explicit SGLang mention detected — matching existing familiarity over evaluating a new serving engine.", "primaryId": "sglang", "conf": "high"}
+    if s["tgiMentioned"]:
+        return {"v": "vLLM (not Text Generation Inference)", "why": "You mentioned Text Generation Inference (TGI), but as of Hugging Face's own documentation, TGI is now in maintenance mode — HF itself recommends migrating to vLLM or SGLang going forward, so building new on TGI today means starting on a project its own maintainer is steering people away from.", "primaryId": "vllm", "conf": "high"}
+    return {"v": "vLLM (or SGLang if you need non-NVIDIA hardware support or want its newer prefix-caching techniques)", "why": "vLLM is the safer default given its larger community and ecosystem momentum absent a specific reason to prefer SGLang — both are free, OSS, production-grade continuous-batching serving engines, a meaningfully different tier from Ollama at the request volume this stack implies.", "primaryId": "vllm", "conf": "medium"}
+
+
 def pick_interface_topology(s):
     hosting = pick_hosting_location(s)
     glossary = "Hybrid = one gateway routing requests across local + cloud models by cost/security/task. Distributed = multiple independent serving replicas (often regional) behind a load balancer, for scale/availability, not policy. Mesh = service-mesh-style interconnection (Istio-class) giving consistent routing, retries, and observability across many AI services/agents talking to each other and to models."
@@ -2585,6 +2625,7 @@ def recommend_stack(requirement_text: str) -> dict:
         "hosting_location": hosting,
         "compute_tier": pick_compute_tier(s),
         "runtime": pick_runtime(s),
+        "inference_serving_vendor": pick_inference_serving_vendor(s),
         "interface_topology": pick_interface_topology(s),
         "mcp_vs_api": pick_mcp_vs_api(s),
         "guardrail_pipeline": pick_guardrail_pipeline(s),

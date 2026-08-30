@@ -2142,6 +2142,12 @@ function detectSignals(text){
     searchRecommendation: has(['search bar','product search','site search','search relevance','autocomplete','instant search','faceted search','recommendations','recommended for you','you may also like','personalized feed','for you page','discovery feed','similar items','related products']),
     routingGuardrailService: has(['route between models','multiple llm providers','cost-optimize llm calls','model selection per task','different models per task','llm gateway','llm proxy','ai gateway','centralized guardrails','prompt injection','jailbreak','pii redaction','content policy enforcement','semantic router','model router','fall back to a stronger model']),
     selfHostInfra: has(['docker','kubernetes','k8s','self-hosted','self hosted','own gpu','own gpus','own server','own servers','own infrastructure','own hardware','on our own hardware','ollama']),
+    vllmMentioned: has(['vllm']),
+    sglangMentioned: has(['sglang','sg-lang']),
+    // Bare "tgi" deliberately excluded (too short/common a substring to trust) — only the full
+    // name triggers this. See pickInferenceServingVendor's TGI branch for why it's detected at
+    // all despite the project being in maintenance mode.
+    tgiMentioned: has(['text generation inference']),
     awsShop: has(['aws','amazon web services']),
     azureShop: has(['azure','microsoft']),
     gcpShop: has(['gcp','google cloud']),
@@ -3461,6 +3467,34 @@ function pickRuntime(s){
   return {rec:'Direct provider SDK to start; move to OpenRouter if you need multi-model flexibility, or Ollama once self-hosting infrastructure and steady volume both exist', why:'Absent a specific driver (data sensitivity, existing self-host infra, or a concrete need for many model families at once), the simplest option — calling your chosen provider\'s SDK directly — has the least moving parts. Add OpenRouter\'s routing layer or Ollama\'s self-hosting only when a concrete requirement calls for it.', conf:'low'};
 }
 
+// Text Generation Inference (TGI) is deliberately NOT a competing option here despite being a
+// commonly-named tool — verified live against huggingface.co/docs/text-generation-inference:
+// Hugging Face put it in maintenance mode and its own docs now recommend migrating to vLLM or
+// SGLang. tgiMentioned is still detected (see detectSignals above) specifically so a team naming
+// it gets steered off a project its own maintainer is deprecating, rather than the tool staying
+// silent about a real, checkable fact.
+const INFERENCE_SERVING_VENDORS = [
+  {id:'vllm', name:'vLLM', cat:'Continuous-batching inference server (community-led)', bestFor:'Production self-hosted serving at real request volume, especially multi-GPU deployments', strength:'Continuous batching + PagedAttention deliver state-of-the-art throughput; OpenAI-compatible API; tensor/pipeline/data/expert parallelism for multi-GPU scaling; supports 200+ model architectures', drawback:'More operational complexity than Ollama — real GPU/CUDA tuning and capacity planning, not a single-binary install; only worth it once you have steady, predictable production volume', pricing:'Free (OSS, Apache 2.0)'},
+  {id:'sglang', name:'SGLang', cat:'High-performance inference server (RadixAttention)', bestFor:'Teams wanting the newest performance techniques (prefix caching, speculative decoding) or needing non-NVIDIA hardware support (AMD, Intel Xeon, Google TPU, Ascend NPU)', strength:'RadixAttention prefix caching and speculative decoding for low-latency, high-throughput serving; broader accelerator hardware support than vLLM; proven at massive scale (reported hundreds of thousands of GPUs in production across its user base)', drawback:'Smaller community/ecosystem than vLLM\'s; less universally the default choice teams reach for first', pricing:'Free (OSS, Apache 2.0)'},
+];
+// Gated on self-hosting actually being at PRODUCTION scale — a genuinely different tier from
+// pickRuntime's Ollama recommendation, not a restatement of it: Ollama (llama.cpp-based) is the
+// right tool for dev-machine prototyping and light self-hosting, while vLLM/SGLang's continuous-
+// batching architecture is what production serving at real request volume actually runs on.
+function pickInferenceServingVendor(s){
+  const sensitive = s.compliance || s.healthcare || s.security || (s.security && s.finance);
+  const selfHostingAtAll = s.onPrem || sensitive || s.selfHostInfra;
+  const productionScale = s.highScale || s.enterprise;
+  if(!(selfHostingAtAll && productionScale)){
+    return {v:'Not applicable — not self-hosting an LLM at production scale', why:'vLLM and SGLang exist to serve real production request volume efficiently — Ollama (see the Runtime card above) is the right fit for dev-machine prototyping or lighter self-hosting below that scale. Revisit this once self-hosted request volume becomes steady and production-grade.', primaryId:null, conf:'high'};
+  }
+  if(s.vllmMentioned) return {v:'vLLM', why:'Explicit vLLM mention detected — matching existing familiarity over evaluating a new serving engine.', primaryId:'vllm', conf:'high'};
+  if(s.sglangMentioned) return {v:'SGLang', why:'Explicit SGLang mention detected — matching existing familiarity over evaluating a new serving engine.', primaryId:'sglang', conf:'high'};
+  if(s.tgiMentioned) return {v:'vLLM (not Text Generation Inference)', why:'You mentioned Text Generation Inference (TGI), but as of Hugging Face\'s own documentation, TGI is now in maintenance mode — HF itself recommends migrating to vLLM or SGLang going forward, so building new on TGI today means starting on a project its own maintainer is steering people away from.', primaryId:'vllm', conf:'high'};
+  return {v:'vLLM (or SGLang if you need non-NVIDIA hardware support or want its newer prefix-caching techniques)', why:'vLLM is the safer default given its larger community and ecosystem momentum absent a specific reason to prefer SGLang — both are free, OSS, production-grade continuous-batching serving engines, a meaningfully different tier from Ollama at the request volume this stack implies.', primaryId:'vllm', conf:'medium'};
+}
+const INFERENCE_SERVING_NOTE = 'vLLM and SGLang are both free, OSS, production-grade continuous-batching serving engines — this is a workflow/hardware-support preference, not a maturity or cost decision. Text Generation Inference (TGI) is deliberately excluded: Hugging Face itself put it in maintenance mode and now recommends vLLM or SGLang instead.';
+
 function pickInterfaceTopology(s){
   const hosting = pickHostingLocation(s);
   const glossary = 'Hybrid = one gateway routing requests across local + cloud models by cost/security/task. Distributed = multiple independent serving replicas (often regional) behind a load balancer, for scale/availability, not policy. Mesh = service-mesh-style interconnection (Istio-class) giving consistent routing, retries, and observability across many AI services/agents talking to each other and to models.';
@@ -4072,6 +4106,7 @@ function computeRecommendations(s){
         topology = pickInterfaceTopology(s), mcpVsApi = pickMCPvsAPI(s), guardrailPipeline = pickGuardrailPipeline(s),
         vectorDb = pickVectorDBPlacement(s, rag), runtime = pickRuntime(s);
   const costEstimate = pickCostEstimate(s, {hosting});
+  const inferenceServingVendorPick = pickInferenceServingVendor(s);
 
   // Vendor/alternatives comparisons — Groups 1-4 (see docs/alternatives-research/*.md). Rendered as
   // an inline "See alternatives" toggle inside the matching Stack card below (or the matching
@@ -4101,7 +4136,7 @@ function computeRecommendations(s){
     auditLogging, privilegedAccess, testingStrategy, networkBoundary, multiCloudBridging, securityGates,
     cloudVendorPick, computePlatformPick, orchestratorPick, gatewayVendorPick, dbVendorPick, msgVendorPick,
     llmProviderPick, vectorDbVendorPick, guardrailsVendorPick, cicdVendorPick, gitopsVendorPick, obsVendorPick, feVendorPick,
-    agentFrameworkVendorPick,
+    agentFrameworkVendorPick, inferenceServingVendorPick,
     // No separate "base" GitOps pick exists (unlike cicd/compute) — pickGitopsVendor() produces
     // the recommendation and the vendor primaryId together. Aliased under a plain `gitops` key
     // too so STACK_CARD_CATEGORY / the refine-ask-challenge UI can look it up the same way every
@@ -4152,7 +4187,7 @@ function renderRecommendations(s, rec){
     auditLogging, privilegedAccess, testingStrategy, networkBoundary, multiCloudBridging, securityGates,
     cloudVendorPick, computePlatformPick, orchestratorPick, gatewayVendorPick, dbVendorPick, msgVendorPick,
     llmProviderPick, vectorDbVendorPick, guardrailsVendorPick, cicdVendorPick, gitopsVendorPick, obsVendorPick, feVendorPick,
-    agentFrameworkVendorPick} = rec;
+    agentFrameworkVendorPick, inferenceServingVendorPick} = rec;
 
   // `v === true`, not `v`: signals is no longer all-booleans — excluded/known/latencyTarget are
   // objects, and `{}` is truthy, so a plain truthiness filter would list them as detected signals.
@@ -4450,6 +4485,9 @@ function renderRecommendations(s, rec){
       <div class="assumption">${computeTier.why} One size doesn't fit all here — the right tier depends on device target and scale, not a single default; re-check this table if your device target or team size changes.</div>
       <div class="subhead" style="margin-top:16px;">Local runtime vs. multi-model router <span style="color:var(--muted); font-weight:400;">— Ollama (self-hosted) vs. OpenRouter (cloud multi-provider) vs. a direct single-provider SDK</span></div>
       <div class="rag-pick"><div class="head" style="display:flex; justify-content:space-between; align-items:center;"><div class="name">${runtime.rec}</div><span class="conf conf-${runtime.conf||'low'}">${confLabel(runtime.conf)}</span></div><div class="why">${runtime.why}</div></div>
+      <div class="subhead" style="margin-top:16px;">If self-hosting at production scale: serving engine <span style="color:var(--muted); font-weight:400;">— vLLM vs. SGLang, a different tier from Ollama above</span></div>
+      <div class="rag-pick"><div class="head" style="display:flex; justify-content:space-between; align-items:center;"><div class="name">${inferenceServingVendorPick.v}</div><span class="conf conf-${inferenceServingVendorPick.conf||'low'}">${confLabel(inferenceServingVendorPick.conf)}</span></div><div class="why">${inferenceServingVendorPick.why}</div></div>
+      ${inferenceServingVendorPick.primaryId ? altToggle(INFERENCE_SERVING_VENDORS, inferenceServingVendorPick, INFERENCE_SERVING_NOTE) : ''}
     </div>`);
 
   sec('topology', 'Topology', 'Interface Topology <span style="color:var(--muted); text-transform:none; letter-spacing:0; font-weight:400;">— hybrid vs. distributed vs. mesh, for LLM serving, RAG &amp; agents</span>',
