@@ -86,14 +86,18 @@ def _js(body: str):
 
 # --------------------------------------------------------------------------- #8 static checks
 
-def test_clear_api_key_and_prompt_function_exists():
+def test_prompt_to_update_api_key_function_exists():
     text = _text()
-    assert "function clearApiKeyAndPrompt(cardKey, intent){" in text
-    body_start = text.index("function clearApiKeyAndPrompt(cardKey, intent){")
+    assert "function promptToUpdateApiKey(cardKey, intent){" in text
+    body_start = text.index("function promptToUpdateApiKey(cardKey, intent){")
     body_end = text.index("\n}\n", body_start)
     body = text[body_start:body_end]
-    assert "sessionStorage.removeItem" in body
     assert "renderRefineKeyPrompt(cardKey" in body
+    # Deliberately does NOT clear the stored key itself (found in review): setApiKey()
+    # overwrites unconditionally once a new key is submitted, so clearing here first would
+    # only cost something -- a click prompted by an unrelated, transient error (a network
+    # blip, a rate limit) would otherwise silently discard a perfectly good key.
+    assert "sessionStorage.removeItem" not in body
 
 
 def test_refine_error_path_offers_the_retry_button():
@@ -101,7 +105,7 @@ def test_refine_error_path_offers_the_retry_button():
     body_start = text.index("async function onRefineClick(cardKey, btnEl){")
     body_end = text.index("\n}\n", body_start)
     body = text[body_start:body_end]
-    assert "clearApiKeyAndPrompt('${cardKey}','refine')" in body
+    assert "promptToUpdateApiKey('${cardKey}','refine')" in body
 
 
 def test_ask_error_path_offers_the_retry_button():
@@ -109,31 +113,44 @@ def test_ask_error_path_offers_the_retry_button():
     body_start = text.index("async function onAskClick(cardKey){")
     body_end = text.index("\n}\n", body_start)
     body = text[body_start:body_end]
-    assert "clearApiKeyAndPrompt('${cardKey}','ask')" in body
+    assert "promptToUpdateApiKey('${cardKey}','ask')" in body
 
 
 # --------------------------------------------------------------------------- #8 behavior
 
 @requires_node
-def test_clear_api_key_and_prompt_actually_clears_the_stored_key():
+def test_prompt_to_update_api_key_shows_the_entry_prompt():
     out = _js("""
-      sessionStorage.setItem('anthropic_api_key', 'a-bad-key');
-      clearApiKeyAndPrompt('stack-0', 'refine');
+      const before = document.getElementById('refineResult-stack-0').innerHTML.includes('apiKeyInput-stack-0');
+      promptToUpdateApiKey('stack-0', 'refine');
+      const html = document.getElementById('refineResult-stack-0').innerHTML;
       console.log(JSON.stringify({
-        keyGone: sessionStorage.getItem('anthropic_api_key') === null,
-        promptShown: document.getElementById('refineResult-stack-0').innerHTML.includes('apiKeyInput-stack-0'),
-        intent: document.getElementById('refineResult-stack-0').innerHTML.includes('data-intent="refine"'),
+        shownBefore: before,
+        promptShown: html.includes('apiKeyInput-stack-0'),
+        intent: html.includes('data-intent="refine"'),
       }));
     """)
-    assert out == {"keyGone": True, "promptShown": True, "intent": True}
+    assert out == {"shownBefore": False, "promptShown": True, "intent": True}
 
 
 @requires_node
-def test_clear_api_key_and_prompt_preserves_the_ask_intent():
+def test_prompt_to_update_api_key_does_not_clear_a_good_key_the_user_never_meant_to_lose():
+    """The whole point of the review-driven behavior change: clicking the recovery button
+    because of an unrelated, transient error must not silently discard a perfectly good key."""
+    out = _js("""
+      sessionStorage.setItem('anthropic_api_key', 'a-perfectly-good-key');
+      promptToUpdateApiKey('stack-0', 'refine');
+      console.log(JSON.stringify({ keyStillThere: sessionStorage.getItem('anthropic_api_key') === 'a-perfectly-good-key' }));
+    """)
+    assert out == {"keyStillThere": True}
+
+
+@requires_node
+def test_prompt_to_update_api_key_preserves_the_ask_intent():
     """Re-saving the key after an ask-flow error must resume asking, not refining — the intent
     passed through here is what onSaveKeyClick branches on."""
     out = _js("""
-      clearApiKeyAndPrompt('stack-0', 'ask');
+      promptToUpdateApiKey('stack-0', 'ask');
       console.log(JSON.stringify({
         intent: document.getElementById('refineResult-stack-0').innerHTML.includes('data-intent="ask"'),
       }));

@@ -6013,9 +6013,12 @@ function renderRefineKeyPrompt(cardKey, intent){
 // Manual QA sweep item #8 — a bad/expired key (401, rate-limited, etc.) previously left the user
 // stuck: renderRefineKeyPrompt() only ever shows when getApiKey() is empty, so once ANY key is
 // saved (even a bad one), nothing in the UI could clear it short of a page refresh (which wipes
-// sessionStorage). Clears the stored key and re-shows the entry prompt in one step.
-function clearApiKeyAndPrompt(cardKey, intent){
-  sessionStorage.removeItem('anthropic_api_key');
+// sessionStorage). Deliberately does NOT clear the stored key itself — onSaveKeyClick's
+// setApiKey(val) overwrites unconditionally once a new one is submitted, so clearing here first
+// would only cost something: an earlier version did clear eagerly, and a click prompted by an
+// unrelated, transient error (a network blip, a rate limit) would silently discard a perfectly
+// good key the user would then have to go dig up again for no reason.
+function promptToUpdateApiKey(cardKey, intent){
   renderRefineKeyPrompt(cardKey, intent || 'refine');
 }
 async function onSaveKeyClick(cardKey){
@@ -6174,7 +6177,7 @@ async function onRefineClick(cardKey, btnEl){
     }
   } catch(e){
     resultEl.innerHTML = `<div class="refine-error">${e.message}</div>
-      <button class="refine-error-retry-btn" onclick="clearApiKeyAndPrompt('${cardKey}','refine')">🔑 Update / re-enter API key</button>`;
+      <button class="refine-error-retry-btn" onclick="promptToUpdateApiKey('${cardKey}','refine')">🔑 Update / re-enter API key</button>`;
   } finally {
     if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z"/></svg> Refine with AI'; }
   }
@@ -6298,7 +6301,7 @@ async function onAskClick(cardKey){
     thread.insertAdjacentHTML('beforeend', `<div class="ask-msg answer">${data.answer}</div>`);
   } catch(e){
     thread.insertAdjacentHTML('beforeend', `<div class="ask-msg answer refine-error">${e.message}</div>
-      <button class="refine-error-retry-btn" onclick="clearApiKeyAndPrompt('${cardKey}','ask')">🔑 Update / re-enter API key</button>`);
+      <button class="refine-error-retry-btn" onclick="promptToUpdateApiKey('${cardKey}','ask')">🔑 Update / re-enter API key</button>`);
   }
 }
 
