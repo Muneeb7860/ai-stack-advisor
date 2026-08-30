@@ -6319,6 +6319,21 @@ function openHistoryEntry(id){
   scrollToResultsShell();
 }
 
+// The analysis history label is the user's OWN pasted requirement text — which the app's own
+// "Paste your own description" mode explicitly invites pasting external documents into (a job
+// spec, a PRD from somewhere else). Building the `title` attribute below with a hand-rolled
+// `.replace(/"/g, '&quot;')` only escaped that one attribute; the visible <span> content had no
+// escaping at all, so a pasted "<img src=x onerror=...>" ran real script the next time the
+// sidebar rendered. escapeHtml() covers both the attribute and the text node the same way.
+function escapeHtml(str){
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function renderSidebarHistory(){
   const section = document.getElementById('sidebarHistory');
   const list = document.getElementById('sidebarHistoryList');
@@ -6332,8 +6347,9 @@ function renderSidebarHistory(){
   section.style.display = 'block';
   list.innerHTML = history.map(e => {
     const label = e.text.length > 60 ? e.text.slice(0, 60) + '…' : e.text;
-    return `<div class="sidebar-history-item" onclick="openHistoryEntry('${e.id}')" title="${label.replace(/"/g, '&quot;')}">
-      <span class="shi-label">${label}</span>
+    const safeLabel = escapeHtml(label);
+    return `<div class="sidebar-history-item" onclick="openHistoryEntry('${e.id}')" title="${safeLabel}">
+      <span class="shi-label">${safeLabel}</span>
       <span class="shi-x" title="Remove" onclick="deleteHistoryEntry('${e.id}', event)">✕</span>
     </div>`;
   }).join('');
