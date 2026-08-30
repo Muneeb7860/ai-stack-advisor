@@ -143,8 +143,12 @@ def test_recommend_stack_returns_all_expected_categories():
     alias the way gitops does. inference_serving_vendor (vLLM/SGLang) was added the same
     bespoke-section way, gated on self-hosting actually being at production scale rather than
     just present at all (a genuinely different tier from pick_runtime's Ollama recommendation).
-    If this test needs updating again, cross-check against the actual index.html analyze()
-    assembly, not against what an MCP client currently expects.
+    realtime_analytics/realtime_analytics_vendor (Tinybird/ClickHouse Cloud) were added as a
+    real stack card (dual-key, same shape as gitops) — gated on dataHeavy AND realtime both
+    firing, distinct from pick_database's own generic warehouse_need branch (batch/interactive
+    analytics without a real-time requirement). If this test needs updating again, cross-check
+    against the actual index.html analyze() assembly, not against what an MCP client currently
+    expects.
 
     Note this list is hand-maintained, so it only catches a key added on the PYTHON side — it is
     not a substitute for test_engine_parity.py, which is what catches a category that landed in
@@ -163,6 +167,7 @@ def test_recommend_stack_returns_all_expected_categories():
         "frontend_vendor", "audit_logging", "privileged_access", "testing_strategy",
         "network_boundary", "multi_cloud_bridging", "security_gates", "gitops", "gitops_vendor",
         "agent_framework_vendor", "inference_serving_vendor",
+        "realtime_analytics", "realtime_analytics_vendor",
     }
     assert set(result["recommendations"].keys()) == expected_categories
 

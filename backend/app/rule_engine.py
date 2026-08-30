@@ -525,6 +525,8 @@ def detect_signals(text: str) -> dict:
         "compliance": has(["soc2", "hipaa", "pci", "gdpr", "compliance", "regulated", "audit"]),
         "security": has(["security", "pii", "sensitive data", "encryption", "zero trust"]),
         "dataHeavy": has(["big data", "analytics", "data pipeline", "data lake", "etl", "warehouse"]),
+        "tinybirdMentioned": has(["tinybird"]),
+        "clickhouseMentioned": has(["clickhouse"]),
         "structured": has(["structured data", "relational", "transactional", "sql", "ledger", "orders"]),
         "unstructured": has(["unstructured", "documents", "pdf", "images", "logs", "text data"]),
         "iot": has(["iot", "sensor", "device telemetry", "edge device"]),
@@ -957,6 +959,37 @@ def pick_database_vendor(db):
 
 
 DATABASE_NOTE = "CockroachDB and DynamoDB aren't drop-in swaps for Postgres/MongoDB — CockroachDB trades operational simplicity for horizontal-scale-by-default, and DynamoDB trades query flexibility for AWS-native zero-ops. Source: docs/alternatives-research/02-data-layer-database-cache-messaging.md."
+
+# Distinct from pick_database's generic "warehouse_need" branch (BigQuery/Snowflake/Redshift):
+# that fires on ANY analytics-heavy workload regardless of latency, and those three trade
+# real-time freshness for a mature batch-ETL/BI-tool ecosystem. This category only fires when
+# the requirement is ALSO explicitly real-time/streaming (dataHeavy AND realtime) — sub-second
+# queries over continuously-arriving data is a genuinely different tool category, not a fancier
+# warehouse. Tinybird is itself built on managed ClickHouse (not an independent competitor to
+# it) — its own docs describe it as "a managed ClickHouse platform" — so the `cat`/drawback
+# fields say so explicitly rather than presenting these as two unrelated options.
+REALTIME_ANALYTICS_VENDORS = [
+    {"id": "clickhouse", "name": "ClickHouse Cloud", "cat": "Fully managed real-time OLAP (the underlying engine)", "bestFor": "Teams wanting maximum control over schema/query tuning with sub-second performance at scale, across AWS/GCP/Azure", "strength": "Sub-second queries via columnar storage + vectorized execution; ClickPipes for managed ingestion from Kafka/S3/Postgres/MongoDB; separates storage/compute for automatic elastic scaling; reported ~70% cost reduction vs. comparable warehouses in published case studies", "drawback": "Still a database you design schemas/materialized views for — more operational modeling work than a fully-abstracted API layer; open-source ClickHouse is also self-hostable if you want zero vendor spend and can own the ops yourself", "pricing": "Pay-for-use, autoscaling compute/storage — no fixed published free tier; self-hosted OSS ClickHouse is free"},
+    {"id": "tinybird", "name": "Tinybird", "cat": "Managed ClickHouse platform with a developer-first API layer", "bestFor": "Developers wanting to ship a real-time analytics API (not just a queryable database) fast, without hand-building the ingestion+API layer on top of raw ClickHouse", "strength": "Built on managed ClickHouse but adds an Events API for ingestion, instant SQL-to-REST-API \"pipes,\" zero-copy data branches for dev/staging, and built-in connectors (Kafka/S3/GCS/DynamoDB) — meaningfully less to build than wiring the same pipeline yourself on ClickHouse Cloud directly", "drawback": "An abstraction layer over ClickHouse, not a different underlying engine — if you already have deep ClickHouse expertise and want direct control, ClickHouse Cloud itself may be the more natural fit; advanced features (connectors, data branches, horizontal scaling) are gated to paid/enterprise tiers", "pricing": "Free: 10GB storage, 1,000 requests/day, shared 0.25 vCPU · Developer: from $49/mo, 25GB storage · Enterprise: custom, compute overage ~$0.0002/sec"},
+]
+
+
+def pick_realtime_analytics_vendor(s):
+    """Gated on dataHeavy AND realtime both firing — a batch/interactive analytics need alone
+    (dataHeavy without realtime) is well served by pick_database's own warehouse_need branch
+    (BigQuery/Snowflake/Redshift) instead, which isn't replaced or duplicated here."""
+    if not (s["dataHeavy"] and s["realtime"]):
+        return {"v": "Not applicable — no real-time/streaming analytics requirement in this stack", "why": "Tinybird and ClickHouse Cloud exist specifically for sub-second queries over continuously-streaming data. A batch/interactive analytics need without a real-time requirement is well served by a conventional cloud data warehouse (BigQuery/Snowflake/Redshift — see the Database card above if that fired) instead, which trades real-time freshness for a more mature BI-tool ecosystem.", "primaryId": None, "conf": "high"}
+    if s["tinybirdMentioned"]:
+        return {"v": "Tinybird", "why": "Explicit Tinybird mention detected — matching existing familiarity over evaluating a new platform.", "primaryId": "tinybird", "conf": "high"}
+    if s["clickhouseMentioned"]:
+        return {"v": "ClickHouse Cloud", "why": "Explicit ClickHouse mention detected — matching existing familiarity. Note Tinybird is built on managed ClickHouse too, so if you want a developer-first API layer on top rather than direct database access, it's a complementary, not competing, option.", "primaryId": "clickhouse", "conf": "high"}
+    if s["startupMvp"] or s["smallTeam"]:
+        return {"v": "Tinybird", "why": "A small team building a real-time analytics feature gets more value from Tinybird's ready-made ingestion API and instant SQL-to-REST \"pipes\" than from standing up the same pipeline on raw ClickHouse Cloud yourself — the API-layer convenience matters more than direct engine control at this stage.", "primaryId": "tinybird", "conf": "medium"}
+    return {"v": "ClickHouse Cloud (or Tinybird if you want a developer-first API layer built on top of it)", "why": "Direct ClickHouse Cloud access is the safer default absent a specific reason to prefer Tinybird's API-layer convenience — both are free/OSS-rooted, production-grade real-time OLAP options built on the same underlying engine.", "primaryId": "clickhouse", "conf": "medium"}
+
+
+REALTIME_ANALYTICS_NOTE = "Tinybird is a managed ClickHouse platform, not an independent competitor to ClickHouse Cloud — this is an API-layer-convenience-vs-direct-engine-control decision, not a maturity or cost one. Neither replaces pick_database's generic BigQuery/Snowflake/Redshift warehouse pick, which serves batch/interactive analytics without a real-time requirement."
 
 CACHE_VENDORS = [
     {"id": "redis", "name": "Redis", "cat": "Single-threaded", "bestFor": "Shared state, pub/sub, rich data structures, Lua scripting", "strength": "15+ years production-proven, massive ecosystem, richest data-type support", "drawback": "Single-threaded throughput ceiling; license moved to SSPL/RSALv2 (not OSI-approved open source)", "pricing": "Free self-hosted under SSPL/RSALv2"},
@@ -2487,6 +2520,16 @@ def apply_exclusions(rec: dict, s: dict) -> dict:
         rec["cache"] = excluded_pick("caching")
     if ex.get("database"):
         rec["database"] = excluded_pick("a database")
+        # Real-time analytics (Tinybird/ClickHouse) is itself a specialized database — same
+        # "no separate underlying pick to fall back to" situation as gitops, so the PRIMARY text
+        # needs replacing outright, not just suppressing the vendor comparison.
+        rec["realtime_analytics"] = {
+            "v": "Not applicable — you excluded databases", "conf": "high", "excluded": True,
+            "why": "Tinybird and ClickHouse Cloud are themselves specialized (real-time OLAP) "
+                   "databases — with databases excluded from your stack entirely, there is "
+                   "nothing for this category to recommend.",
+        }
+        rec["realtime_analytics_vendor"] = dict(rec["realtime_analytics"], primaryId=None, suppressed=True)
     # Found via a manual "on-premises... no public cloud" QA scenario: BOTH s.onPrem and
     # ex.cloud can fire on the same sentence at once ("on-premises" triggers the former,
     # "no public cloud" separately matches EXCLUSION_TERMS["cloud"]). Since this block runs
@@ -2568,6 +2611,9 @@ def recommend_stack(requirement_text: str) -> dict:
     compute = pick_compute(s)
     msg = pick_messaging(s)
     db = pick_database(s)
+    # No separate "base" pick exists (same shape as gitops) — pick_realtime_analytics_vendor()
+    # produces the recommendation and the vendor primaryId together.
+    realtime_analytics = pick_realtime_analytics_vendor(s)
     containers = pick_containers(s)
     obs = pick_observability(s)
     fe = pick_frontend(s)
@@ -2596,6 +2642,8 @@ def recommend_stack(requirement_text: str) -> dict:
         "mesh": pick_mesh(s),
         "cache": pick_cache(s),
         "database": db,
+        "realtime_analytics": realtime_analytics,
+        "realtime_analytics_vendor": realtime_analytics,
         "containers": containers,
         "observability": obs,
         "frontend": fe,
