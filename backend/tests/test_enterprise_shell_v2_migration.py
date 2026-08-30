@@ -25,7 +25,9 @@ def _text():
 def test_app_shell_and_sidebar_exist():
     text = _text()
     assert '<div class="app-shell">' in text
-    assert '<aside class="app-sidebar">' in text
+    # Prefix match, not an exact literal: manual QA sweep item #10 added a second class
+    # (sidebar-focused-input) to this same element — the sidebar itself still exists as before.
+    assert re.search(r'<aside class="app-sidebar[^"]*">', text)
     assert '<div class="app-main">' in text
 
 
@@ -53,9 +55,10 @@ def test_theme_toggle_moved_into_sidebar_not_fixed_at_document_root():
     """The button element itself must be a child of the sidebar markup now (not a
     document-root sibling of the glide panel, its old position)."""
     text = _text()
-    sidebar_open = text.index('<aside class="app-sidebar">')
-    sidebar_close = text.index("</aside>", sidebar_open)
-    assert 'id="themeToggle"' in text[sidebar_open:sidebar_close]
+    m = re.search(r'<aside class="app-sidebar[^"]*">', text)
+    assert m, '<aside class="app-sidebar..."> not found'
+    sidebar_close = text.index("</aside>", m.start())
+    assert 'id="themeToggle"' in text[m.start():sidebar_close]
 
 
 # ------------------------------------------------------------------- export/share relocation

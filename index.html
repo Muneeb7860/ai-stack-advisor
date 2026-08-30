@@ -154,6 +154,31 @@
     padding:16px 12px; border-right:1px solid var(--border); background:var(--panel);
     position:sticky; top:0; height:100vh; overflow-y:auto;
   }
+  /* Focus mode (manual QA sweep item #10) — This Analysis / Export & Share / History already
+     self-hide until there's something real behind them (see setSidebarThisAnalysisVisible() and
+     renderSidebarHistory()), so on a genuinely fresh input screen the 208px column reserves most
+     of its width for "New Analysis" and a theme toggle. Narrowing it — not hiding it, both of
+     those stay real, useful nav — gives the input form the width back without losing anything.
+     Toggled by the same boolean setSidebarThisAnalysisVisible() already tracks, so this can't
+     drift out of sync with the state it depends on.
+     Deliberately NO `transition` on width/flex-basis here: a `position:sticky` element with a
+     transitioning flex-basis got stuck reporting its PRE-toggle computed width indefinitely in
+     live testing (reproduced in isolation, unrelated to this app's own markup — removing either
+     `position:sticky` or the transition on its own fixed it, the combination did not resolve
+     itself even a second after the transition's own duration had elapsed). Not worth the risk
+     for a purely cosmetic width animation.
+     Guarded to widths above the existing 860px mobile breakpoint (below) — a bare, unguarded
+     compound-class selector here has HIGHER specificity (two classes) than that breakpoint's
+     own `.app-sidebar{width:0; flex:0 0 0}` collapse rule (one class), and specificity wins
+     regardless of media-query nesting or source order. Since `sidebar-focused-input` is present
+     by default in the static HTML, an unguarded rule here made the sidebar render at 168px on
+     every fresh MOBILE page load too, instead of collapsing to the bottom nav — a real
+     regression, caught by actually resizing to a mobile viewport and looking, not assumed safe
+     from reading the CSS. The focused-input concept is meaningless below 861px anyway, since the
+     sidebar collapses to zero width there regardless of this class. */
+  @media (min-width:861px){
+    .app-sidebar.sidebar-focused-input{width:168px; flex:0 0 168px;}
+  }
   .app-sidebar-brand{
     font-size:13px; font-weight:700; letter-spacing:-0.01em; color:var(--text);
     padding:6px 8px 14px;
@@ -499,6 +524,20 @@
   .g-chip{background:rgba(224,162,60,0.1); border:1px solid rgba(224,162,60,0.3); color:#e8c07e; border-radius:6px; padding:5px 9px; font-size:11.5px;}
   .signals{display:flex; flex-wrap:wrap; gap:5px; margin-top:5px;}
   .sig{background:var(--chip); border:1px solid var(--border); color:var(--muted); border-radius:999px; padding:3px 8px; font-size:10.5px; font-family:var(--font-mono);}
+  /* Signal chip color-coding (manual QA sweep item #11) — every chip previously used this one
+     flat .sig style regardless of what it meant (a stated fact vs. an inferred assumption vs.
+     something explicitly ruled out), making the signals row hard to scan at a glance. A left
+     border + a faint category tint is additive to .sig above, not a replacement, so nothing
+     that already keys off .sig (the click-to-toggle handlers, the strike-through override
+     style) needs to change.
+     .why-sig is deliberately NOT given a rule here — it already has its own full border+tint+
+     text-color treatment further down (search .why-sig, near .why-signals), added in an earlier
+     pass. An earlier draft of this change duplicated a rule for it here, whose `background`
+     was silently shadowed by that later, more complete rule anyway (same specificity, source
+     order decides) — caught in review, removed rather than left as dead, confusing weight. */
+  .sig-stated{border-left:2px solid var(--accent); background:color-mix(in srgb, var(--accent) 8%, var(--chip));}
+  .sig-known{border-left:2px solid var(--good); background:color-mix(in srgb, var(--good) 8%, var(--chip));}
+  .sig-excluded{border-left:2px solid var(--warn); background:color-mix(in srgb, var(--warn) 8%, var(--chip));}
   .footer-note{color:var(--muted); font-size:12px; margin-top:24px; line-height:1.55; border-top:1px solid var(--border); padding-top:13px;}
   .docs-row{display:flex; gap:8px; flex-wrap:wrap; margin-top:5px;}
   .doc-chip{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 11px; font-size:12px; flex:1; min-width:145px;}
@@ -1004,6 +1043,14 @@
   .refine-adjusted b{color:var(--good);}
   .refine-nochange{color:var(--muted); font-style:italic;}
   .refine-error{background:rgba(224,162,60,0.08); border:1px solid rgba(224,162,60,0.3); border-radius:7px; padding:8px 10px; color:#e8c07e;}
+  /* Manual QA sweep item #8 — offered alongside ANY refine/ask error (not just ones detected as
+     key-related — string-matching error text to guess the cause is fragile and a spurious "update
+     key" option costs nothing when the real cause was something else). */
+  .refine-error-retry-btn{
+    display:block; margin-top:7px; background:transparent; border:1px solid rgba(224,162,60,0.4);
+    color:#e8c07e; border-radius:7px; padding:6px 10px; font-size:11.5px; font-weight:600; cursor:pointer;
+  }
+  .refine-error-retry-btn:hover{background:rgba(224,162,60,0.1);}
   .refine-keyprompt{margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;}
   .refine-keyprompt input{
     flex:1; min-width:180px; background:var(--surface); border:1px solid var(--border); border-radius:7px;
@@ -1115,7 +1162,7 @@
      phase (routing refine/ask into a drawer) — reserved now, deliberately empty/hidden, not
      wired to anything yet. -->
 <div class="app-shell">
-  <aside class="app-sidebar">
+  <aside class="app-sidebar sidebar-focused-input">
     <div class="app-sidebar-brand">AI Stack Advisor</div>
     <nav class="app-sidebar-nav">
       <button type="button" class="app-sidebar-item" onclick="backToMode()" title="Start a new analysis" aria-label="Start a new analysis">
@@ -3962,14 +4009,14 @@ function renderRecommendations(s, rec){
     if (!keys.length) return '';
     return `
       <div class="signals" style="margin-top:6px;" title="${title}">
-        <span class="sig" style="opacity:.75;">${label}</span>
+        <span class="sig sig-${kind}" style="opacity:.75;">${label}</span>
         ${keys.map(k => {
           const off = (typeof signalOverrides !== 'undefined') && signalOverrides[kind][k] === false;
           if (!canOverride){
-            return `<span class="sig" style="${off ? 'text-decoration:line-through;opacity:.5;' : ''}"
+            return `<span class="sig sig-${kind}" style="${off ? 'text-decoration:line-through;opacity:.5;' : ''}"
               title="Shown for transparency. Overriding an inference is only available on an analysis you ran yourself, not on a shared read-only report.">${k}</span>`;
           }
-          return `<span class="sig" role="button" tabindex="0" style="cursor:pointer;${off ? 'text-decoration:line-through;opacity:.5;' : ''}"
+          return `<span class="sig sig-${kind}" role="button" tabindex="0" style="cursor:pointer;${off ? 'text-decoration:line-through;opacity:.5;' : ''}"
             title="${off ? 'Switched off by you — click to re-apply this inference' : 'Detected from your text — click to switch this inference off'}"
             onclick="toggleInference('${kind}','${k}')"
             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleInference('${kind}','${k}');}">${k}${off ? '' : ' ×'}</span>`;
@@ -3990,7 +4037,7 @@ function renderRecommendations(s, rec){
   const signalsHtml = `<div class="results-hero">
       <div class="rh-eyebrow">${activeSignals.length} signal${activeSignals.length===1?'':'s'} detected${excludedList.length?` · ${excludedList.length} exclusion${excludedList.length===1?'':'s'}`:''}</div>
       <div class="rh-headline">${heroHeadline}</div>
-      <div class="signals">${activeSignals.length? activeSignals.map(x=>`<span class="sig">${x}</span>`).join('') : '<span class="sig">generic / no strong signals — defaults applied</span>'}</div>
+      <div class="signals">${activeSignals.length? activeSignals.map(x=>`<span class="sig sig-stated">${x}</span>`).join('') : '<span class="sig">generic / no strong signals — defaults applied</span>'}</div>
       ${excludedHtml}
       ${renderTokenBudgetHtml(rec, s)}
       ${lowSignalBanner}
@@ -5548,6 +5595,9 @@ function setSidebarThisAnalysisVisible(visible){
   // Phase 5a — the mobile bottom nav's counterpart button mirrors the same visibility.
   const mobileBtn = document.getElementById('mobileThisAnalysisBtn');
   if (mobileBtn) mobileBtn.style.display = visible ? '' : 'none';
+  // Focus mode (manual QA sweep item #10) — same boolean, since "no current analysis yet" is
+  // exactly when the sidebar's own content is at its sparsest.
+  document.querySelector('.app-sidebar')?.classList.toggle('sidebar-focused-input', !visible);
 }
 
 // Phase 5a (responsive collapse) — the mobile bottom nav's History/Export buttons toggle the
@@ -5960,6 +6010,17 @@ function renderRefineKeyPrompt(cardKey, intent){
       <button onclick="onSaveKeyClick('${cardKey}')">Save &amp; Continue</button>
     </div>`;
 }
+// Manual QA sweep item #8 — a bad/expired key (401, rate-limited, etc.) previously left the user
+// stuck: renderRefineKeyPrompt() only ever shows when getApiKey() is empty, so once ANY key is
+// saved (even a bad one), nothing in the UI could clear it short of a page refresh (which wipes
+// sessionStorage). Deliberately does NOT clear the stored key itself — onSaveKeyClick's
+// setApiKey(val) overwrites unconditionally once a new one is submitted, so clearing here first
+// would only cost something: an earlier version did clear eagerly, and a click prompted by an
+// unrelated, transient error (a network blip, a rate limit) would silently discard a perfectly
+// good key the user would then have to go dig up again for no reason.
+function promptToUpdateApiKey(cardKey, intent){
+  renderRefineKeyPrompt(cardKey, intent || 'refine');
+}
 async function onSaveKeyClick(cardKey){
   const promptEl = document.querySelector(`#refineResult-${cardKey} .refine-keyprompt`);
   const intent = promptEl?.dataset.intent || 'refine';
@@ -6115,7 +6176,8 @@ async function onRefineClick(cardKey, btnEl){
       applyRefinementToCard(cardKey, category, resultEl);
     }
   } catch(e){
-    resultEl.innerHTML = `<div class="refine-error">${e.message}</div>`;
+    resultEl.innerHTML = `<div class="refine-error">${e.message}</div>
+      <button class="refine-error-retry-btn" onclick="promptToUpdateApiKey('${cardKey}','refine')">🔑 Update / re-enter API key</button>`;
   } finally {
     if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z"/></svg> Refine with AI'; }
   }
@@ -6238,7 +6300,8 @@ async function onAskClick(cardKey){
     addSessionUsage(data.usage);
     thread.insertAdjacentHTML('beforeend', `<div class="ask-msg answer">${data.answer}</div>`);
   } catch(e){
-    thread.insertAdjacentHTML('beforeend', `<div class="ask-msg answer refine-error">${e.message}</div>`);
+    thread.insertAdjacentHTML('beforeend', `<div class="ask-msg answer refine-error">${e.message}</div>
+      <button class="refine-error-retry-btn" onclick="promptToUpdateApiKey('${cardKey}','ask')">🔑 Update / re-enter API key</button>`);
   }
 }
 
