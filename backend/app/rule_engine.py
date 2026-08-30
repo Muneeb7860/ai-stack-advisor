@@ -319,6 +319,14 @@ def excluded_pick(what: str) -> dict:
     }
 
 
+def domain_floor_pick(what: str, why: str) -> dict:
+    """Same shape as excluded_pick(), but for a category the requirement's DOMAIN rules out
+    rather than something the user explicitly said "no" to — different wording ("Not
+    applicable" / inferred from what you described) since "you excluded X" would be misleading
+    here."""
+    return {"v": "Not applicable — " + what, "conf": "high", "excluded": True, "why": why}
+
+
 def detect_signals(text: str) -> dict:
     """Mirrors index.html's detectSignals() exactly (100+ signal dimensions as of the
     expansion pass — see KICKOFF_BRIEF.md Section 0)."""
@@ -404,6 +412,16 @@ def detect_signals(text: str) -> dict:
         "agentic": has(["agentic", "multi-agent", "take actions", "automate workflow", "autonomous", "tool use", "function calling"]),
         "mobile": has(["mobile", "flutter", "ios", "android", "react native"]),
         "web": has(["web app", "website", "web application", "react", "angular", "vue"]),
+        # Domain floors (docs/manual-qa-test-matrix.csv TC-05/06/07/09) — mirrors index.html
+        # exactly (same keyword lists). See that file's comment for the full rationale.
+        "browserExtension": has(["chrome extension", "browser extension", "firefox extension", "safari extension", "edge extension", "manifest v3", "browser add-on", "browser addon"]),
+        "cliTool": has(["command line tool", "command-line tool", "cli tool", "cli utility", "command line application", "command-line application", "terminal application", "terminal tool", "console application"]),
+        "desktopApp": has(["desktop application", "desktop app", "cross-platform desktop", "electron app", "tauri app", "native desktop", "desktop software"]),
+        # The second half MUST use has_raw(), not has(): "no backend" is itself a negation
+        # phrase, so strip_negations() already deleted it from `t` by this point — same
+        # reasoning as strong_on_prem's has_raw(...) elsewhere in this function.
+        "staticSite": has(["static site", "static website", "static web site", "marketing website", "landing page", "brochure site", "jamstack"])
+        and has_raw(["no backend", "no back-end", "no back end", "no server-side", "no server side", "no dynamic content", "purely static", "static hosting only", "without a backend", "without a back-end"]),
         "voice": has(["voice", "speech", "call center", "ivr"]),
         "compliance": has(["soc2", "hipaa", "pci", "gdpr", "compliance", "regulated", "audit"]),
         "security": has(["security", "pii", "sensitive data", "encryption", "zero trust"]),
@@ -2002,6 +2020,79 @@ def pick_governance(s):
     return {"kra": kra, "kpi": kpi, "sla": sla, "rci": rci}
 
 
+def apply_domain_floors(rec: dict, s: dict) -> None:
+    """Mirrors index.html's applyDomainFloors() — see that function's comment for the full
+    rationale and the deliberate scope decision (only cloud/containers/database/iam/
+    observability/messaging/compute/frontend/architecture are touched, not every category).
+
+    An if/elif chain, not independent ifs: these four are meant to be mutually exclusive.
+    """
+    if s.get("browserExtension"):
+        why = ("Browser extensions run entirely inside the browser sandbox and ship through the "
+               "browser's own extension store — there is no server-side deployment to host.")
+        rec["cloud"] = domain_floor_pick("no server-side hosting needed for a browser extension", why)
+        rec["containers"] = domain_floor_pick("nothing runs server-side to containerize", why)
+        rec["database"] = domain_floor_pick(
+            "no server-side datastore — use the browser's own storage API (chrome.storage / IndexedDB) for local state", why)
+        rec["iam"] = domain_floor_pick("no server-side user accounts to authenticate", why)
+        rec["observability"] = domain_floor_pick(
+            "no server infrastructure to observe — use a client-side error-reporting SDK instead", why)
+        rec["messaging"] = domain_floor_pick("no server-side services to connect via messaging", why)
+        rec["compute"] = domain_floor_pick("logic runs inside the browser sandbox, not on a provisioned compute tier", why)
+        rec["architecture"] = domain_floor_pick("a single browser extension has no service architecture style to choose", why)
+        rec["frontend"] = {
+            "v": "Manifest V3 browser extension (background service worker + popup UI in vanilla JS or a lightweight framework)",
+            "conf": "high", "why": why,
+        }
+    elif s.get("desktopApp"):
+        why = ("A cross-platform desktop application with no backend server runs entirely on the "
+               "user's own machine — there is nothing to host, scale, or authenticate against server-side.")
+        rec["cloud"] = domain_floor_pick("no server-side hosting — the app runs on the user's own machine", why)
+        rec["containers"] = domain_floor_pick("nothing runs server-side to containerize", why)
+        rec["iam"] = domain_floor_pick(
+            "no server-side user accounts — use the OS's own user session if any access control is needed", why)
+        rec["observability"] = domain_floor_pick(
+            "no server infrastructure to observe — use a desktop crash-reporting SDK (e.g. Sentry) instead", why)
+        rec["messaging"] = domain_floor_pick("no server-side services to connect via messaging", why)
+        rec["compute"] = domain_floor_pick("runs on the user's own machine, not a provisioned compute tier", why)
+        rec["architecture"] = domain_floor_pick("a single desktop application has no service architecture style to choose", why)
+        rec["frontend"] = {
+            "v": "Cross-platform desktop UI (Tauri or Electron, matched to your team's language) with an embedded SQLite database for local persistence",
+            "conf": "high", "why": why,
+        }
+        rec["database"] = {"v": "Embedded SQLite (bundled with the app, no server-side database)", "conf": "high", "why": why}
+    elif s.get("cliTool"):
+        why = ("A local command-line tool runs on the operator's own machine or a CI runner — "
+               "there is no server-side surface to host, and no end-user-facing UI to build.")
+        rec["cloud"] = domain_floor_pick("no server-side hosting for a local CLI tool", why)
+        rec["containers"] = domain_floor_pick(
+            "nothing runs server-side to containerize (package the tool itself via pip/pipx or a single binary instead)", why)
+        rec["iam"] = domain_floor_pick("no server-side user accounts for a local CLI tool", why)
+        rec["observability"] = domain_floor_pick("no server infrastructure to observe — plain logging to stdout or a log file is enough", why)
+        rec["messaging"] = domain_floor_pick("no server-side services to connect via messaging", why)
+        rec["compute"] = domain_floor_pick("runs on the operator's own machine or a CI runner, not a provisioned compute tier", why)
+        rec["architecture"] = domain_floor_pick("a single CLI tool has no service architecture style to choose", why)
+        rec["frontend"] = domain_floor_pick(
+            "command-line interface only — no web/mobile frontend (argparse, Click, or Typer for Python; Cobra for Go; etc.)", why)
+        rec["database"] = domain_floor_pick(
+            "no server-side database — read/write local files directly, or add embedded SQLite only if you need structured queries over the data", why)
+    elif s.get("staticSite"):
+        why = ("A static site with no backend has nothing to compute or persist server-side — "
+               "it only needs files served from a CDN.")
+        rec["cloud"] = {
+            "v": "Static hosting / CDN (Cloudflare Pages, Vercel, Netlify, or S3 + CloudFront) — not a full IaaS cloud tier",
+            "conf": "high", "why": why,
+        }
+        rec["containers"] = domain_floor_pick("static assets are served directly from a CDN — no server process to containerize", why)
+        rec["database"] = domain_floor_pick("no server-side data to persist for a static site", why)
+        rec["iam"] = domain_floor_pick("no user accounts for a static site", why)
+        rec["observability"] = domain_floor_pick(
+            "no server infrastructure to observe — a lightweight client-side analytics snippet is enough if desired", why)
+        rec["messaging"] = domain_floor_pick("no server-side services to connect via messaging", why)
+        rec["compute"] = domain_floor_pick("pure static delivery — no server compute tier", why)
+        rec["architecture"] = domain_floor_pick("a static site has no application architecture style — just markup and assets", why)
+
+
 # ---------- Top-level entry point ----------
 
 
@@ -2170,6 +2261,10 @@ def recommend_stack(requirement_text: str) -> dict:
         "frontend_vendor": pick_frontend_vendor(s, fe),
     }
 
+    # Domain floors run BEFORE exclusions: if the requirement both describes a domain floor (e.g.
+    # a CLI tool) AND explicitly excludes something (e.g. "no logging"), the more specific,
+    # user-stated exclusion should win the final wording, not the inferred domain default.
+    apply_domain_floors(recommendations, s)
     apply_exclusions(recommendations, s)
 
     return {"signals": s, "recommendations": recommendations}

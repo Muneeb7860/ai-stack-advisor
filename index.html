@@ -1887,6 +1887,12 @@ function excludedPick(what){
          'This is a stated constraint, not a heuristic default — if the exclusion was picked up in error, ' +
          'rephrase the requirement and re-run.'};
 }
+// Same shape as excludedPick(), but for a category the requirement's DOMAIN rules out rather
+// than something the user explicitly said "no" to — different wording ("Not applicable" /
+// inferred from what you described) since "you excluded X" would be misleading here.
+function domainFloorPick(what, why){
+  return {v: 'Not applicable — ' + what, conf: 'high', excluded: true, why};
+}
 function detectSignals(text){
   const raw = text.toLowerCase(); // used only for phrases that are themselves phrased with "no"/"cannot" — the negation IS the requirement
   const t = stripNegations(text).toLowerCase();
@@ -1960,6 +1966,22 @@ function detectSignals(text){
     agentic: has(['agentic','multi-agent','take actions','automate workflow','autonomous','tool use','function calling']),
     mobile: has(['mobile','flutter','ios','android','react native']),
     web: has(['web app','website','web application','react','angular','vue']),
+    // Domain floors (docs/manual-qa-test-matrix.csv TC-05/06/07/09) — these describe things that
+    // genuinely need none of cloud/containers/server-side-database/IAM/observability-vendor/
+    // messaging. Without these, a "command line tool that analyzes log files" got the full
+    // enterprise web-app default (AWS, Kubernetes, RabbitMQ, PostgreSQL, React) with no signal
+    // to say otherwise — confirmed live in a real browser before this fix existed, not assumed.
+    browserExtension: has(['chrome extension','browser extension','firefox extension','safari extension','edge extension','manifest v3','browser add-on','browser addon']),
+    cliTool: has(['command line tool','command-line tool','cli tool','cli utility','command line application','command-line application','terminal application','terminal tool','console application']),
+    desktopApp: has(['desktop application','desktop app','cross-platform desktop','electron app','tauri app','native desktop','desktop software']),
+    // Static site needs BOTH a "this is a static site" phrase AND a "no backend" phrase — either
+    // alone is too easy to over-match (a normal web app can mention "static assets" in passing,
+    // and "no backend" alone already has its own, unrelated meanings elsewhere). The second half
+    // MUST use hasRaw(), not has(): "no backend" is itself a negation phrase, so stripNegations()
+    // already deleted it from `t` by this point — same reasoning as strongOnPrem's hasRaw(...)
+    // above, where the negation word IS the signal, not something to strip before matching.
+    staticSite: has(['static site','static website','static web site','marketing website','landing page','brochure site','jamstack'])
+      && hasRaw(['no backend','no back-end','no back end','no server-side','no server side','no dynamic content','purely static','static hosting only','without a backend','without a back-end']),
     voice: has(['voice','speech','call center','ivr']),
     compliance: has(['soc2','hipaa','pci','gdpr','compliance','regulated','audit']),
     security: has(['security','pii','sensitive data','encryption','zero trust']),
@@ -3604,6 +3626,72 @@ function pickGovernance(s){
 // pickX() functions — one auditable list beats 45 scattered guards, and a new category cannot
 // silently miss the check.
 //
+// Domain floors (docs/manual-qa-test-matrix.csv TC-05/06/07/09) — a browser extension, a local
+// CLI tool, and a desktop app all run with NO server-side infrastructure at all; a static site
+// with no backend needs only CDN hosting, not a full cloud/compute/database tier. Applied the
+// same way applyExclusions() applies USER-STATED exclusions below — one auditable place, not a
+// guard threaded through every pickX() function — but with domainFloorPick()'s wording (inferred
+// from the domain) rather than excludedPick()'s "you excluded X" (the user never said any of
+// this explicitly, the requirement's own domain implies it).
+//
+// An if/else-if chain, not independent ifs: these four are meant to be mutually exclusive
+// (something is either a browser extension, a desktop app, a CLI tool, or a static site — not
+// several at once), and picking a priority order for the rare case a requirement's wording trips
+// more than one is safer than letting later branches silently overwrite earlier ones.
+//
+// Scope decision: only the categories most visibly wrong for these domains are touched (cloud,
+// containers, database, IAM, observability, messaging, compute, frontend, architecture) — CI/CD,
+// languages, and the cross-cutting policy categories (audit logging, testing strategy, etc.) are
+// left alone. Not because they're guaranteed correct for every one of these domains, but because
+// covering every one of 45+ categories for four new floors in one pass trades real verification
+// depth for breadth; flagged as a known remaining gap rather than silently declared complete.
+function applyDomainFloors(rec, s){
+  if (s.browserExtension){
+    const why = 'Browser extensions run entirely inside the browser sandbox and ship through the browser\'s own extension store — there is no server-side deployment to host.';
+    rec.cloud = domainFloorPick('no server-side hosting needed for a browser extension', why);
+    rec.containers = domainFloorPick('nothing runs server-side to containerize', why);
+    rec.db = domainFloorPick('no server-side datastore — use the browser\'s own storage API (chrome.storage / IndexedDB) for local state', why);
+    rec.iam = domainFloorPick('no server-side user accounts to authenticate', why);
+    rec.obs = domainFloorPick('no server infrastructure to observe — use a client-side error-reporting SDK instead', why);
+    rec.msg = domainFloorPick('no server-side services to connect via messaging', why);
+    rec.compute = domainFloorPick('logic runs inside the browser sandbox, not on a provisioned compute tier', why);
+    rec.arch = domainFloorPick('a single browser extension has no service architecture style to choose', why);
+    rec.fe = {v: 'Manifest V3 browser extension (background service worker + popup UI in vanilla JS or a lightweight framework)', conf: 'high', why};
+  } else if (s.desktopApp){
+    const why = 'A cross-platform desktop application with no backend server runs entirely on the user\'s own machine — there is nothing to host, scale, or authenticate against server-side.';
+    rec.cloud = domainFloorPick('no server-side hosting — the app runs on the user\'s own machine', why);
+    rec.containers = domainFloorPick('nothing runs server-side to containerize', why);
+    rec.iam = domainFloorPick('no server-side user accounts — use the OS\'s own user session if any access control is needed', why);
+    rec.obs = domainFloorPick('no server infrastructure to observe — use a desktop crash-reporting SDK (e.g. Sentry) instead', why);
+    rec.msg = domainFloorPick('no server-side services to connect via messaging', why);
+    rec.compute = domainFloorPick('runs on the user\'s own machine, not a provisioned compute tier', why);
+    rec.arch = domainFloorPick('a single desktop application has no service architecture style to choose', why);
+    rec.fe = {v: 'Cross-platform desktop UI (Tauri or Electron, matched to your team\'s language) with an embedded SQLite database for local persistence', conf: 'high', why};
+    rec.db = {v: 'Embedded SQLite (bundled with the app, no server-side database)', conf: 'high', why};
+  } else if (s.cliTool){
+    const why = 'A local command-line tool runs on the operator\'s own machine or a CI runner — there is no server-side surface to host, and no end-user-facing UI to build.';
+    rec.cloud = domainFloorPick('no server-side hosting for a local CLI tool', why);
+    rec.containers = domainFloorPick('nothing runs server-side to containerize (package the tool itself via pip/pipx or a single binary instead)', why);
+    rec.iam = domainFloorPick('no server-side user accounts for a local CLI tool', why);
+    rec.obs = domainFloorPick('no server infrastructure to observe — plain logging to stdout or a log file is enough', why);
+    rec.msg = domainFloorPick('no server-side services to connect via messaging', why);
+    rec.compute = domainFloorPick('runs on the operator\'s own machine or a CI runner, not a provisioned compute tier', why);
+    rec.arch = domainFloorPick('a single CLI tool has no service architecture style to choose', why);
+    rec.fe = domainFloorPick('command-line interface only — no web/mobile frontend (argparse, Click, or Typer for Python; Cobra for Go; etc.)', why);
+    rec.db = domainFloorPick('no server-side database — read/write local files directly, or add embedded SQLite only if you need structured queries over the data', why);
+  } else if (s.staticSite){
+    const why = 'A static site with no backend has nothing to compute or persist server-side — it only needs files served from a CDN.';
+    rec.cloud = {v: 'Static hosting / CDN (Cloudflare Pages, Vercel, Netlify, or S3 + CloudFront) — not a full IaaS cloud tier', conf: 'high', why};
+    rec.containers = domainFloorPick('static assets are served directly from a CDN — no server process to containerize', why);
+    rec.db = domainFloorPick('no server-side data to persist for a static site', why);
+    rec.iam = domainFloorPick('no user accounts for a static site', why);
+    rec.obs = domainFloorPick('no server infrastructure to observe — a lightweight client-side analytics snippet is enough if desired', why);
+    rec.msg = domainFloorPick('no server-side services to connect via messaging', why);
+    rec.compute = domainFloorPick('pure static delivery — no server compute tier', why);
+    rec.arch = domainFloorPick('a static site has no application architecture style — just markup and assets', why);
+  }
+}
+
 // Mutates in place: the caller's object literal holds the same references it is about to return.
 function applyExclusions(rec, s){
   const ex = (s && s.excluded) || {};
@@ -3707,6 +3795,10 @@ function computeRecommendations(s){
     cloudVendorPick, computePlatformPick, orchestratorPick, gatewayVendorPick, dbVendorPick, msgVendorPick,
     llmProviderPick, vectorDbVendorPick, guardrailsVendorPick, cicdVendorPick, obsVendorPick, feVendorPick};
 
+  // Domain floors run BEFORE exclusions: if the requirement both describes a domain floor (e.g.
+  // a CLI tool) AND explicitly excludes something (e.g. "no logging"), the more specific,
+  // user-stated exclusion should win the final wording, not the inferred domain default.
+  applyDomainFloors(out, s);
   applyExclusions(out, s);
   return out;
 }
@@ -3834,6 +3926,23 @@ function renderRecommendations(s, rec){
         <b>not a recommendation for your project</b>. Describe what you are building — what it does, who
         uses it, scale, compliance, and any technology you must or must not use — and re-run.
       </div>` : '';
+  // "Java or python" (docs/manual-qa-test-matrix.csv TC-08) already produces real signals
+  // (language mentions), so lowSignalBanner above never fires for it — but a handful of words
+  // with no real domain/scale/compliance context still isn't enough to justify a confident
+  // enterprise stack. Word count is a blunt instrument on purpose: precisely judging "is this
+  // enough context" isn't solvable by keyword-matching, so this only fires for genuinely tiny
+  // inputs, not to second-guess a well-specified short requirement. Unavailable on the shared
+  // read-only view (lastRequirementText is never populated there — see rawForChips above), so
+  // this deliberately doesn't fire there rather than guess from a stale/empty value.
+  const wordCount = (typeof lastRequirementText !== 'undefined' && lastRequirementText)
+    ? lastRequirementText.trim().split(/\s+/).filter(Boolean).length
+    : null;
+  const ambiguousShortInputBanner = (wordCount !== null && wordCount <= 6 && activeSignals.length > 0 && excludedList.length === 0) ? `
+      <div class="brownfield-banner">
+        <b>Very little context to go on</b> — your input is short enough (${wordCount} word${wordCount===1?'':'s'}) that
+        the stack below leans heavily on defaults, not the specifics of your project. Add scale, compliance,
+        team size, or what the product actually does, and re-run for a sharper recommendation.
+      </div>` : '';
   // Inference chips. These are the two HEURISTIC reads — what you ruled out, and what the engine
   // assumed your team already runs — and both change the output, so both are shown and both are
   // yours to switch off. A chip the user has overridden stays visible, struck through, so the
@@ -3885,6 +3994,7 @@ function renderRecommendations(s, rec){
       ${excludedHtml}
       ${renderTokenBudgetHtml(rec, s)}
       ${lowSignalBanner}
+      ${ambiguousShortInputBanner}
       ${brownfieldBanner}
     </div>`;
 
@@ -3960,7 +4070,7 @@ function renderRecommendations(s, rec){
       <div class="rag-pick"><div class="head" style="display:flex; justify-content:space-between; align-items:center;"><div class="name">Best bet: ${iam.v}</div><span class="conf conf-${iam.conf||'low'}">${confLabel(iam.conf)}</span></div><div class="why">${iam.why}</div></div>
       <div class="subhead">Full comparison</div>
       <div class="iam-vendor-list">
-        ${iam.alternatives.map(v=>`<div class="iam-vendor-card ${v.id===iam.primaryId?'recommended':''}">
+        ${(iam.alternatives || []).map(v=>`<div class="iam-vendor-card ${v.id===iam.primaryId?'recommended':''}">
           <div class="ivc-head"><span class="ivc-name">${v.name}</span><span class="ivc-cat">${v.cat}</span>${v.id===iam.primaryId?'<span class="rec-star">★ best bet</span>':''}</div>
           <div class="ivc-row"><b>Best for:</b> ${v.bestFor}</div>
           <div class="ivc-row"><b>Strength:</b> ${v.strength}</div>
@@ -3969,7 +4079,7 @@ function renderRecommendations(s, rec){
         </div>`).join('')}
       </div>
       <div class="assumption">CyberArk, SailPoint, and Saviynt appear above for completeness but are <b>not</b> Okta-equivalent replacements — CyberArk is privileged-access management (vaulting/securing admin credentials), and SailPoint/Saviynt are identity governance (access certification for audit). All are typically layered on top of one of the SSO/IdP rows above, not chosen instead of one. Also worth knowing going into any vendor conversation: Thoma Bravo owns Ping, SailPoint, and the former ForgeRock, so cross-shopping those three specifically isn't the independent competitive pressure it looks like.</div>
-      ${iam.complementary.length ? iam.complementary.map(c=>`<div class="iam-complementary"><div class="cat-tag">Recommended add-on — ${c.cat}</div><div class="name">${c.vendor}</div><div class="why">${c.why}</div></div>`).join('') : ''}
+      ${(iam.complementary || []).length ? iam.complementary.map(c=>`<div class="iam-complementary"><div class="cat-tag">Recommended add-on — ${c.cat}</div><div class="name">${c.vendor}</div><div class="why">${c.why}</div></div>`).join('') : ''}
       <div class="subhead">IAM health metrics worth tracking</div>
       ${IAM_METRICS.map(m=>`<div class="opt-item"><div class="t">${m.m}</div><div class="w">${m.target}</div></div>`).join('')}
       <div class="subhead">RBAC / access-control best practices</div>
@@ -4521,7 +4631,7 @@ function buildCanonicalArchitectureGraph(ctx, signals = {}){
   N('frontend','client','Frontend', fe.v, fe.conf, fe.why, 'Application Architect');
   N('gateway','edge','API Gateway / Edge', gw.v, gw.conf, gw.why, 'Solution Architect');
   N('iam','edge','Identity & Access — '+iam.v, '', iam.conf, iam.why, 'Enterprise Architect',
-    [`<b>Best bet: ${iam.v}</b> — ${iam.why}`, ...iam.alternatives.map(v=>`<b>${v.name}</b> (${v.cat}) — ${v.bestFor}. ${v.pricing}`), ...iam.complementary.map(c=>`<b>+ ${c.vendor}</b> (${c.cat} add-on) — ${c.why}`)]);
+    [`<b>Best bet: ${iam.v}</b> — ${iam.why}`, ...(iam.alternatives || []).map(v=>`<b>${v.name}</b> (${v.cat}) — ${v.bestFor}. ${v.pricing}`), ...(iam.complementary || []).map(c=>`<b>+ ${c.vendor}</b> (${c.cat} add-on) — ${c.why}`)]);
   N('dns','edge','DNS', dns.v, dns.conf, 'DNS routing and edge protection for your domain.', 'Solution Architect');
   // Defensive optional-chaining: older stored/shared analyses (share links) were computed before
   // this field existed, so hybridConnectivity may be absent on a replayed `rec` — same backward-
