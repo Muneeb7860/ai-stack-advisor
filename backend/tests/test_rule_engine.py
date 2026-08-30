@@ -140,8 +140,11 @@ def test_recommend_stack_returns_all_expected_categories():
     for the new Agent Framework (LangGraph/Pydantic AI/FastMCP) category — a bespoke, non-"stack"
     section like vector_db_vendor (has its own altToggle but no STACK_CARD_CATEGORY entry, since
     it doesn't render as a refine/ask/challenge-enabled stack card), so it needs no plain-key
-    alias the way gitops does. If this test needs updating again, cross-check against the actual
-    index.html analyze() assembly, not against what an MCP client currently expects.
+    alias the way gitops does. inference_serving_vendor (vLLM/SGLang) was added the same
+    bespoke-section way, gated on self-hosting actually being at production scale rather than
+    just present at all (a genuinely different tier from pick_runtime's Ollama recommendation).
+    If this test needs updating again, cross-check against the actual index.html analyze()
+    assembly, not against what an MCP client currently expects.
 
     Note this list is hand-maintained, so it only catches a key added on the PYTHON side — it is
     not a substitute for test_engine_parity.py, which is what catches a category that landed in
@@ -159,7 +162,7 @@ def test_recommend_stack_returns_all_expected_categories():
         "vector_db_vendor", "guardrails_vendor", "cicd_vendor", "observability_vendor",
         "frontend_vendor", "audit_logging", "privileged_access", "testing_strategy",
         "network_boundary", "multi_cloud_bridging", "security_gates", "gitops", "gitops_vendor",
-        "agent_framework_vendor",
+        "agent_framework_vendor", "inference_serving_vendor",
     }
     assert set(result["recommendations"].keys()) == expected_categories
 
