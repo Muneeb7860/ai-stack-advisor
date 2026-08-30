@@ -2094,6 +2094,9 @@ function detectSignals(text){
     chatbot: has(['chatbot','conversational','customer support bot','assistant','virtual agent']),
     knowledgeBase: has(['knowledge base','internal documents','policy documents','confluence','wiki','document search','faq']),
     agentic: has(['agentic','multi-agent','take actions','automate workflow','autonomous','tool use','function calling']),
+    langgraphMentioned: has(['langgraph']),
+    pydanticAiMentioned: has(['pydantic ai','pydanticai']),
+    fastmcpMentioned: has(['fastmcp','fast mcp']),
     mobile: has(['mobile','flutter','ios','android','react native']),
     web: has(['web app','website','web application','react','angular','vue']),
     // Domain floors (docs/manual-qa-test-matrix.csv TC-05/06/07/09) — these describe things that
@@ -3225,6 +3228,31 @@ function pickMCP(s){
   return picks;
 }
 
+// LangGraph and Pydantic AI compete on the same job (orchestrating an agent's own reasoning/
+// tool-use loop); FastMCP solves a genuinely different one (exposing tools/servers via the MCP
+// protocol so an agent — built with LangGraph, Pydantic AI, or anything else — can call them).
+// Grouped in one category anyway, same as GATEWAY_VENDORS mixing open-source/commercial or
+// CACHE_VENDORS mixing single/multi-threaded stores — the `cat` field on each entry says which
+// job it does, and FastMCP's own drawback text says so explicitly.
+const AGENT_FRAMEWORK_VENDORS = [
+  {id:'langgraph', name:'LangGraph', cat:'Stateful multi-agent orchestration (graph-based)', bestFor:'Complex, branching, or long-running multi-agent workflows needing durable checkpoints and human-in-the-loop review', strength:'Explicit graph-based state machine mixes deterministic, auditable steps with model-driven decisions in one flow; agents persist and resume from checkpoints rather than restarting on failure; deep LangSmith integration for tracing/observability', drawback:'Intentionally low-level — the graph abstraction itself is more to learn and maintain than a simple agent loop, and it\'s overkill for a single-agent, non-branching workflow', pricing:'Free (OSS) — LangSmith observability is a separate paid product'},
+  {id:'pydanticai', name:'Pydantic AI', cat:'Type-safe agent SDK (single-agent-loop-first)', bestFor:'Python teams wanting a lighter-weight, type-safe agent loop without LangChain\'s larger ecosystem surface area', strength:'Type safety throughout (structured outputs, dependency injection, tool definitions) built on familiar Pydantic validation; model-agnostic — swap providers with a string; built-in OpenTelemetry/Logfire observability with no extra config', drawback:'Younger project with a smaller ecosystem/plugin surface than LangChain/LangGraph; less mature tooling for genuinely complex, branching multi-agent graphs', pricing:'Free (OSS)'},
+  {id:'fastmcp', name:'FastMCP', cat:'MCP server/tool-exposition framework (not an agent-orchestration framework)', bestFor:'Python teams building MCP servers/tools without hand-rolling the protocol themselves', strength:'Automatic schema generation and validation from plain Python functions (decorator-based); FastMCP\'s high-level API was incorporated into the official MCP Python SDK in 2024, so it\'s not a fringe alternative to the standard — it effectively became part of it', drawback:'Solves tool-exposition, not agent orchestration — it doesn\'t compete with LangGraph/Pydantic AI, it complements whichever one (or neither) you use for the agent\'s own reasoning loop', pricing:'Free (OSS)'},
+];
+function pickAgentFrameworkVendor(s){
+  if(!s.agentic) return {v:'Not applicable — no agentic/multi-step tool-use workflow in this stack', why:'LangGraph, Pydantic AI, and FastMCP all exist to build/orchestrate an agent\'s own reasoning or tool-calling loop — without an agentic/multi-step tool-use requirement, there\'s no such loop for a framework to structure. Revisit this once/if you add one.', primaryId:null, conf:'high'};
+  if(s.langgraphMentioned) return {v:'LangGraph', why:'Explicit LangGraph mention detected — matching existing familiarity over evaluating a new framework.', primaryId:'langgraph', conf:'high'};
+  if(s.pydanticAiMentioned) return {v:'Pydantic AI', why:'Explicit Pydantic AI mention detected — matching existing familiarity over evaluating a new framework.', primaryId:'pydanticai', conf:'high'};
+  if(s.fastmcpMentioned) return {v:'FastMCP', why:'Explicit FastMCP mention detected. Note this solves a different problem than LangGraph/Pydantic AI — it exposes tools via MCP, it doesn\'t orchestrate the agent\'s own reasoning loop — you likely still want one of those alongside it for the agent itself.', primaryId:'fastmcp', conf:'high'};
+  const mcpAlsoRelevant = s.knowledgeBase || s.ragNeed || s.enterprise;
+  const fastmcpNote = mcpAlsoRelevant ? ' Since you\'re also likely exposing tools via MCP, FastMCP is the standard choice for building those servers — a complementary, not competing, choice (its high-level API was incorporated into the official MCP Python SDK in 2024).' : '';
+  if(s.enterprise || s.largeTeam){
+    return {v:'LangGraph' + (mcpAlsoRelevant ? ' (+ FastMCP for MCP servers)' : ''), why:'Complex, multi-step, or multi-agent workflows at team/enterprise scale benefit from LangGraph\'s explicit graph-based state machine — durable checkpoints, human-in-the-loop interrupts, and precise control over branching logic that a simpler single-agent-loop SDK doesn\'t give you.' + fastmcpNote, primaryId:'langgraph', conf:'medium'};
+  }
+  return {v:'Pydantic AI' + (mcpAlsoRelevant ? ' (+ FastMCP for MCP servers)' : ''), why:'A type-safe, lighter-weight agent SDK is the better default absent a specific need for LangGraph\'s graph-based multi-agent complexity — Pydantic AI\'s familiar Pydantic validation/typing catches errors at development time, and it\'s model-agnostic without LangChain\'s larger surface area. Move to LangGraph if the workflow grows into genuinely branching, multi-agent, or long-running/durable territory.' + fastmcpNote, primaryId:'pydanticai', conf:'medium'};
+}
+const AGENT_FRAMEWORK_NOTE = 'LangGraph and Pydantic AI compete on the same job (orchestrating an agent\'s own reasoning/tool-use loop); FastMCP solves a different one (exposing tools via the MCP protocol so an agent — built with either of those, or anything else — can call them). Grouped here for convenience, not because all three compete head-to-head.';
+
 // Brownfield/AI-only guidance (pattern #1 — chatbot-only). Distinct from every pickX() function
 // above: those all answer "what should we build," this answers "how does a new AI layer attach
 // to something that already exists" — integration surface, session handling, auth passthrough.
@@ -4062,6 +4090,7 @@ function computeRecommendations(s){
   const gitopsVendorPick = pickGitopsVendor(s, containers);
   const obsVendorPick = pickObservabilityVendor(s, obs);
   const feVendorPick = pickFrontendVendor(s, fe);
+  const agentFrameworkVendorPick = pickAgentFrameworkVendor(s);
 
   // Build the result first, THEN apply exclusions to it. Applying them to a separate object
   // literal would mutate a throwaway — the `const` bindings above stay bound to the original
@@ -4072,6 +4101,7 @@ function computeRecommendations(s){
     auditLogging, privilegedAccess, testingStrategy, networkBoundary, multiCloudBridging, securityGates,
     cloudVendorPick, computePlatformPick, orchestratorPick, gatewayVendorPick, dbVendorPick, msgVendorPick,
     llmProviderPick, vectorDbVendorPick, guardrailsVendorPick, cicdVendorPick, gitopsVendorPick, obsVendorPick, feVendorPick,
+    agentFrameworkVendorPick,
     // No separate "base" GitOps pick exists (unlike cicd/compute) — pickGitopsVendor() produces
     // the recommendation and the vendor primaryId together. Aliased under a plain `gitops` key
     // too so STACK_CARD_CATEGORY / the refine-ask-challenge UI can look it up the same way every
@@ -4092,7 +4122,7 @@ function computeRecommendations(s){
 // see. 'integration' is the one section that's brownfield-only in the other direction (it never
 // applies to greenfield, not even by default) — handled explicitly below, not by omission.
 const ALL_SECTION_IDS = ['stack','iamcompare','tradeoffs','llm','orchestration','hosting','topology',
-  'mcpapi','mcpservers','rag','vectordb','guardrails','integration','cost','throughput','governance','docs'];
+  'mcpapi','mcpservers','agentframework','rag','vectordb','guardrails','integration','cost','throughput','governance','docs'];
 
 // The ONLY place the "which sections render" decision lives. sec() inside renderRecommendations
 // just checks membership against this function's output — no scattered if(showInfra)/
@@ -4121,7 +4151,8 @@ function renderRecommendations(s, rec){
     topology, mcpVsApi, guardrailPipeline, vectorDb, runtime, costEstimate, hybridConnectivity,
     auditLogging, privilegedAccess, testingStrategy, networkBoundary, multiCloudBridging, securityGates,
     cloudVendorPick, computePlatformPick, orchestratorPick, gatewayVendorPick, dbVendorPick, msgVendorPick,
-    llmProviderPick, vectorDbVendorPick, guardrailsVendorPick, cicdVendorPick, gitopsVendorPick, obsVendorPick, feVendorPick} = rec;
+    llmProviderPick, vectorDbVendorPick, guardrailsVendorPick, cicdVendorPick, gitopsVendorPick, obsVendorPick, feVendorPick,
+    agentFrameworkVendorPick} = rec;
 
   // `v === true`, not `v`: signals is no longer all-booleans — excluded/known/latencyTarget are
   // objects, and `{}` is truthy, so a plain truthiness filter would list them as detected signals.
@@ -4437,6 +4468,11 @@ function renderRecommendations(s, rec){
 
   sec('mcpservers', 'MCP Servers', 'MCP Server(s) Needed',
     `<div class="card"><div class="signals">${mcp.map(m=>`<span class="badge">${m}</span>`).join('')}</div></div>`);
+
+  sec('agentframework', 'Agent Framework', 'Agent Orchestration Framework',
+    `<div class="card"><div class="rag-pick"><div class="head" style="display:flex; justify-content:space-between; align-items:center;"><div class="name">${agentFrameworkVendorPick.v}</div><span class="conf conf-${agentFrameworkVendorPick.conf||'low'}">${confLabel(agentFrameworkVendorPick.conf)}</span></div><div class="why">${agentFrameworkVendorPick.why}</div></div>
+      ${s.agentic ? altToggle(AGENT_FRAMEWORK_VENDORS, agentFrameworkVendorPick, AGENT_FRAMEWORK_NOTE) : ''}
+    </div>`);
 
   sec('rag', 'RAG', 'RAG Architecture',
     `<div class="card"><div class="rag-pick"><div class="head" style="display:flex; justify-content:space-between; align-items:center;"><div class="name">${rag.name}</div><span class="conf conf-${rag.conf||'low'}">${confLabel(rag.conf)}</span></div><div class="why">${rag.why}</div></div></div>`);
