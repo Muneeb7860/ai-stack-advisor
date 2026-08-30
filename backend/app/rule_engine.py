@@ -49,6 +49,13 @@ _PASSIVE_NEGATION_PHRASES = (
     "is not allowed", "are not allowed", "is not needed", "are not needed",
     "is not required", "are not required", "is excluded", "are excluded",
     "not permitted", "not to be used", "is ruled out", "are ruled out",
+    # Idiomatic negation — the excluded subject sits before the idiom, same as the phrases
+    # above. Found via a pasted-and-verified "brutal feedback" gap report and independently
+    # confirmed as a real, reproducible miss in docs/market-scenario-test-log.csv rows A6/A7
+    # ("Kubernetes is off the table" was still recommending Kubernetes). No "is/are" prefix
+    # baked in on purpose — "off the table" alone, inside \b...\b, matches regardless of the
+    # verb tense/form used ("was off the table", "Kubernetes: off the table").
+    "off the table",
 )
 _PASSIVE_NEGATION_ALT = "|".join(_PASSIVE_NEGATION_PHRASES)
 
@@ -77,7 +84,7 @@ def strip_negations(text: str) -> str:
         flags=re.IGNORECASE,
     )
     text = re.sub(
-        r"\b(no|not|without|avoid|don't|doesn't|isn't|won't|never|excluding|except for|except)\b"
+        r"\b(no|not|without|avoid|skip|ditch|steer clear of|don't|doesn't|isn't|won't|never|excluding|except for|except)\b"
         r"[^.!?;\n]{0,300}?" + _CLAUSE_END,
         " ",
         text,
@@ -112,7 +119,7 @@ EXCLUSION_TERMS = {
 }
 
 _NEGATION_CLAUSE = re.compile(
-    r"\b(?:no|not|without|avoid|don't|doesn't|isn't|won't|never|excluding|except for|except)\b"
+    r"\b(?:no|not|without|avoid|skip|ditch|steer clear of|don't|doesn't|isn't|won't|never|excluding|except for|except)\b"
     r"([^.!?;\n]{0,300}?)" + _CLAUSE_END,
     re.I,
 )

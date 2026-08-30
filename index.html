@@ -1697,6 +1697,13 @@ const PASSIVE_NEGATION_PHRASES = [
   'is not allowed', 'are not allowed', 'is not needed', 'are not needed',
   'is not required', 'are not required', 'is excluded', 'are excluded',
   'not permitted', 'not to be used', 'is ruled out', 'are ruled out',
+  // Idiomatic negation — the excluded subject sits before the idiom, same as the phrases
+  // above. Found via a pasted-and-verified "brutal feedback" gap report and independently
+  // confirmed as a real, reproducible miss in docs/market-scenario-test-log.csv rows A6/A7
+  // ("Kubernetes is off the table" was still recommending Kubernetes). No "is/are" prefix
+  // baked in on purpose — "off the table" alone, inside \b...\b, matches regardless of the
+  // verb tense/form used ("was off the table", "Kubernetes: off the table").
+  'off the table',
 ];
 const PASSIVE_NEGATION_ALT = PASSIVE_NEGATION_PHRASES.join('|');
 
@@ -1710,7 +1717,7 @@ function stripNegations(text){
   // pass below never fires on "neither" at all (not in its negator list), so without this,
   // both names survive to be read as positive mentions. See NEITHER_NOR_CLAUSE below.
   text = text.replace(new RegExp('\\bneither\\b[^.!?;\\n]{0,300}?' + NEGATION_CLAUSE_END, 'gi'), ' ');
-  text = text.replace(new RegExp('\\b(no|not|without|avoid|don\'t|doesn\'t|isn\'t|won\'t|never|excluding|except for|except)\\b[^.!?;\\n]{0,300}?' + NEGATION_CLAUSE_END, 'gi'), ' ');
+  text = text.replace(new RegExp('\\b(no|not|without|avoid|skip|ditch|steer clear of|don\'t|doesn\'t|isn\'t|won\'t|never|excluding|except for|except)\\b[^.!?;\\n]{0,300}?' + NEGATION_CLAUSE_END, 'gi'), ' ');
   return text;
 }
 
@@ -1776,7 +1783,7 @@ const QUANTITY_QUALIFIER_RE = /\b(?:another|a second|an additional|a different|o
 function findExclusions(text, termsByKey){
   const t = String(text || '').toLowerCase();
   // Same clause shape stripNegations() removes, but capturing the clause instead of dropping it.
-  const NEG = new RegExp('\\b(?:no|not|without|avoid|don\'t|doesn\'t|isn\'t|won\'t|never|excluding|except for|except)\\b([^.!?;\\n]{0,300}?)' + NEGATION_CLAUSE_END, 'gi');
+  const NEG = new RegExp('\\b(?:no|not|without|avoid|skip|ditch|steer clear of|don\'t|doesn\'t|isn\'t|won\'t|never|excluding|except for|except)\\b([^.!?;\\n]{0,300}?)' + NEGATION_CLAUSE_END, 'gi');
   // Passive voice ("Kubernetes must not be used") — see PASSIVE_NEGATION_PHRASES above.
   const PASSIVE_NEG = new RegExp('([^.!?;\\n]{0,300}?)\\b(?:' + PASSIVE_NEGATION_ALT + ')\\b', 'gi');
   // "Neither Java nor Python" — a correlating conjunction, not a single negator word, so it
