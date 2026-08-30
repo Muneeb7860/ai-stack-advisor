@@ -128,19 +128,32 @@ def test_category_vendors_reuses_the_same_arrays_render_alt_toggle_uses():
 
 
 def test_challenge_button_and_form_exist_on_every_card_via_attach_refine_to_card():
+    """buildChallengeButtonHtml()/buildChallengeBoxHtml() hold the actual markup (factored out
+    so the Flow View integration can reuse it — see attachChallengeToFlowNode) — this test
+    checks attachRefineToCard still wires both into every card's trigger row and zone."""
     text = _text()
     body_start = text.index("function attachRefineToCard(card, category, label, cardKey){")
     body_end = text.index("\n}\n", body_start)
     body = text[body_start:body_end]
-    assert "onChallengeToggleClick" in body
-    assert "challenge-toggle-btn" in body
-    assert "challenge-box" in body
     assert "cardPickByKey[cardKey]" in body
+    assert "buildChallengeButtonHtml(cardKey)" in body
+    assert "buildChallengeBoxHtml(cardKey, category)" in body
+
+    button_start = text.index("function buildChallengeButtonHtml(cardKey){")
+    button_end = text.index("\n}\n", button_start)
+    button_body = text[button_start:button_end]
+    assert "onChallengeToggleClick" in button_body
+    assert "challenge-toggle-btn" in button_body
+
+    box_start = text.index("function buildChallengeBoxHtml(cardKey, category){")
+    box_end = text.index("\n}\n", box_start)
+    box_body = text[box_start:box_end]
+    assert "challenge-box" in box_body
 
 
 def test_challenge_dropdown_falls_back_to_free_text_when_no_vendor_array_exists():
     text = _text()
-    body_start = text.index("function attachRefineToCard(card, category, label, cardKey){")
+    body_start = text.index("function buildChallengeBoxHtml(cardKey, category){")
     body_end = text.index("\n}\n", body_start)
     body = text[body_start:body_end]
     assert "const categoryVendors = CATEGORY_VENDORS[category];" in body
