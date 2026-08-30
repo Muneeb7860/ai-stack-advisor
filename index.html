@@ -4862,6 +4862,59 @@ function showFlowPopover(id){
   if(top+220 > window.innerHeight) top = Math.max(10, window.innerHeight-230);
   pop.style.left = left+'px';
   pop.style.top = top+'px';
+
+  attachChallengeToFlowNode(pop, n);
+}
+
+// "Challenge This Pick" — Flow View integration (docs/challenge-this-pick-spec.md's own
+// deferred item: "Flow View nodes have their own separate inspection popover... extending this
+// widget there is a follow-up decision, not assumed here"). Reuses the exact same
+// buildChallengeButtonHtml/buildChallengeBoxHtml markup and onChallengeToggleClick/
+// onChallengeSubmit functions the stack-card grid uses — only how category/current-pick get
+// derived differs, since a flow node has no `.pick` DOM element to read from.
+//
+// Flow node ids mostly equal STACK_CARD_CATEGORY's category keys directly (cloud, gateway, iam,
+// containers, cache, messaging, mesh, observability, cicd, frontend, dns, hybridconnectivity,
+// multicloudbridging) — these four don't, so they need a translation. llm/rag/vectordb/mcp/
+// guardrails have no STACK_CARD_CATEGORY entry at all (per the comment above that map — no
+// pickX() backs them), so they fall straight through to the free-text-only challenge form via
+// buildChallengeBoxHtml's own `CATEGORY_VENDORS[category]` lookup, same as any other card
+// category without a vendor array — not special-cased here.
+const FLOW_NODE_CATEGORY_OVERRIDES = { arch: 'architecture', computemodel: 'compute', lang: 'languages', db: 'database' };
+
+// A few nodes (iam, llm, rag) pack their actual pick value into `title` as "Label — Value"
+// instead of a plain `sub` string (see buildCanonicalArchitectureGraph's N() calls) — split it
+// back out so the challenge form's "current pick" and the context-panel title read cleanly.
+function splitFlowNodeTitle(n){
+  const idx = n.title.indexOf(' — ');
+  return idx >= 0 ? { label: n.title.slice(0, idx), value: n.title.slice(idx + 3) } : { label: n.title, value: '' };
+}
+function flowNodeLabel(n){ return splitFlowNodeTitle(n).label; }
+function flowNodeCurrentPick(n){ return n.sub || splitFlowNodeTitle(n).value || n.title; }
+
+function attachChallengeToFlowNode(pop, n){
+  const cardKey = `flow-${n.id}`;
+  const category = FLOW_NODE_CATEGORY_OVERRIDES[n.id] || n.id;
+  cardLabelByKey[cardKey] = flowNodeLabel(n);
+  cardPickByKey[cardKey] = flowNodeCurrentPick(n);
+
+  // showFlowPopover() replaces pop.innerHTML wholesale on every open, so the trigger button
+  // must be re-added every time this runs — unlike the stack-card grid, which builds it once
+  // per full render.
+  pop.insertAdjacentHTML('beforeend', `<div class="refine-btns-row">${buildChallengeButtonHtml(cardKey)}</div>`);
+
+  // The zone below lives in the persistent #contextPanelBody, not inside the popover — re-adding
+  // it on a repeat click of the same node would accumulate duplicate zones (the stack-card grid
+  // never hits this because attachRefineUI() clears #contextPanelBody once per full render,
+  // whereas this function runs once per popover open, i.e. potentially many times per render).
+  if (document.querySelector(`.context-zone[data-card-key="${cardKey}"]`)) return;
+
+  const zone = document.createElement('div');
+  zone.className = 'refine-zone context-zone';
+  zone.dataset.cardKey = cardKey;
+  zone.dataset.category = category;
+  zone.innerHTML = buildChallengeBoxHtml(cardKey, category);
+  document.getElementById('contextPanelBody').appendChild(zone);
 }
 
 initFlowViewport();
@@ -5660,6 +5713,40 @@ let cardLabelByKey = {};
 // the DOM every time the challenge form opens.
 let cardPickByKey = {};
 
+// "Challenge This Pick" — factored out of attachRefineToCard so the Flow View integration below
+// (attachChallengeToFlowNode) can reuse the exact same button/box markup instead of duplicating
+// it. Behavior-preserving extraction: attachRefineToCard's own output is unchanged by this.
+function buildChallengeButtonHtml(cardKey){
+  return `<button class="challenge-toggle-btn icon-btn" id="challengeToggleBtn-${cardKey}" onclick="openContextPanelFor('${cardKey}'); onChallengeToggleClick('${cardKey}')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v17.25m0-17.25c-1.472 0-2.882.265-4.185.75M12 3c1.472 0 2.882.265 4.185.75M18.75 4.97l-4.5 1.63m4.5-1.63 1.5 6.75c-.5 1-1.5 1.5-2.5 1.5s-2-.5-2.5-1.5l1.5-6.75m-13.5 0-1.5 6.75c.5 1 1.5 1.5 2.5 1.5s2-.5 2.5-1.5l-1.5-6.75m0 0-4.5-1.63"/></svg> Challenge this pick</button>`;
+}
+function buildChallengeBoxHtml(cardKey, category){
+  // "Challenge This Pick" (docs/challenge-this-pick-spec.md): the dropdown only exists when
+  // this category has a real vendor-alternatives array (CATEGORY_VENDORS, defined above the
+  // vendor arrays) — free-text-only otherwise, not a fabricated 3-option list. "Other" is
+  // always the last option so a real alternative not in the KB can still be named.
+  const categoryVendors = CATEGORY_VENDORS[category];
+  const challengeSelectHtml = categoryVendors
+    ? `<select id="challengeSelect-${cardKey}">
+         ${categoryVendors.map(v => `<option value="${v.name}">${v.name}</option>`).join('')}
+         <option value="">Other (specify below)</option>
+       </select>`
+    : '';
+  return `
+    <div class="challenge-box" id="challengeBox-${cardKey}">
+      <div class="challenge-field-label">What would you choose instead?</div>
+      ${challengeSelectHtml}
+      <input type="text" id="challengeAltInput-${cardKey}" placeholder="${categoryVendors ? 'If “Other”, name it here' : 'Name an alternative'}">
+      <div class="challenge-field-label">Why is this a better fit for your case?</div>
+      <textarea id="challengeReason-${cardKey}" placeholder="e.g. For our 20k/sec real-time volume, a dedicated pub/sub tier is overkill..."></textarea>
+      <div class="challenge-actions">
+        <button class="challenge-submit-btn" onclick="onChallengeSubmit('${cardKey}')">Submit</button>
+        <button class="challenge-cancel-btn" onclick="onChallengeToggleClick('${cardKey}')">Cancel</button>
+      </div>
+      <div class="challenge-confirm" id="challengeConfirm-${cardKey}"></div>
+    </div>
+  `;
+}
+
 function attachRefineToCard(card, category, label, cardKey){
   // "Why this pick" signal chips — stack cards only (STACK_CARD_SIGNALS has no entries for
   // trade-off cards' pseudo-category 'tradeoffs', so this is a no-op there).
@@ -5677,7 +5764,7 @@ function attachRefineToCard(card, category, label, cardKey){
   triggerRow.innerHTML = `
     <button class="refine-btn icon-btn" onclick="openContextPanelFor('${cardKey}'); onRefineClick('${cardKey}', this)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z"/></svg> Refine with AI</button>
     <button class="ask-toggle-btn icon-btn" id="askToggleBtn-${cardKey}" onclick="openContextPanelFor('${cardKey}'); onAskToggleClick('${cardKey}')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z"/></svg> Ask a question</button>
-    <button class="challenge-toggle-btn icon-btn" id="challengeToggleBtn-${cardKey}" onclick="openContextPanelFor('${cardKey}'); onChallengeToggleClick('${cardKey}')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v17.25m0-17.25c-1.472 0-2.882.265-4.185.75M12 3c1.472 0 2.882.265 4.185.75M18.75 4.97l-4.5 1.63m4.5-1.63 1.5 6.75c-.5 1-1.5 1.5-2.5 1.5s-2-.5-2.5-1.5l1.5-6.75m-13.5 0-1.5 6.75c.5 1 1.5 1.5 2.5 1.5s2-.5 2.5-1.5l-1.5-6.75m0 0-4.5-1.63"/></svg> Challenge this pick</button>
+    ${buildChallengeButtonHtml(cardKey)}
   `;
   card.appendChild(triggerRow);
 
@@ -5690,18 +5777,6 @@ function attachRefineToCard(card, category, label, cardKey){
   // /api/refine call can adjust several categories' cards at once, so every card's result slot
   // needs to exist even while its own zone isn't the one currently on screen); only the active
   // one is display:block, via the .context-zone/.active pair in the CSS above.
-  // "Challenge This Pick" (docs/challenge-this-pick-spec.md): the dropdown only exists when
-  // this category has a real vendor-alternatives array (CATEGORY_VENDORS, defined above the
-  // vendor arrays) — free-text-only otherwise, not a fabricated 3-option list. "Other" is
-  // always the last option so a real alternative not in the KB can still be named.
-  const categoryVendors = CATEGORY_VENDORS[category];
-  const challengeSelectHtml = categoryVendors
-    ? `<select id="challengeSelect-${cardKey}">
-         ${categoryVendors.map(v => `<option value="${v.name}">${v.name}</option>`).join('')}
-         <option value="">Other (specify below)</option>
-       </select>`
-    : '';
-
   const zone = document.createElement('div');
   zone.className = 'refine-zone context-zone';
   zone.dataset.cardKey = cardKey;
@@ -5715,18 +5790,7 @@ function attachRefineToCard(card, category, label, cardKey){
         <button onclick="onAskClick('${cardKey}')">Send</button>
       </div>
     </div>
-    <div class="challenge-box" id="challengeBox-${cardKey}">
-      <div class="challenge-field-label">What would you choose instead?</div>
-      ${challengeSelectHtml}
-      <input type="text" id="challengeAltInput-${cardKey}" placeholder="${categoryVendors ? 'If “Other”, name it here' : 'Name an alternative'}">
-      <div class="challenge-field-label">Why is this a better fit for your case?</div>
-      <textarea id="challengeReason-${cardKey}" placeholder="e.g. For our 20k/sec real-time volume, a dedicated pub/sub tier is overkill..."></textarea>
-      <div class="challenge-actions">
-        <button class="challenge-submit-btn" onclick="onChallengeSubmit('${cardKey}')">Submit</button>
-        <button class="challenge-cancel-btn" onclick="onChallengeToggleClick('${cardKey}')">Cancel</button>
-      </div>
-      <div class="challenge-confirm" id="challengeConfirm-${cardKey}"></div>
-    </div>
+    ${buildChallengeBoxHtml(cardKey, category)}
   `;
   document.getElementById('contextPanelBody').appendChild(zone);
 }

@@ -100,17 +100,24 @@ error for a background sync failing.
 
 ## Explicitly NOT in this spec (real scope boundaries, not oversights)
 
-- **No aggregate dashboard/analytics view of disagreements** — this spec only covers capture,
-  not a "here's what N users disagreed on" reporting surface. That's a real, separate feature
-  needing its own scoping (who can see it, is it per-analysis or product-wide) once there's
-  actual data to look at.
+- ~~**No aggregate dashboard/analytics view of disagreements**~~ — scoped and shipped separately,
+  see `docs/aggregate-disagreements-dashboard-spec.md` (a local, read-only report script; no new
+  network endpoint, since no auth infra exists anywhere in this backend and a public feed of
+  every beta tester's stated disagreements isn't the same access-control shape as `share.py`'s
+  public-by-design links).
 - **No "Copy Feedback JSON" button** — that made sense in the GTM mockup's framing (manually
   relaying feedback with no backend), but this spec already has a real persistence path
   (localStorage + opt-in backend row), so a manual copy/paste step is redundant, not a nice-to-have.
-- **Not wired into the Flow View's node popovers** — only the card view's `.refine-btns-row`.
-  Flow View nodes have their own separate inspection popover (`showFlowPopover`,
-  `index.html:4773`) with no refine/ask presence today either; extending this widget there is
-  a follow-up decision, not assumed here.
+- ~~**Not wired into the Flow View's node popovers**~~ — shipped: `showFlowPopover()`
+  (`index.html`, search `attachChallengeToFlowNode`) now appends the same Challenge button/box
+  via `buildChallengeButtonHtml`/`buildChallengeBoxHtml` (factored out of `attachRefineToCard`
+  for this reuse), with a small `FLOW_NODE_CATEGORY_OVERRIDES` map for the handful of flow node
+  ids that don't equal their `STACK_CARD_CATEGORY` key directly (`arch`→`architecture`,
+  `computemodel`→`compute`, `lang`→`languages`, `db`→`database`). Flow-only nodes with no
+  `STACK_CARD_CATEGORY` entry at all (`llm`, `rag`, `vectordb`, `mcp`, `guardrails`) fall through
+  to the same free-text-only form every card-side category without a vendor array already uses —
+  not specially handled. Refine/Ask were deliberately NOT added to the Flow View in this pass;
+  only Challenge This Pick, per this note's original scope.
 
 ## Testing approach (once this moves from spec to implementation)
 
