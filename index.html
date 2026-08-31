@@ -880,6 +880,16 @@
   .ha-fix-row{display:flex; gap:12px; padding:10px 0; border-top:1px solid var(--border);}
   .ha-fix-row:first-child{border-top:none; padding-top:0;}
   .ha-fix-rank{font-family:ui-monospace,monospace; font-weight:700; color:var(--accent); flex-shrink:0; width:18px;}
+  /* Evidence upload — optional, per-question, confirms or flags the self-selected score (never overrides it) */
+  .ha-evidence-toggle{
+    background:none; border:1px dashed var(--border); border-radius:var(--radius-sm); color:var(--muted2);
+    font-size:12px; padding:6px 12px; cursor:pointer; margin-top:10px; transition:border-color .15s var(--ease), color .15s var(--ease);
+  }
+  .ha-evidence-toggle:hover{border-color:var(--accent); color:var(--accent);}
+  .ha-evidence-result{font-size:12.5px; line-height:1.5; margin-top:8px; padding:8px 12px; border-radius:var(--radius-sm);}
+  .ha-evidence-result.match{background:color-mix(in srgb, #2f8a5a 12%, transparent); color:#2f8a5a; border:1px solid color-mix(in srgb, #2f8a5a 35%, transparent);}
+  .ha-evidence-result.mismatch{background:color-mix(in srgb, #d9534f 10%, transparent); color:#d9534f; border:1px solid color-mix(in srgb, #d9534f 35%, transparent);}
+  .ha-evidence-result.silent{background:var(--surface); color:var(--muted2); border:1px solid var(--border);}
   .dropzone{
     border:2px dashed var(--border); border-radius:var(--radius-lg); padding:36px 20px;
     text-align:center; cursor:pointer; background:rgba(18,21,29,0.4);
@@ -6097,12 +6107,206 @@ const HA_SCORE_BANDS = [
   { max: 15, label: 'Mature', note: 'Practice subtraction — ask which rules, tools and checks no longer earn their place' },
 ];
 
+// ============ Harness Readiness evidence upload (optional, per question) ============
+// Confirms or flags — never overrides — the self-selected score against one attached file's
+// text content. Pure, DOM-free functions so they're testable via the same Node-harness
+// pattern as scoreHarnessAudit. See docs/harness-engineering/HARNESS_EVIDENCE_SCOPE.md for
+// the full per-component check table and the reasoning behind each threshold.
+
+function haEvidenceVerdict(ceiling, level, matchReason, mismatchReason) {
+  if (ceiling === null) return { verdict: 'silent', reason: '' };
+  if (level <= ceiling) return { verdict: 'match', reason: matchReason };
+  return { verdict: 'mismatch', reason: mismatchReason };
+}
+
+function checkSystemOfRecordEvidence(level, text, filename) {
+  if (!/\.md$/i.test(filename || '')) return { verdict: 'silent', reason: '' };
+  const trimmed = (text || '').trim();
+  if (!trimmed) return { verdict: 'silent', reason: '' };
+  const hasLessonLine = /\b(don't|do not|never|avoid)\b[^.\n]{0,80}\b(broke|failed|caused|mistake)\b/i.test(trimmed)
+    || /\b(broke|failed|caused|mistake)\b[^.\n]{0,80}\b(don't|do not|never|avoid)\b/i.test(trimmed);
+  // Found during pre-merge review: a lesson-line match used to grant ceiling 3 outright, so a
+  // near-empty stub with one matching sentence outscored a real, substantial file with none —
+  // both checks (length AND lesson-line) are now required for the top ceiling, and each branch
+  // gets its own accurate reason text instead of one static string reused across all three.
+  if (trimmed.length < 200) {
+    return haEvidenceVerdict(1, level,
+      `${filename} exists, though it's short.`,
+      `${filename} looks like a stub (under 200 characters) — a level above 1 needs a more substantial file.`);
+  }
+  if (!hasLessonLine) {
+    return haEvidenceVerdict(2, level,
+      `${filename} isn't a stub.`,
+      `${filename} isn't a stub, but doesn't show a line tracing to a real past failure — level 3 needs at least one "don't/never ... broke/failed" style line.`);
+  }
+  return haEvidenceVerdict(3, level,
+    `${filename} isn't a stub, and traces to a real past failure.`,
+    `${filename} already shows the strongest evidence this checker looks for.`);
+}
+
+function checkToolsEvidence(level, text, filename) {
+  if (!/\.json$/i.test(filename || '')) return { verdict: 'silent', reason: '' };
+  let parsed;
+  try { parsed = JSON.parse(text); } catch (e) { return { verdict: 'silent', reason: '' }; }
+  const entries = parsed && (parsed.mcpServers || parsed.servers || parsed.tools);
+  if (!entries || typeof entries !== 'object' || !Object.keys(entries).length) return { verdict: 'silent', reason: '' };
+  // Can't verify "you can justify each one" from a config file alone — caps at 2, same ceiling
+  // HARNESS_AUDIT.md used by hand for an unreviewed-but-present set.
+  return haEvidenceVerdict(2, level,
+    `${filename} lists at least one configured tool/server.`,
+    `${filename} shows tools are configured, but a file alone can't confirm each one is justified and reviewed — level 3 needs that judgment call, not just a config.`);
+}
+
+function checkVerificationEvidence(level, text, filename) {
+  const isHookConfig = /\.json$/i.test(filename || '');
+  const isCi = /\.(yml|yaml)$/i.test(filename || '');
+  if (!isHookConfig && !isCi) return { verdict: 'silent', reason: '' };
+  if (isHookConfig) {
+    let parsed;
+    try { parsed = JSON.parse(text); } catch (e) { return { verdict: 'silent', reason: '' }; }
+    const hooks = parsed && parsed.hooks;
+    if (!hooks || typeof hooks !== 'object') return { verdict: 'silent', reason: '' };
+    const hasBlockingHook = Object.keys(hooks).some(k => /^(Stop|PostToolUse)$/i.test(k));
+    if (!hasBlockingHook) return { verdict: 'silent', reason: '' };
+    return haEvidenceVerdict(3, level,
+      `${filename} wires a Stop/PostToolUse hook — matches "cannot finish on a failing check."`,
+      `${filename} has hooks configured, but none blocking on Stop/PostToolUse.`);
+  }
+  const toolNames = /\b(ruff|pytest|eslint|vitest|playwright)\b/i;
+  const genericCheck = /\b(npm (run )?(test|lint)|yarn (test|lint)|make test)\b/i;
+  if (!toolNames.test(text) && !genericCheck.test(text)) return { verdict: 'silent', reason: '' };
+  return haEvidenceVerdict(2, level,
+    `${filename} runs a real check (test/lint) in CI.`,
+    `${filename} runs a check, but nothing here shows the agent is blocked on it failing — level 3 needs a blocking hook, not just a CI step.`);
+}
+
+function checkGuardrailsEvidence(level, text, filename) {
+  if (!/\.json$/i.test(filename || '')) return { verdict: 'silent', reason: '' };
+  let parsed;
+  try { parsed = JSON.parse(text); } catch (e) { return { verdict: 'silent', reason: '' }; }
+  const perm = parsed && (parsed.permissions || parsed);
+  const allow = Array.isArray(perm && perm.allow) ? perm.allow : [];
+  const ask = Array.isArray(perm && perm.ask) ? perm.ask : [];
+  const deny = Array.isArray(perm && perm.deny) ? perm.deny : [];
+  if (!allow.length && !ask.length && !deny.length) return { verdict: 'silent', reason: '' };
+  const credPattern = /\.env|secrets\/\*\*|\*\.pem/i;
+  const denyHasCred = deny.some(d => credPattern.test(String(d)));
+  // Found during pre-merge review: this used to compute one of 4 distinct ceiling values but
+  // route all of them through the same 2 static reason strings, so e.g. an allow-only file
+  // rendered "✓ has a credential-path deny rule and ask rules" — a claim false for that file.
+  // Each branch now returns its own accurate description of what was actually found.
+  if (denyHasCred && ask.length) {
+    return haEvidenceVerdict(2, level,
+      `${filename} has a credential-path deny rule and ask rules.`,
+      `${filename} shows explicit allow/ask/deny boundaries, but a file alone can't confirm least-privilege execution or checkpoints before irreversible acts — level 3 needs that judgment call, not just a config.`);
+  }
+  if (denyHasCred) {
+    return haEvidenceVerdict(1, level,
+      `${filename} has a credential-path deny rule, but no ask rules.`,
+      `${filename} has a credential-path deny rule, but no ask rules — level 2+ needs both.`);
+  }
+  if (ask.length) {
+    return haEvidenceVerdict(1, level,
+      `${filename} has ask rules, but no credential-path deny rule.`,
+      `${filename} has ask rules, but no credential-path deny rule — level 2+ needs both.`);
+  }
+  if (allow.length) {
+    return haEvidenceVerdict(1, level,
+      `${filename} has an allow list, but no deny or ask rules.`,
+      `${filename} has only an allow list — level 2+ needs a credential-path deny rule and an ask rule, not just allow entries.`);
+  }
+  return haEvidenceVerdict(0, level,
+    `${filename} doesn't show a credential-path deny rule or ask rules.`,
+    `${filename} has a deny rule, but it doesn't cover a credential path (.env, secrets/**, *.pem) — a level above 0 needs that.`);
+}
+
+function checkObservabilityEvidence(level, text, filename) {
+  if (!/(failures|changelog|postmortem)/i.test(filename || '')) return { verdict: 'silent', reason: '' };
+  const trimmed = (text || '').trim();
+  if (!trimmed) return { verdict: 'silent', reason: '' };
+  const dateEntries = (trimmed.match(/\d{4}-\d{2}-\d{2}/g) || []).length;
+  const headingEntries = (trimmed.match(/^##\s/gm) || []).length;
+  const entries = Math.max(dateEntries, headingEntries);
+  // Found during pre-merge review: `entries || 'a'` treated 0 (falsy) as the string 'a', so a
+  // file with zero recognizable entries rendered "has a dated/headed entries" — a false claim
+  // that entries exist. Each entry count now gets its own accurate reason text.
+  if (entries === 0) {
+    return haEvidenceVerdict(1, level,
+      `${filename} exists, though it doesn't show any dated or headed entries yet.`,
+      `${filename} exists, but doesn't show any dated or headed entries — a level above 1 needs at least one.`);
+  }
+  if (entries === 1) {
+    return haEvidenceVerdict(2, level,
+      `${filename} has one dated/headed entry.`,
+      `${filename} has only one dated/headed entry — level 3 ("a failure log drives your backlog") needs more than one, a real pattern rather than a single note.`);
+  }
+  return haEvidenceVerdict(3, level,
+    `${filename} has ${entries} dated/headed entries.`,
+    `${filename} already shows the strongest evidence this checker looks for.`);
+}
+
+const HA_EVIDENCE_CHECKERS = {
+  system_of_record: checkSystemOfRecordEvidence,
+  tools: checkToolsEvidence,
+  verification: checkVerificationEvidence,
+  guardrails: checkGuardrailsEvidence,
+  observability: checkObservabilityEvidence,
+};
+
+function checkEvidence(componentId, level, text, filename) {
+  const checker = HA_EVIDENCE_CHECKERS[componentId];
+  if (!checker) return { verdict: 'silent', reason: '' };
+  return checker(level, text, filename);
+}
+
+function haRenderEvidenceResult(componentId, result) {
+  const el = document.getElementById(`haEvidenceResult-${componentId}`);
+  if (!el) return;
+  // Found during pre-merge review: the silent branch used to clear text/display but leave a
+  // stale match/mismatch class behind, so a later visibility toggle without going through this
+  // function again could show the wrong color on a hidden-then-reshown element.
+  el.className = 'ha-evidence-result';
+  if (result.verdict === 'silent') { el.style.display = 'none'; el.textContent = ''; return; }
+  el.style.display = 'block';
+  el.className = `ha-evidence-result ${result.verdict}`;
+  el.textContent = result.verdict === 'match' ? `✓ Evidence checks out — ${result.reason}` : `⚠ ${result.reason}`;
+}
+
+// Keeps each step's last-uploaded evidence so re-checking on a changed radio selection
+// (see the select() handler in haRenderStep) doesn't need the user to re-attach the file.
+let haEvidenceCache = {};
+
+function haOnEvidenceFile(componentId, file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    haEvidenceCache[componentId] = { text: e.target.result, filename: file.name };
+    haRecheckEvidence(componentId);
+  };
+  reader.readAsText(file);
+}
+
+function haRecheckEvidence(componentId) {
+  const cached = haEvidenceCache[componentId];
+  if (!cached) return;
+  const level = haAnswers[componentId];
+  // Found during pre-merge review (found independently by 3 review angles): a sentinel of -1
+  // for "no selection yet" always satisfied `level <= ceiling` (every real ceiling is 0-3), so
+  // uploading a file before picking a radio option always rendered a false "✓ Evidence checks
+  // out" — confirming a self-selected score that didn't exist yet. There's nothing to confirm
+  // or flag until a score is picked, so this now shows nothing rather than guessing.
+  if (level === undefined) { haRenderEvidenceResult(componentId, { verdict: 'silent', reason: '' }); return; }
+  const result = checkEvidence(componentId, level, cached.text, cached.filename);
+  haRenderEvidenceResult(componentId, result);
+}
+
 let haCurrentStep = 1;
 let haAnswers = {};
 
 function startHarnessAudit(){
   haCurrentStep = 1;
   haAnswers = {};
+  haEvidenceCache = {};
   // Found during pre-merge review: #resultsShell has its own 'active' toggle independent of
   // showScreen()'s screen array (see setSidebarThisAnalysisVisible's comment above) — a user
   // with a real product analysis already showing who then opens this mode would otherwise see
@@ -6133,8 +6337,14 @@ function haRenderStep(){
           </div>
         `).join('')}
       </div>
+      ${HA_EVIDENCE_CHECKERS[c.id] ? `
+      <button type="button" class="ha-evidence-toggle" onclick="document.getElementById('haEvidenceInput-${c.id}').click();">Have a file that proves this? (optional)</button>
+      <input type="file" id="haEvidenceInput-${c.id}" style="display:none;" onchange="haOnEvidenceFile('${c.id}', event.target.files && event.target.files[0])">
+      <div class="ha-evidence-result" id="haEvidenceResult-${c.id}" style="display:none;"></div>
+      ` : ''}
     </div>
   `;
+  haRecheckEvidence(c.id);
   document.querySelectorAll('#haSteps .pick-radio').forEach(el => {
     el.setAttribute('tabindex', '0');
     el.setAttribute('role', 'radio');
@@ -6143,6 +6353,7 @@ function haRenderStep(){
       el.classList.add('selected');
       el.setAttribute('aria-checked', 'true');
       haAnswers[c.id] = parseInt(el.dataset.val, 10);
+      haRecheckEvidence(c.id);
       document.getElementById('haNextBtn').disabled = false;
       document.getElementById('haNextBtn').textContent = haCurrentStep === total ? 'See my score' : 'Continue';
     };
