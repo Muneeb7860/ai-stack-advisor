@@ -14,7 +14,7 @@ children.push(...coverTitle(
   'Product Requirements Document',
   'Functional & technical specification',
   [
-    ['Document Version', '1.7'],
+    ['Document Version', '1.8'],
     ['Status', 'v1 and v2 shipped, frontend actually wired to the backend — see Section 7.7, Section 9.2, and Release Plan (Section 11). Hexagonal diagram-export architecture, AI Opportunity Layer, technology-catalog unification, Huawei Cloud vendor support, and Hybrid Connectivity added in a later session — see Section 7.2, 7.7, 9.4, and Release Plan.'],
     ['Prepared by', 'Muneeb, with Claude (Cowork)'],
     ['Date', new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })],
@@ -36,6 +36,7 @@ children.push(reqTable(
     ['1.5', 'Later session: refactored diagram export (Flow View, Mermaid, Draw.io, SVG) onto a single hexagonal-architecture domain core (Section 9.4) — fixed a real inconsistency where exporters showed 5-8 nodes against Flow View\'s 18-20. Added the AI Opportunity & Leverage Layer (FR-32), unified the technology catalog into one source of truth with a maintainer CLI and client-side custom overlay (FR-33), added Huawei Cloud vendor support (FR-34) and a new Hybrid Connectivity core category (FR-6a, 16th category). Corrected stale counts: signal dimensions 65+ -> 100+, pickX() functions 45 -> 47, KB technologies now 243. Two real bugs found and fixed during this work, not just features added — see Section 12.'],
     ['1.6', 'Later session: added the Enterprise v2.0 shell — persistent sidebar, 3-column results layout, localStorage-backed analysis history, a refine/ask context-panel drawer, and a full mobile responsive treatment (Section 7.8, FR-35 through FR-41). Documented 8 accessibility/interaction fixes and the completion of the emoji-to-icon migration (FR-42, FR-43). See BRD Section 8.2 for the user-facing feature summary.'],
     ['1.7', 'Later session: added the "Challenge This Pick" widget (FR-44) — the first real instrumentation for BRD Section 7\'s disagreement-rate metric. New backend Disagreement aggregate (DDD Section 4.5), POST /api/analyses/{analysis_id}/disagreements endpoint, and a per-card frontend form reusing the existing per-category vendor-alternatives data. See BRD Section 8.2 for the user-facing summary.'],
+    ['1.8', 'Later session: added Harness Readiness (Section 7.9, FR-45 through FR-49) — a fourth, structurally distinct entry mode that self-audits a team\'s own agent-development process (not a technology-stack recommendation) against a third-party practitioner rubric, via a guided 5-question radio flow. Client-side only, v1-only by design (no Python-side equivalent). First step of a new "help teams build their own harness" product direction, separate from the existing stack-advisor product this PRD otherwise documents. See BRD Section 8.2 for the user-facing summary and docs/harness-engineering/ for the underlying scope and research.'],
   ]
 ));
 
@@ -175,6 +176,16 @@ children.push(reqTable(['ID', 'Requirement', 'Status'], [1000, 5600, 1800], [
   ['FR-43', 'All remaining emoji-as-iconography (a 45-item glide-panel options list, plus 3 unrelated stray instances) replaced with the existing stroke-icon system.', 'Shipped — client-side only'],
 ]));
 
+children.push(h2('7.9 Harness Readiness (self-audit mode)'));
+children.push(p('A fourth entry mode, structurally distinct from the other three: it doesn\'t recommend a technology stack, it scores a team\'s own agent-development process. Deliberately a guided questionnaire, not free-text signal detection — Appendix B of the source rubric is a 4-point scale per component with concrete, mutually-exclusive level descriptions, which is a multiple-choice UI problem, not a text-mining one (see docs/harness-engineering/HARNESS_READINESS_SCOPE.md for the full rationale). v1-only by design, matching this app\'s existing zero-marginal-cost invariant — no Python-side equivalent exists or is planned.', { italics: true, color: MUTED, size: 19 }));
+children.push(reqTable(['ID', 'Requirement', 'Status'], [1000, 5600, 1800], [
+  ['FR-45', 'A fourth mode-picker card, "Audit your harness," alongside the existing three (guided wizard / free text / diagram upload).', 'Shipped — client-side only'],
+  ['FR-46', 'A guided 5-question self-audit — one question per harness component (system of record, tools, verification, guardrails, observability), each a 4-option radio (0-3) using the source rubric\'s level text verbatim — producing a total /15 score and one of 4 maturity bands (harness consumer / real harness exists / production grade / mature).', 'Shipped — client-side only, deterministic scoring, no LLM call'],
+  ['FR-47', 'Results screen: total score + band, one card per component showing its score and matching level description, and a fix-priority list capped at 3, limited to components scoring 0 or 1 only (a component that already scores 2-3 is not padded into the list) — and a graceful "no urgent fix" message when nothing qualifies.', 'Shipped — client-side only'],
+  ['FR-48', 'Fix suggestions name concrete, current tools for verification (Ruff, pytest, ESLint, Vitest, Playwright) but deliberately name no vendor for guardrails or observability — the market research behind this feature found that exact vendor category (Lakera, Protect AI, Guardrails AI) got bought out or archived in 2026, so a named product could be defunct by the time someone reads the recommendation.', 'Shipped — client-side only'],
+  ['FR-49', 'A visible in-product citation of the source rubric (Aishwarya Srinivasan / The Gen Academy\'s Harness Engineering Build Guide, Appendix B) on the results screen.', 'Shipped — client-side only'],
+]));
+
 // ---------- Non-functional ----------
 children.push(h1('8. Non-Functional Requirements'));
 children.push(reqTable(['ID', 'Requirement'], [1000, 7400], [
@@ -218,6 +229,7 @@ children.push(reqTable(['Release', 'Contents', 'Status'], [1600, 6000, 1800], [
   ['v2.2', 'Hexagonal diagram-export refactor (Section 9.4) — fixed Flow View/exporter node-count inconsistency; AI Opportunity & Leverage Layer (FR-32) — fixed a phantom-signal-key bug that had silently disabled the compliance guardrail it shipped with; technology catalog unified to one source of truth with maintainer CLI + custom overlay (FR-33); Huawei Cloud vendor support (FR-34); Hybrid Connectivity category (FR-6a) — fixed a pre-existing onPrem false-positive this work surfaced (see Section 12)', 'Shipped'],
   ['v2.3', 'Enterprise v2.0 shell (FR-35 through FR-41) — persistent sidebar, 3-column results layout, localStorage-backed analysis history, refine/ask context-panel drawer, full mobile responsive treatment (bottom nav, full-screen overlays, Flow View mobile tuning); 8 accessibility/interaction fixes and completion of the emoji-to-icon migration (FR-42, FR-43)', 'Shipped'],
   ['v2.4', '"Challenge This Pick" widget (FR-44) — first real instrumentation for BRD Section 7\'s disagreement-rate metric. New Disagreement backend aggregate + endpoint, per-card feedback form reusing existing vendor-alternatives data', 'Shipped'],
+  ['v2.5', 'Harness Readiness (FR-45 through FR-49, Section 7.9) — a fourth entry mode self-auditing a team\'s own agent-development process against a third-party rubric via a guided 5-question flow, producing a /15 score, maturity band, and fix-priority list. Client-side only, no vendor names for guardrails/observability by deliberate market-research-driven policy. First step of a new harness-engineering product direction — see docs/harness-engineering/', 'Shipped'],
 ]));
 
 // ---------- Known limitations ----------
