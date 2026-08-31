@@ -66,6 +66,29 @@ def test_show_screen_array_includes_both_new_screens():
     assert "'screenHarnessAudit','screenHarnessResults'" in _text()
 
 
+def test_radio_group_has_accessible_role():
+    """Found during pre-merge review: the individual radios already got role="radio" via JS,
+    but the container never got the matching role="radiogroup" a screen reader needs to
+    announce the set as one group (the wizard's own equivalent group does this)."""
+    text = _text()
+    start = text.index("function haRenderStep(){")
+    section = text[start:start + 2000]
+    assert 'role="radiogroup"' in section
+
+
+def test_start_harness_audit_clears_stale_product_analysis_state():
+    """Found during pre-merge review: a user with a real product analysis already showing who
+    then opens "Audit your harness" would otherwise see the old report rendered alongside the
+    new harness screens, since #resultsShell's 'active' class is independent of showScreen()'s
+    screen array."""
+    text = _text()
+    start = text.index("function startHarnessAudit(){")
+    section = text[start:start + 800]
+    assert "resultsShell" in section and "remove('active')" in section
+    assert "setSidebarThisAnalysisVisible(false)" in section
+    assert "closeContextPanel()" in section
+
+
 def test_no_backend_or_llm_call_anywhere_in_the_harness_audit_code():
     """Matches the scope's own stated invariant: pure client-side, no API involvement."""
     text = _text()
@@ -139,12 +162,27 @@ def test_js_score_harness_audit_all_threes():
 
 @requires_node
 def test_js_fix_order_is_sorted_lowest_first_and_capped_at_three():
+    """Found during pre-merge review: fixOrder used to always return exactly 3 components
+    regardless of score, so a component scoring 2 (already fine per the per-component card's
+    own <=1 threshold for showing "Fix:" text) would still show up here. guardrails scores 2
+    in this input, so it's correctly excluded — only verification (0) and tools (1) qualify."""
     out = _js("""
       const answers = { system_of_record: 3, tools: 1, verification: 0, guardrails: 2, observability: 3 };
       const r = scoreHarnessAudit(answers);
       console.log(JSON.stringify(r.fixOrder.map(c => c.id)));
     """)
-    assert out == ["verification", "tools", "guardrails"]
+    assert out == ["verification", "tools"]
+
+
+@requires_node
+def test_js_fix_order_is_empty_when_nothing_scores_0_or_1():
+    """A perfect (or near-perfect) score shouldn't produce a padded, contradictory fix list."""
+    out = _js("""
+      const answers = { system_of_record: 3, tools: 2, verification: 3, guardrails: 2, observability: 3 };
+      const r = scoreHarnessAudit(answers);
+      console.log(JSON.stringify(r.fixOrder.length));
+    """)
+    assert out == 0
 
 
 @requires_node

@@ -6103,6 +6103,15 @@ let haAnswers = {};
 function startHarnessAudit(){
   haCurrentStep = 1;
   haAnswers = {};
+  // Found during pre-merge review: #resultsShell has its own 'active' toggle independent of
+  // showScreen()'s screen array (see setSidebarThisAnalysisVisible's comment above) — a user
+  // with a real product analysis already showing who then opens this mode would otherwise see
+  // the old recommendation report still rendered alongside the harness-audit questionnaire.
+  // Same reasoning for the context-drawer and the sidebar's "This Analysis" button, which would
+  // otherwise keep pointing at that now-hidden stale analysis.
+  document.getElementById('resultsShell')?.classList.remove('active');
+  setSidebarThisAnalysisVisible(false);
+  closeContextPanel();
   haRenderStep();
   showScreen('screenHarnessAudit');
 }
@@ -6117,7 +6126,7 @@ function haRenderStep(){
     <div class="wiz-step active">
       <div class="wiz-q">${c.name} <span style="font-weight:400; font-style:italic; color:var(--muted2); font-size:13px;">— ${c.question}</span></div>
       <div class="wiz-sub">${c.looksLike}</div>
-      <div class="radio-list" data-group="${c.id}">
+      <div class="radio-list" data-group="${c.id}" role="radiogroup" aria-label="${c.name}">
         ${c.levels.map((label, i) => `
           <div class="pick-radio ha-radio${selected === i ? ' selected' : ''}" data-val="${i}" aria-checked="${selected === i ? 'true' : 'false'}">
             <div><div class="pr-main">${i} — ${label.split('.')[0]}.</div><div class="pr-sub">${label}</div></div><div class="pr-dot"></div>
@@ -6160,8 +6169,13 @@ function haBack(){
 function scoreHarnessAudit(answers){
   const total = HARNESS_COMPONENTS.reduce((sum, c) => sum + (answers[c.id] || 0), 0);
   const band = HA_SCORE_BANDS.find(b => total <= b.max);
+  // Found during pre-merge review: this used to always return exactly 3 components regardless
+  // of score, so a team scoring 3/3 on everything ("Mature — practice subtraction") still saw a
+  // 3-item fix list with full fix text, directly contradicting its own band message. Only
+  // components that actually warrant a fix belong here — same score<=1 threshold the
+  // per-component card already uses to decide whether to show its own "Fix:" text.
   const fixOrder = HARNESS_COMPONENTS
-    .slice()
+    .filter(c => (answers[c.id] || 0) <= 1)
     .sort((a, b) => (answers[a.id] || 0) - (answers[b.id] || 0))
     .slice(0, 3);
   return { total, band, fixOrder };
@@ -6187,12 +6201,14 @@ function haFinish(){
       </div>
     `;
   }).join('');
-  document.getElementById('haFixOrderList').innerHTML = result.fixOrder.map((c, i) => `
-    <div class="ha-fix-row">
-      <div class="ha-fix-rank">${i + 1}</div>
-      <div style="font-size:13.5px; line-height:1.5;"><b>${c.name}</b> (scored ${haAnswers[c.id] || 0}) — ${c.fix}</div>
-    </div>
-  `).join('');
+  document.getElementById('haFixOrderList').innerHTML = result.fixOrder.length
+    ? result.fixOrder.map((c, i) => `
+      <div class="ha-fix-row">
+        <div class="ha-fix-rank">${i + 1}</div>
+        <div style="font-size:13.5px; line-height:1.5;"><b>${c.name}</b> (scored ${haAnswers[c.id] || 0}) — ${c.fix}</div>
+      </div>
+    `).join('')
+    : `<div style="font-size:13.5px; color:var(--muted2);">Nothing scored 0 or 1 — no urgent fix. ${result.band.note}.</div>`;
   showScreen('screenHarnessResults');
 }
 
