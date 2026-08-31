@@ -59,6 +59,7 @@ def _js(expr_body: str):
 REAL_TEXT = "A SaaS product with an AI chatbot answering customer questions using an LLM."
 MINIMAL_TEXT = "A college capstone project — a simple chatbot for a class assignment."
 ENTERPRISE_TEXT = "A large enterprise platform with an AI assistant, many engineers on the team."
+NO_LLM_TEXT = "A simple e-commerce website with a product catalog, shopping cart and Stripe checkout."
 
 
 # ------------------------------------------------------------------------- explicit mentions
@@ -75,6 +76,40 @@ def test_braintrust_mention_is_detected_and_recommended():
     assert s["braintrustMentioned"] is True
     rec = recommend_stack("We already use Braintrust. " + REAL_TEXT)["recommendations"]
     assert rec["llm_observability_vendor"]["v"] == "Braintrust"
+
+
+# ------------------------------------------------------------------------ gating on LLM usage
+
+def test_requirement_with_no_llm_signals_gets_not_applicable():
+    """Found in post-merge review of PR #51 — the bug this test locks out: the pick originally
+    gated ONLY on minimalProject, so a plain CRUD app with zero AI signals was told to adopt
+    Langfuse to trace LLM calls it never makes, while the Cost section of the very same report
+    said "No significant LLM/chatbot/RAG/voice signal detected." Uses the same usesLLM definition
+    the cost estimate uses (now the shared llm_usage_detected helper), not a second copy."""
+    s = detect_signals(NO_LLM_TEXT)
+    assert not (s["chatbot"] or s["agentic"] or s["knowledgeBase"] or s["voice"])
+    rec = recommend_stack(NO_LLM_TEXT)["recommendations"]
+    assert rec["llm_observability_vendor"]["v"] == "Not applicable — no LLM/AI feature detected in this stack"
+    assert rec["llm_observability_vendor"]["primaryId"] is None
+
+
+def test_no_llm_gate_is_checked_before_the_minimal_project_gate():
+    """Ordering matters for the message the user actually reads: a learning project that also has
+    no AI feature should be told the more fundamental thing (no LLM to trace), not the narrower
+    "you're just a learning project" reason."""
+    rec = recommend_stack("A college capstone project — a static personal portfolio website.")["recommendations"]
+    assert rec["llm_observability_vendor"]["v"] == "Not applicable — no LLM/AI feature detected in this stack"
+
+
+def test_llm_usage_detected_helper_is_shared_with_the_cost_estimate():
+    """Regression lock for the root cause: the condition existed twice (cost estimate + this
+    pick) and the second copy omitted it entirely. One helper, both consumers."""
+    from app.rule_engine import llm_usage_detected
+    assert llm_usage_detected(detect_signals(REAL_TEXT)) is True
+    assert llm_usage_detected(detect_signals(NO_LLM_TEXT)) is False
+    # The cost estimate must report the same answer for the same input, from the same helper.
+    rec = recommend_stack(NO_LLM_TEXT)["recommendations"]
+    assert rec["cost_estimate"]["usesLLM"] is False
 
 
 # ------------------------------------------------------------------- gating on minimalProject
@@ -166,6 +201,38 @@ def test_js_and_python_llm_observability_vendor_ids_match():
     py_ids = sorted(v["id"] for v in LLM_OBSERVABILITY_VENDORS)
     js_ids = sorted(_js("console.log(JSON.stringify(LLM_OBSERVABILITY_VENDORS.map(v => v.id)));"))
     assert py_ids == js_ids
+
+
+@requires_node
+def test_js_requirement_with_no_llm_signals_gets_not_applicable():
+    out = _js(f"""
+      const rec = computeRecommendations(detectSignals({NO_LLM_TEXT!r}));
+      console.log(JSON.stringify({{ v: rec.llmObservabilityVendorPick.v, primaryId: rec.llmObservabilityVendorPick.primaryId }}));
+    """)
+    assert out["v"] == "Not applicable — no LLM/AI feature detected in this stack"
+    assert out["primaryId"] is None
+
+
+@requires_node
+def test_js_alt_toggle_is_suppressed_whenever_the_pick_is_not_applicable():
+    """The render gate derives from the pick's own primaryId rather than duplicating its internal
+    condition — otherwise a no-LLM report would show "Not applicable" as the headline and still
+    render the full Langfuse-vs-Braintrust comparison directly underneath it."""
+    text = INDEX_HTML.read_text(encoding="utf-8")
+    start = text.index("sec('llmobservability'")
+    section = text[start:start + 900]
+    assert "llmObservabilityVendorPick.primaryId ? altToggle(" in section
+    assert "!s.minimalProject ? altToggle" not in section
+
+
+@requires_node
+def test_js_and_python_vendor_cat_fields_match_exactly():
+    """Locks the HTML-entity divergence found in review: index.html used `&amp;` in two cat
+    fields while the Python twin used a raw `&`, diverging from each other and from this file's
+    own convention for vendor-catalog prose."""
+    py = {v["id"]: v["cat"] for v in LLM_OBSERVABILITY_VENDORS}
+    js = _js("console.log(JSON.stringify(LLM_OBSERVABILITY_VENDORS.map(v => [v.id, v.cat])));")
+    assert {k: v for k, v in js} == py
 
 
 @requires_node

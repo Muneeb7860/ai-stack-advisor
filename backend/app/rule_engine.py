@@ -1791,6 +1791,14 @@ def pick_agent_framework_vendor(s):
 
 AGENT_FRAMEWORK_NOTE = "LangGraph and Pydantic AI compete on the same job (orchestrating an agent's own reasoning/tool-use loop); FastMCP solves a different one (exposing tools via the MCP protocol so an agent — built with either of those, or anything else — can call them). Grouped here for convenience, not because all three compete head-to-head."
 
+
+def llm_usage_detected(s):
+    """"Does this stack make LLM calls at all" — one definition, two consumers (the cost
+    estimate's LLM API band and the LLM Observability pick). Extracted during post-merge review:
+    these were two independent copies of the same condition, and the second one silently omitted
+    it entirely, which is how a no-AI CRUD app ended up being told to adopt LLM tracing."""
+    return bool(s["chatbot"] or s["agentic"] or s["knowledgeBase"] or s["voice"])
+
 # Langfuse and Braintrust both trace LLM calls and support evaluation, but genuinely differ in
 # posture, not just brand — Langfuse is open-source/self-hostable with no per-seat pricing
 # (acquired by ClickHouse in Jan 2026, staying open-source and self-hostable per ClickHouse's own
@@ -1807,6 +1815,8 @@ def pick_llm_observability_vendor(s):
     """Gated on `minimalProject` — a learning/portfolio project doesn't need dedicated LLM
     tracing yet, mirroring this file's existing minimalProject gating used elsewhere rather than
     inventing a new rule."""
+    if not llm_usage_detected(s):
+        return {"v": "Not applicable — no LLM/AI feature detected in this stack", "why": "Langfuse and Braintrust exist to trace and evaluate LLM calls — this requirement has no chatbot, agentic workflow, knowledge-base/RAG, or voice signal, so there are no model calls to trace. Revisit this once/if an AI feature is added.", "primaryId": None, "conf": "high"}
     if s["minimalProject"]:
         return {"v": "Not applicable — a learning/portfolio project doesn't need dedicated LLM tracing yet", "why": "Langfuse and Braintrust both exist to trace and evaluate LLM calls at real usage volume — for a learning project, console logs or your framework's own debug output are enough. Revisit this once the project handles real user traffic.", "primaryId": None, "conf": "high"}
     if s["langfuseMentioned"]:
@@ -2375,7 +2385,7 @@ def pick_cost_estimate(s, ctx=None):
     if s["knowledgeBase"] or s["agentic"]:
         vector_db_note = " Vector DB specifically: free/starter tier ($0–$25/mo) is realistic pre-launch; budget $50–$700/mo once you have real document/query volume, climbing further at very large index sizes (Pinecone/Qdrant Cloud production tiers)."
 
-    uses_llm = s["chatbot"] or s["agentic"] or s["knowledgeBase"] or s["voice"]
+    uses_llm = llm_usage_detected(s)
     llm_band = None
     if uses_llm:
         hosting = (ctx or {}).get("hosting") or {}
