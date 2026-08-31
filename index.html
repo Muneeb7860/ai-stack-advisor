@@ -3387,6 +3387,14 @@ function pickAgentFrameworkVendor(s){
 }
 const AGENT_FRAMEWORK_NOTE = 'LangGraph and Pydantic AI compete on the same job (orchestrating an agent\'s own reasoning/tool-use loop); FastMCP solves a different one (exposing tools via the MCP protocol so an agent — built with either of those, or anything else — can call them). Grouped here for convenience, not because all three compete head-to-head.';
 
+// "Does this stack make LLM calls at all" — one definition, two consumers (the cost estimate's
+// LLM API band and the LLM Observability pick). Extracted during post-merge review: these were
+// two independent copies of the same condition, and the second one silently omitted it entirely,
+// which is how a no-AI CRUD app ended up being told to adopt LLM tracing.
+function llmUsageDetected(s){
+  return !!(s.chatbot || s.agentic || s.knowledgeBase || s.voice);
+}
+
 // Langfuse and Braintrust both trace LLM calls and support evaluation, but genuinely differ in
 // posture, not just brand — Langfuse is open-source/self-hostable with no per-seat pricing
 // (acquired by ClickHouse in Jan 2026, staying open-source and self-hostable per ClickHouse's
@@ -3394,10 +3402,16 @@ const AGENT_FRAMEWORK_NOTE = 'LangGraph and Pydantic AI compete on the same job 
 // traces directly to CI/CD-gated evaluations. Verified live against langfuse.com/pricing,
 // braintrust.dev/articles/langfuse-vs-braintrust, and clickhouse.com/blog (the acquisition post).
 const LLM_OBSERVABILITY_VENDORS = [
-  {id:'langfuse', name:'Langfuse', cat:'Open-source LLM tracing, evaluation &amp; prompt management', bestFor:'Teams wanting a genuinely free, self-hostable default with no per-seat pricing', strength:'Open-source and self-hostable with no per-seat pricing; production-ready with 2,000+ paying customers and 26M+ monthly SDK installs; acquired by ClickHouse (Jan 2026) but stays open-source, self-hostable, and on its existing roadmap per ClickHouse\'s own announcement', drawback:'Meters by unit (a trace plus its observations/scores is many units) rather than a flat per-GB rate, which can be less predictable at high trace volume than Braintrust\'s data-based metering', pricing:'Free (OSS, self-hosted) — Cloud Hobby tier free up to 50k units/mo, then ~$8/100k units'},
-  {id:'braintrust', name:'Braintrust', cat:'End-to-end LLM eval &amp; observability platform', bestFor:'Teams wanting production traces to become evaluation cases and gate CI/CD on eval results', strength:'Production traces convert to evaluation cases in one click; eval results surface directly on pull requests for CI/CD-gated deployment; generous free tier (1M spans/mo, unlimited users, 10k evals) and a unified workspace for PMs and engineers to iterate together', drawback:'Commercial-first (no self-hosted OSS option like Langfuse); meters by GB of processed data plus thousands of eval scores, a different cost shape to reason about than Langfuse\'s per-unit pricing', pricing:'Free tier (1M spans/mo, 10k evals) — Pro $249/mo'},
+  {id:'langfuse', name:'Langfuse', cat:'Open-source LLM tracing, evaluation & prompt management', bestFor:'Teams wanting a genuinely free, self-hostable default with no per-seat pricing', strength:'Open-source and self-hostable with no per-seat pricing; production-ready with 2,000+ paying customers and 26M+ monthly SDK installs; acquired by ClickHouse (Jan 2026) but stays open-source, self-hostable, and on its existing roadmap per ClickHouse\'s own announcement', drawback:'Meters by unit (a trace plus its observations/scores is many units) rather than a flat per-GB rate, which can be less predictable at high trace volume than Braintrust\'s data-based metering', pricing:'Free (OSS, self-hosted) — Cloud Hobby tier free up to 50k units/mo, then ~$8/100k units'},
+  {id:'braintrust', name:'Braintrust', cat:'End-to-end LLM eval & observability platform', bestFor:'Teams wanting production traces to become evaluation cases and gate CI/CD on eval results', strength:'Production traces convert to evaluation cases in one click; eval results surface directly on pull requests for CI/CD-gated deployment; generous free tier (1M spans/mo, unlimited users, 10k evals) and a unified workspace for PMs and engineers to iterate together', drawback:'Commercial-first (no self-hosted OSS option like Langfuse); meters by GB of processed data plus thousands of eval scores, a different cost shape to reason about than Langfuse\'s per-unit pricing', pricing:'Free tier (1M spans/mo, 10k evals) — Pro $249/mo'},
 ];
 function pickLlmObservabilityVendor(s){
+  // Found in post-merge review: this used to gate ONLY on minimalProject, so a plain CRUD app
+  // with zero AI signals was told to adopt Langfuse to trace LLM calls it never makes — while
+  // the Cost section of the very same report said "No significant LLM/chatbot/RAG/voice signal
+  // detected." Reuses the same usesLLM definition costEstimate already uses (see pickCostEstimate)
+  // rather than a second, drifting definition of "does this stack use an LLM."
+  if(!llmUsageDetected(s)) return {v:'Not applicable — no LLM/AI feature detected in this stack', why:'Langfuse and Braintrust exist to trace and evaluate LLM calls — this requirement has no chatbot, agentic workflow, knowledge-base/RAG, or voice signal, so there are no model calls to trace. Revisit this once/if an AI feature is added.', primaryId:null, conf:'high'};
   // A learning/portfolio project genuinely doesn't need dedicated LLM tracing — console logs
   // are enough until it handles real user traffic. Mirrors this file's existing minimalProject
   // gating used elsewhere (e.g. cost estimation, domain floors) rather than inventing a new rule.
@@ -4010,7 +4024,7 @@ function pickCostEstimate(s, ctx){
   // quoting one model's price as if it were the only option. Presented as a spread across budget/
   // mid/frontier tiers at one illustrative volume assumption, not a single number, since the tier
   // choice is itself the biggest lever (see pickModelOrchestration/pickRuntime above).
-  const usesLLM = s.chatbot || s.agentic || s.knowledgeBase || s.voice;
+  const usesLLM = llmUsageDetected(s);
   let llmBand = null;
   if(usesLLM){
     // Only treat as "no direct API spend" when hosting is predominantly local/self-hosted (the
@@ -4681,7 +4695,7 @@ function renderRecommendations(s, rec){
 
   sec('llmobservability', 'LLM Observability', 'LLM Tracing &amp; Evaluation',
     `<div class="card"><div class="rag-pick"><div class="head" style="display:flex; justify-content:space-between; align-items:center;"><div class="name">${llmObservabilityVendorPick.v}</div><span class="conf conf-${llmObservabilityVendorPick.conf||'low'}">${confLabel(llmObservabilityVendorPick.conf)}</span></div><div class="why">${llmObservabilityVendorPick.why}</div></div>
-      ${!s.minimalProject ? altToggle(LLM_OBSERVABILITY_VENDORS, llmObservabilityVendorPick, LLM_OBSERVABILITY_NOTE) : ''}
+      ${llmObservabilityVendorPick.primaryId ? altToggle(LLM_OBSERVABILITY_VENDORS, llmObservabilityVendorPick, LLM_OBSERVABILITY_NOTE) : ''}
     </div>`);
 
   sec('rag', 'RAG', 'RAG Architecture',
