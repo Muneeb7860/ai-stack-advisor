@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
-from .routers import ask, disagreements, recommend, refine, share
+from .routers import ask, disagreements, harness_feedback, recommend, refine, share
 
 # Without this, Python's logging module has no handler attached and every logger.info() call
 # in this codebase — including llm_providers.py's native-vs-fallback tool-call-path logging,
@@ -37,6 +37,7 @@ app.include_router(refine.router)
 app.include_router(ask.router)
 app.include_router(recommend.router)
 app.include_router(disagreements.router)
+app.include_router(harness_feedback.router)
 
 
 @app.get("/health")
