@@ -11,7 +11,7 @@ Aggregate boundaries (DDD Section 4, repeated here because it matters for how yo
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, Text, String, DateTime, func
+from sqlalchemy import Boolean, ForeignKey, Integer, Text, String, DateTime, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -108,3 +108,35 @@ class McpInvocation(Base):
     input_text: Mapped[str] = mapped_column(Text, nullable=False)
     client_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     invoked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class HarnessFeedback(Base):
+    """Feedback on a completed Harness Readiness self-audit — see
+    docs/harness-engineering/HARNESS_FEEDBACK_SCOPE.md.
+
+    Standalone by design: NO foreign key to analyses, unlike Disagreement. A harness audit has no
+    Analysis row and must not create one — an Analysis is a product requirement (input text +
+    detected signals), which a self-audit of a team's own process definitionally is not. Forcing
+    one into existence just to hang feedback off it would corrupt that table's meaning and every
+    metric derived from it. Closest precedent for a standalone record is McpInvocation above,
+    whose analysis_id is nullable for the same class of reason.
+
+    Append-only, same rationale as Disagreement/RefinementResult: feedback is a fact about a
+    moment. No update/delete route exists or should.
+
+    `answers` carries the per-component scores because the comment is nearly useless without
+    them — "this wasn't useful" from a team scoring 14/15 means something completely different
+    than from a team scoring 2/15.
+    """
+
+    __tablename__ = "harness_feedback"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    total: Mapped[int] = mapped_column(Integer, nullable=False)
+    band: Mapped[str] = mapped_column(String(64), nullable=False)
+    answers: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    # Deliberately separate from `comment`: response rate on a one-click binary is far higher
+    # than on free text, so this is the field that will actually have an n worth reading.
+    helpful: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

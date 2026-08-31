@@ -1557,6 +1557,21 @@
     <div id="haFixOrderList"></div>
   </div>
   <div class="card" id="haHistoryCard" style="display:none;"></div>
+  <div class="card" id="haFeedbackCard">
+    <div style="font-size:13px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.04em; margin-bottom:10px;">Was this useful?</div>
+    <div id="haFeedbackForm">
+      <div style="display:flex; gap:8px; margin-bottom:12px;">
+        <button type="button" class="ha-evidence-toggle" id="haFeedbackYes" onclick="haSetFeedbackHelpful(true)">Yes, useful</button>
+        <button type="button" class="ha-evidence-toggle" id="haFeedbackNo" onclick="haSetFeedbackHelpful(false)">Not really</button>
+      </div>
+      <textarea id="haFeedbackComment" rows="3" placeholder="Anything you'd change, or that was missing? (optional)" style="width:100%; box-sizing:border-box; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text); padding:9px 11px; font-family:inherit; font-size:13px; resize:vertical;"></textarea>
+      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:10px;">
+        <button type="button" class="ha-evidence-toggle" id="haFeedbackSubmit" onclick="submitHarnessFeedback()" disabled>Send feedback</button>
+        <span style="font-size:11.5px; color:var(--muted2); line-height:1.5;">Sends your score (<span id="haFeedbackScorePreview"></span>), the five component answers, and your comment. Nothing else — no email, no identifier, and not the requirement text from any other mode.</span>
+      </div>
+    </div>
+    <div id="haFeedbackThanks" style="display:none; font-size:13.5px; color:var(--muted2);"></div>
+  </div>
   <div class="sub" style="margin-top:20px; font-size:12px; opacity:.75;">Rubric and component descriptions: <em>Harness Engineering Build Guide</em>, Appendix B (Aishwarya Srinivasan / The Gen Academy) — used as a self-audit tool here, not reproduced as the source's own product.</div>
 </div>
 
@@ -6472,6 +6487,7 @@ function haFinish(){
   const priorEntries = getHarnessHistory();
   saveHarnessAuditEntry(result, haAnswers);
   haRenderHistory(priorEntries, result);
+  haResetFeedbackForm(result);
   showScreen('screenHarnessResults');
 }
 
@@ -7429,6 +7445,71 @@ function haComputeDeltas(current, previous){
     .map(c => ({ name: c.name, from: previous.answers?.[c.id] ?? 0, to: current.answers?.[c.id] ?? 0 }))
     .filter(d => d.from !== d.to);
   return { totalDelta: current.total - previous.total, changed };
+}
+
+// Harness feedback (docs/harness-engineering/HARNESS_FEEDBACK_SCOPE.md). The first thing in this
+// feature area that leaves the user's machine, so it follows the posture refine/ask/share already
+// established: explicit user action only (never background telemetry), disclosed in the UI next
+// to the button, and best-effort — if the backend is unreachable (the normal case for anyone
+// running index.html as a local file) the user is thanked and the flow ends, rather than being
+// shown an error about infrastructure they don't care about.
+let haFeedbackHelpful = null;
+
+function haSetFeedbackHelpful(helpful){
+  haFeedbackHelpful = helpful;
+  const yes = document.getElementById('haFeedbackYes');
+  const no = document.getElementById('haFeedbackNo');
+  if (yes) yes.style.borderStyle = helpful ? 'solid' : 'dashed';
+  if (no) no.style.borderStyle = helpful ? 'dashed' : 'solid';
+  if (yes) yes.style.color = helpful ? 'var(--accent)' : 'var(--muted2)';
+  if (no) no.style.color = helpful ? 'var(--muted2)' : 'var(--accent)';
+  const submit = document.getElementById('haFeedbackSubmit');
+  if (submit) submit.disabled = false;
+}
+
+function haResetFeedbackForm(result){
+  haFeedbackHelpful = null;
+  const form = document.getElementById('haFeedbackForm');
+  const thanks = document.getElementById('haFeedbackThanks');
+  if (form) form.style.display = 'block';
+  if (thanks) { thanks.style.display = 'none'; thanks.textContent = ''; }
+  const comment = document.getElementById('haFeedbackComment');
+  if (comment) comment.value = '';
+  const submit = document.getElementById('haFeedbackSubmit');
+  if (submit) submit.disabled = true;
+  const yes = document.getElementById('haFeedbackYes');
+  const no = document.getElementById('haFeedbackNo');
+  [yes, no].forEach(b => { if (b) { b.style.borderStyle = 'dashed'; b.style.color = 'var(--muted2)'; } });
+  const preview = document.getElementById('haFeedbackScorePreview');
+  if (preview && result) preview.textContent = `${result.total}/15`;
+}
+
+async function submitHarnessFeedback(){
+  if (haFeedbackHelpful === null) return; // submit stays disabled until a choice is made
+  const result = scoreHarnessAudit(haAnswers);
+  const commentEl = document.getElementById('haFeedbackComment');
+  const comment = commentEl && commentEl.value.trim();
+  // Show the thank-you immediately and unconditionally. Whether the POST lands is our problem,
+  // not the user's — they did their part the moment they pressed the button.
+  const form = document.getElementById('haFeedbackForm');
+  const thanks = document.getElementById('haFeedbackThanks');
+  if (form) form.style.display = 'none';
+  if (thanks) { thanks.style.display = 'block'; thanks.textContent = 'Thanks — that\'s genuinely useful.'; }
+  try {
+    await fetch(`${API_BASE}/api/harness-feedback`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        total: result.total,
+        band: result.band.label,
+        answers: {...haAnswers},
+        helpful: haFeedbackHelpful,
+        comment: comment || null,
+      }),
+    });
+  } catch(e) {
+    // Deliberately swallowed — see the fire-and-forget contract above.
+  }
 }
 
 function getAnalysisHistory(){

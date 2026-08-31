@@ -178,3 +178,31 @@ class DisagreementResponse(BaseModel):
     reason: str
     created_at: datetime
 
+
+
+class HarnessFeedbackRequest(BaseModel):
+    """POST /api/harness-feedback body. See docs/harness-engineering/HARNESS_FEEDBACK_SCOPE.md.
+    Like DisagreementRequest and unlike RefineRequest/AskRequest, this endpoint never calls an
+    LLM — no anthropic_api_key/provider here, it's pure capture.
+
+    `comment` is optional on purpose: requiring prose is what collapses response rates, and a
+    one-click `helpful` from many users is a better dataset than prose from almost nobody.
+    """
+
+    total: int = Field(..., ge=0, le=15)
+    band: str = Field(..., min_length=1, max_length=64)
+    answers: dict[str, int] = Field(default_factory=dict)
+    helpful: bool
+    comment: str | None = Field(default=None, max_length=4_000)
+
+
+class HarnessFeedbackResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    total: int
+    band: str
+    answers: dict
+    helpful: bool
+    comment: str | None
+    created_at: datetime
