@@ -93,7 +93,12 @@ def test_no_backend_or_llm_call_anywhere_in_the_harness_audit_code():
     """Matches the scope's own stated invariant: pure client-side, no API involvement."""
     text = _text()
     start = text.index("// ============ Harness Readiness audit ============")
-    section = text[start:start + 24000]  # comfortably covers the whole feature block, incl. evidence upload
+    # Found during pre-merge review of the evidence-upload follow-on: a fixed char-count window
+    # (previously 10000, then 24000) came within 251 chars of silently swallowing the next
+    # feature's own API_BASE/fetch( — anchoring to the next unrelated feature's own comment is
+    # exact regardless of how much this block grows.
+    end = text.index("// Enterprise-shell Phase 1:", start)
+    section = text[start:end]
     assert "function haFinish(){" in section, "sanity check: slice actually captured the feature"
     assert "fetch(" not in section
     assert "API_BASE" not in section

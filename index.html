@@ -6125,10 +6125,23 @@ function checkSystemOfRecordEvidence(level, text, filename) {
   if (!trimmed) return { verdict: 'silent', reason: '' };
   const hasLessonLine = /\b(don't|do not|never|avoid)\b[^.\n]{0,80}\b(broke|failed|caused|mistake)\b/i.test(trimmed)
     || /\b(broke|failed|caused|mistake)\b[^.\n]{0,80}\b(don't|do not|never|avoid)\b/i.test(trimmed);
-  const ceiling = hasLessonLine ? 3 : (trimmed.length >= 200 ? 2 : 1);
-  return haEvidenceVerdict(ceiling, level,
-    `${filename} exists and isn't a stub.`,
-    `${filename} doesn't show a line tracing to a real past failure — level 3 needs at least one "don't/never ... broke/failed" style line.`);
+  // Found during pre-merge review: a lesson-line match used to grant ceiling 3 outright, so a
+  // near-empty stub with one matching sentence outscored a real, substantial file with none —
+  // both checks (length AND lesson-line) are now required for the top ceiling, and each branch
+  // gets its own accurate reason text instead of one static string reused across all three.
+  if (trimmed.length < 200) {
+    return haEvidenceVerdict(1, level,
+      `${filename} exists, though it's short.`,
+      `${filename} looks like a stub (under 200 characters) — a level above 1 needs a more substantial file.`);
+  }
+  if (!hasLessonLine) {
+    return haEvidenceVerdict(2, level,
+      `${filename} isn't a stub.`,
+      `${filename} isn't a stub, but doesn't show a line tracing to a real past failure — level 3 needs at least one "don't/never ... broke/failed" style line.`);
+  }
+  return haEvidenceVerdict(3, level,
+    `${filename} isn't a stub, and traces to a real past failure.`,
+    `${filename} already shows the strongest evidence this checker looks for.`);
 }
 
 function checkToolsEvidence(level, text, filename) {
@@ -6178,14 +6191,33 @@ function checkGuardrailsEvidence(level, text, filename) {
   if (!allow.length && !ask.length && !deny.length) return { verdict: 'silent', reason: '' };
   const credPattern = /\.env|secrets\/\*\*|\*\.pem/i;
   const denyHasCred = deny.some(d => credPattern.test(String(d)));
-  let ceiling;
-  if (denyHasCred && ask.length) ceiling = 2;
-  else if (denyHasCred || ask.length) ceiling = 1;
-  else if (allow.length) ceiling = 1;
-  else ceiling = 0;
-  return haEvidenceVerdict(ceiling, level,
-    `${filename} has a credential-path deny rule and ask rules — matches explicit allow/ask/deny boundaries.`,
-    `${filename} doesn't show both a credential-path deny rule and an ask rule — level ${ceiling + 1}+ needs that combination, not just an allow list.`);
+  // Found during pre-merge review: this used to compute one of 4 distinct ceiling values but
+  // route all of them through the same 2 static reason strings, so e.g. an allow-only file
+  // rendered "✓ has a credential-path deny rule and ask rules" — a claim false for that file.
+  // Each branch now returns its own accurate description of what was actually found.
+  if (denyHasCred && ask.length) {
+    return haEvidenceVerdict(2, level,
+      `${filename} has a credential-path deny rule and ask rules.`,
+      `${filename} shows explicit allow/ask/deny boundaries, but a file alone can't confirm least-privilege execution or checkpoints before irreversible acts — level 3 needs that judgment call, not just a config.`);
+  }
+  if (denyHasCred) {
+    return haEvidenceVerdict(1, level,
+      `${filename} has a credential-path deny rule, but no ask rules.`,
+      `${filename} has a credential-path deny rule, but no ask rules — level 2+ needs both.`);
+  }
+  if (ask.length) {
+    return haEvidenceVerdict(1, level,
+      `${filename} has ask rules, but no credential-path deny rule.`,
+      `${filename} has ask rules, but no credential-path deny rule — level 2+ needs both.`);
+  }
+  if (allow.length) {
+    return haEvidenceVerdict(1, level,
+      `${filename} has an allow list, but no deny or ask rules.`,
+      `${filename} has only an allow list — level 2+ needs a credential-path deny rule and an ask rule, not just allow entries.`);
+  }
+  return haEvidenceVerdict(0, level,
+    `${filename} doesn't show a credential-path deny rule or ask rules.`,
+    `${filename} has a deny rule, but it doesn't cover a credential path (.env, secrets/**, *.pem) — a level above 0 needs that.`);
 }
 
 function checkObservabilityEvidence(level, text, filename) {
@@ -6195,10 +6227,22 @@ function checkObservabilityEvidence(level, text, filename) {
   const dateEntries = (trimmed.match(/\d{4}-\d{2}-\d{2}/g) || []).length;
   const headingEntries = (trimmed.match(/^##\s/gm) || []).length;
   const entries = Math.max(dateEntries, headingEntries);
-  const ceiling = entries >= 2 ? 3 : (entries === 1 ? 2 : 1);
-  return haEvidenceVerdict(ceiling, level,
-    `${filename} has ${entries || 'a'} dated/headed entr${entries === 1 ? 'y' : 'ies'}.`,
-    `${filename} exists but doesn't show more than one dated entry — level 3 ("a failure log drives your backlog") needs a real pattern of entries, not just the file existing.`);
+  // Found during pre-merge review: `entries || 'a'` treated 0 (falsy) as the string 'a', so a
+  // file with zero recognizable entries rendered "has a dated/headed entries" — a false claim
+  // that entries exist. Each entry count now gets its own accurate reason text.
+  if (entries === 0) {
+    return haEvidenceVerdict(1, level,
+      `${filename} exists, though it doesn't show any dated or headed entries yet.`,
+      `${filename} exists, but doesn't show any dated or headed entries — a level above 1 needs at least one.`);
+  }
+  if (entries === 1) {
+    return haEvidenceVerdict(2, level,
+      `${filename} has one dated/headed entry.`,
+      `${filename} has only one dated/headed entry — level 3 ("a failure log drives your backlog") needs more than one, a real pattern rather than a single note.`);
+  }
+  return haEvidenceVerdict(3, level,
+    `${filename} has ${entries} dated/headed entries.`,
+    `${filename} already shows the strongest evidence this checker looks for.`);
 }
 
 const HA_EVIDENCE_CHECKERS = {
@@ -6218,6 +6262,10 @@ function checkEvidence(componentId, level, text, filename) {
 function haRenderEvidenceResult(componentId, result) {
   const el = document.getElementById(`haEvidenceResult-${componentId}`);
   if (!el) return;
+  // Found during pre-merge review: the silent branch used to clear text/display but leave a
+  // stale match/mismatch class behind, so a later visibility toggle without going through this
+  // function again could show the wrong color on a hidden-then-reshown element.
+  el.className = 'ha-evidence-result';
   if (result.verdict === 'silent') { el.style.display = 'none'; el.textContent = ''; return; }
   el.style.display = 'block';
   el.className = `ha-evidence-result ${result.verdict}`;
@@ -6242,7 +6290,13 @@ function haRecheckEvidence(componentId) {
   const cached = haEvidenceCache[componentId];
   if (!cached) return;
   const level = haAnswers[componentId];
-  const result = checkEvidence(componentId, level === undefined ? -1 : level, cached.text, cached.filename);
+  // Found during pre-merge review (found independently by 3 review angles): a sentinel of -1
+  // for "no selection yet" always satisfied `level <= ceiling` (every real ceiling is 0-3), so
+  // uploading a file before picking a radio option always rendered a false "✓ Evidence checks
+  // out" — confirming a self-selected score that didn't exist yet. There's nothing to confirm
+  // or flag until a score is picked, so this now shows nothing rather than guessing.
+  if (level === undefined) { haRenderEvidenceResult(componentId, { verdict: 'silent', reason: '' }); return; }
+  const result = checkEvidence(componentId, level, cached.text, cached.filename);
   haRenderEvidenceResult(componentId, result);
 }
 
@@ -6283,9 +6337,11 @@ function haRenderStep(){
           </div>
         `).join('')}
       </div>
+      ${HA_EVIDENCE_CHECKERS[c.id] ? `
       <button type="button" class="ha-evidence-toggle" onclick="document.getElementById('haEvidenceInput-${c.id}').click();">Have a file that proves this? (optional)</button>
       <input type="file" id="haEvidenceInput-${c.id}" style="display:none;" onchange="haOnEvidenceFile('${c.id}', event.target.files && event.target.files[0])">
       <div class="ha-evidence-result" id="haEvidenceResult-${c.id}" style="display:none;"></div>
+      ` : ''}
     </div>
   `;
   haRecheckEvidence(c.id);

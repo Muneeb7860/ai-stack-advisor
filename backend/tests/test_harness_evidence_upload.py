@@ -59,6 +59,16 @@ def test_evidence_toggle_and_file_input_exist_in_step_template():
     assert "haOnEvidenceFile(" in section
 
 
+def test_evidence_toggle_is_gated_on_a_checker_existing_for_the_component():
+    """Found during pre-merge review: the upload button used to render unconditionally for
+    every question, so a future HARNESS_COMPONENTS entry with no matching checker would show a
+    working-looking upload button that could never produce anything but permanent silence."""
+    text = _text()
+    start = text.index("function haRenderStep(){")
+    section = text[start:start + 2500]
+    assert "HA_EVIDENCE_CHECKERS[c.id] ?" in section
+
+
 def test_no_backend_or_llm_call_anywhere_in_the_evidence_checker_code():
     """Same invariant the rest of Harness Readiness holds itself to — this feature reads one
     user-picked file client-side (FileReader), never transmits it anywhere."""
@@ -116,6 +126,17 @@ def test_system_of_record_evidence_match_at_level_3_with_lesson_line():
     text = "A" * 250 + " Do not delete the cache directly — it broke prod last time."
     out = _js(f"""console.log(JSON.stringify(checkSystemOfRecordEvidence(3, {text!r}, 'AGENTS.md')));""")
     assert out["verdict"] == "match"
+
+
+@requires_node
+def test_system_of_record_evidence_a_short_stub_with_a_lesson_line_still_caps_at_level_1():
+    """Found during pre-merge review: a lesson-line match used to grant ceiling 3 outright, so
+    a 40-character stub containing one matching sentence outscored a real, substantial file
+    with none. Both the length AND the lesson-line checks are now required for the top ceiling."""
+    text = "Never delete cache directly, it broke prod once"  # 49 chars — well under the 200 floor
+    out = _js(f"""console.log(JSON.stringify(checkSystemOfRecordEvidence(3, {text!r}, 'AGENTS.md')));""")
+    assert out["verdict"] == "mismatch"
+    assert "stub" in out["reason"]
 
 
 # ----------------------------------------------------------------------------- tools checker
@@ -202,12 +223,34 @@ def test_guardrails_evidence_mismatch_at_level_2_with_ask_rules_but_no_credentia
     assert out["verdict"] == "mismatch"
 
 
+@requires_node
+def test_guardrails_evidence_allow_only_reason_text_does_not_claim_deny_or_ask_rules():
+    """Found during pre-merge review: the match/mismatch reason text used to be one static
+    string reused across all 4 ceiling branches, so an allow-only file rendered "has a
+    credential-path deny rule and ask rules" — false for a file with neither."""
+    payload = '{"permissions": {"allow": ["Bash(git *)"], "ask": [], "deny": []}}'
+    out = _js(f"""console.log(JSON.stringify(checkGuardrailsEvidence(1, {payload!r}, 'settings.local.json')));""")
+    assert out["verdict"] == "match"
+    assert "deny" not in out["reason"].lower() or "no deny" in out["reason"].lower()
+    assert "ask" not in out["reason"].lower() or "no" in out["reason"].lower()
+
+
 # --------------------------------------------------------------------- observability checker
 
 @requires_node
 def test_observability_evidence_silent_on_unrecognized_filename():
     out = _js("""console.log(JSON.stringify(checkObservabilityEvidence(2, '2026-01-01 broke', 'notes.md')));""")
     assert out["verdict"] == "silent"
+
+
+@requires_node
+def test_observability_evidence_zero_entries_reason_does_not_falsely_claim_entries_exist():
+    """Found during pre-merge review: `entries || 'a'` treated the falsy 0 as the string 'a',
+    so a file with zero recognizable entries rendered "has a dated/headed entries" — false."""
+    text = "we had some issues last week, not writing them all down"  # no dates, no ## headings
+    out = _js(f"""console.log(JSON.stringify(checkObservabilityEvidence(1, {text!r}, 'failures.md')));""")
+    assert out["verdict"] == "match"
+    assert "doesn't show any" in out["reason"]
 
 
 @requires_node
@@ -236,3 +279,37 @@ def test_check_evidence_dispatches_to_the_right_component_checker():
 def test_check_evidence_silent_for_unknown_component():
     out = _js("""console.log(JSON.stringify(checkEvidence('nonexistent', 1, 'x', 'y.md').verdict));""")
     assert out == "silent"
+
+
+@requires_node
+def test_harenderevidenceresult_clears_stale_match_class_when_hiding():
+    """Found during pre-merge review: the silent branch used to clear text/display but leave a
+    stale match/mismatch class behind on the (now-hidden) element."""
+    out = _js("""
+      const seenClassNames = [];
+      const el = { set style(v){}, style:{}, set className(v){ seenClassNames.push(v); }, set textContent(v){} };
+      global.document.getElementById = () => el;
+      haRenderEvidenceResult('system_of_record', { verdict: 'match', reason: 'x' });
+      haRenderEvidenceResult('system_of_record', { verdict: 'silent', reason: '' });
+      console.log(JSON.stringify(seenClassNames));
+    """)
+    assert out[-1] == "ha-evidence-result", out
+
+
+# ------------------------------------------------------------------- haRecheckEvidence (premature upload)
+
+@requires_node
+def test_harecheck_evidence_does_not_show_a_false_match_before_any_radio_is_selected():
+    """Found during pre-merge review (independently, by 3 separate review angles): a sentinel
+    of -1 for "no selection yet" always satisfied `level <= ceiling` (every real ceiling is
+    0-3), so uploading a file before picking a radio option always rendered a false "match" —
+    confirming a self-selected score that didn't exist yet."""
+    out = _js("""
+      let seen = null;
+      haRenderEvidenceResult = (componentId, result) => { seen = result; };
+      haAnswers = {};  // no selection made for system_of_record
+      haEvidenceCache = { system_of_record: { text: 'A'.repeat(250), filename: 'AGENTS.md' } };
+      haRecheckEvidence('system_of_record');
+      console.log(JSON.stringify(seen));
+    """)
+    assert out["verdict"] == "silent"
