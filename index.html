@@ -866,6 +866,20 @@
   /* ---- Diagram Upload & Dropzone (Wave 1) ---- */
   #screenUpload{display:none;}
   #screenUpload.active{display:block;}
+
+  /* ---- Harness Readiness audit (self-audit, not part of the analyze() pipeline) ---- */
+  #screenHarnessAudit{display:none;}
+  #screenHarnessAudit.active{display:block;}
+  #screenHarnessResults{display:none;}
+  #screenHarnessResults.active{display:block;}
+  .ha-component-card{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:18px 20px; margin-bottom:12px;}
+  .ha-component-head{display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:6px;}
+  .ha-component-name{font-weight:700; font-size:15px;}
+  .ha-score-badge{font-family:ui-monospace,monospace; font-weight:700; font-size:13px; padding:2px 9px; border-radius:99px; border:1px solid currentColor;}
+  .ha-score-0{color:#d9534f;} .ha-score-1{color:#d99a3c;} .ha-score-2{color:#4d8a6a;} .ha-score-3{color:#2f8a5a;}
+  .ha-fix-row{display:flex; gap:12px; padding:10px 0; border-top:1px solid var(--border);}
+  .ha-fix-row:first-child{border-top:none; padding-top:0;}
+  .ha-fix-rank{font-family:ui-monospace,monospace; font-weight:700; color:var(--accent); flex-shrink:0; width:18px;}
   .dropzone{
     border:2px dashed var(--border); border-radius:var(--radius-lg); padding:36px 20px;
     text-align:center; cursor:pointer; background:rgba(18,21,29,0.4);
@@ -1318,6 +1332,11 @@
       <div class="mc-title">Upload architecture diagram</div>
       <div class="mc-desc">Have a Draw.io (.drawio/.xml), Mermaid (.mmd), PlantUML (.puml), or SVG file? Drag it in to parse components directly.</div>
     </div>
+    <div class="mode-card" onclick="startHarnessAudit()" tabindex="0" role="button" aria-label="Audit your harness" onkeydown="if(event.key===' '||event.key==='Enter'){event.preventDefault(); startHarnessAudit();}">
+      <div class="mc-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 4.556-3.04 8.4-7.2 9.62a1.5 1.5 0 0 1-1.6 0C7.04 20.4 4 16.556 4 12V6.75a.75.75 0 0 1 .5-.707l7-2.55a.75.75 0 0 1 .5 0l7 2.55a.75.75 0 0 1 .5.707V12Z"/></svg></div>
+      <div class="mc-title">Audit your harness</div>
+      <div class="mc-desc">Not a product requirement — five questions scoring your team's own agent-development practices, not a vendor recommendation.</div>
+    </div>
   </div>
 </div>
 
@@ -1488,6 +1507,46 @@
       </div>
     </div>
   </div>
+</div>
+
+<!-- ================= Harness Readiness audit (5-question self-audit, no vendor picks) =================
+     Deliberately NOT part of the analyze()/renderRecommendations() pipeline: this scores a
+     team's own agent-development practices against Appendix B of the Harness Engineering Build
+     Guide, not a product requirement. It has its own tiny state machine, its own results screen,
+     and no backend involvement — see docs/harness-engineering/HARNESS_READINESS_SCOPE.md for the
+     reasoning (guided questionnaire, not free-text signal detection; no vendor catalog for any
+     component, since the guardrails/observability vendor market is exactly what the market
+     research found got bought out or archived in 2026). -->
+<div class="wrap" id="screenHarnessAudit" style="max-width:640px; margin:0 auto; padding:8px 0 20px;">
+  <header>
+    <h1>Audit your harness</h1>
+    <div class="sub">Five questions, one per component, scored 0–3 against the self-audit rubric from the Harness Engineering Build Guide. This scores your team's own practices — it never recommends a vendor.</div>
+    <div class="sub" style="margin-top:8px;"><a href="#" onclick="backToMode(); return false;" style="color:var(--accent); text-decoration:none;">← choose a different way to describe this</a></div>
+  </header>
+  <div class="wiz-progress">
+    <div class="wiz-track"><div class="wiz-fill" id="haFill" style="transform:scaleX(0.2)"></div></div>
+    <div class="wiz-step-label" id="haStepLabel">Step 1 of 5</div>
+  </div>
+  <div id="haSteps"></div>
+  <div class="actions" style="margin-top:18px;">
+    <button class="ghost" id="haBackBtn" onclick="haBack()" style="visibility:hidden;">Back</button>
+    <button class="primary" id="haNextBtn" onclick="haNext()" disabled>Continue</button>
+  </div>
+</div>
+
+<div class="wrap" id="screenHarnessResults" style="max-width:760px; margin:0 auto; padding:8px 0 40px;">
+  <header>
+    <h1>Harness Readiness</h1>
+    <div class="sub" id="haResultsSub"></div>
+    <div class="sub" style="margin-top:8px;"><a href="#" onclick="backToMode(); return false;" style="color:var(--accent); text-decoration:none;">← start over</a></div>
+  </header>
+  <div class="card" id="haScoreCard" style="display:flex; align-items:center; justify-content:space-between; gap:20px; flex-wrap:wrap;"></div>
+  <div id="haComponentCards"></div>
+  <div class="card" id="haFixOrderCard">
+    <div style="font-size:13px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.04em; margin-bottom:10px;">Fix order (lowest score first)</div>
+    <div id="haFixOrderList"></div>
+  </div>
+  <div class="sub" style="margin-top:20px; font-size:12px; opacity:.75;">Rubric and component descriptions: <em>Harness Engineering Build Guide</em>, Appendix B (Aishwarya Srinivasan / The Gen Academy) — used as a self-audit tool here, not reproduced as the source's own product.</div>
 </div>
 
 <div class="wrap" id="screenFreetext">
@@ -5943,7 +6002,7 @@ function toggleGlideItem(groupKey, val, el){
 }
 
 function showScreen(id){
-  ['screenMode','screenWizard','screenFreetext','screenUpload'].forEach(s => {
+  ['screenMode','screenWizard','screenFreetext','screenUpload','screenHarnessAudit','screenHarnessResults'].forEach(s => {
     const el = document.getElementById(s);
     if (el) el.classList.toggle('active', s===id);
   });
@@ -5963,6 +6022,195 @@ function startUpload(){
   showScreen('screenUpload');
 }
 function backToMode(){ showScreen('screenMode'); }
+
+// ============ Harness Readiness audit ============
+// Rubric text transcribed from Harness Engineering Build Guide, Appendix B (Aishwarya
+// Srinivasan / The Gen Academy). Deliberately no vendor names on guardrails/observability
+// fix suggestions — see docs/harness-engineering/HARNESS_READINESS_SCOPE.md: that vendor
+// market (Lakera, Protect AI, Guardrails AI) was found by market research to have been bought
+// out or archived in 2026, so naming one as "the" tool risks recommending something that may
+// not exist standalone by the time someone reads it. Verification gets concrete tool names
+// because those (Ruff, pytest, ESLint, Playwright) are current and is the wedge the same
+// research identified as still open — lead there, not on guardrails.
+const HARNESS_COMPONENTS = [
+  {
+    id: 'system_of_record', name: 'System of record', question: 'What does it need to know?',
+    looksLike: 'Instruction files the agent reads before it starts work — <code>AGENTS.md</code>, <code>CLAUDE.md</code>, a <code>docs/</code> tree the root file points into.',
+    levels: [
+      'No instruction file. Context is re-explained every session.',
+      'A file exists but is stale, or written once and never revised.',
+      'Under a page, accurate, commands verified, detail split by area.',
+      'Lines trace to real failures. Stale entries removed on a schedule.',
+    ],
+    fix: 'Write an <code>AGENTS.md</code> at the repo root — under a page, exact install/run/test/lint commands, a "Do Not" section with at least two rules tied to real past mistakes. It is a Linux Foundation Agentic AI Foundation project, read by roughly 40 tools, not a style preference.',
+  },
+  {
+    id: 'tools', name: 'Tools', question: 'What can it actually do?',
+    looksLike: 'The set of actions the agent is allowed to take, and the schema for each — shell access, file edit, test runner, MCP servers into real systems.',
+    levels: [
+      'Chat only, or unrestricted access to everything.',
+      'Whatever the default was. Never reviewed.',
+      'A deliberate set. You can justify each one.',
+      'Scoped credentials, documented blast radius, unused tools removed.',
+    ],
+    fix: 'Write down, per tool or MCP server, why the agent needs it and what the worst case is if misused. Connect one real system through MCP (the standard interface, also a Linux Foundation project) before adding a second.',
+  },
+  {
+    id: 'verification', name: 'Feedback and verification', question: 'How does it know it worked?',
+    looksLike: 'Machinery that lets the agent check its own work without asking you — linter, type checker, real test suite, end-to-end run.',
+    levels: [
+      'You are the only check.',
+      'Tests exist but the agent does not reliably run them.',
+      'Checks fire automatically and the agent acts on the results.',
+      'Cannot finish on a failing check. Failures return actionable output.',
+    ],
+    fix: 'Give the agent one <code>verify</code> command (Ruff/pytest for Python, ESLint+Vitest for JS/TS, Playwright for a real end-to-end run) and wire a lifecycle hook that runs it and blocks completion on failure. This is independently the layer market research found is still "the thinnest layer in the stack" and "yours to build" — the highest-leverage place to start.',
+  },
+  {
+    id: 'guardrails', name: 'Guardrails and permissions', question: 'What must it never do?',
+    looksLike: 'Explicit boundaries — which paths are read-only, which commands need approval, where the agent stops and hands control back.',
+    levels: [
+      'Defaults, unexamined. Or all prompts bypassed.',
+      'Some approvals, chosen by convenience rather than risk.',
+      'Explicit allow, ask and deny rules. Sensitive paths denied.',
+      'Least privilege, isolated execution, checkpoints before irreversible acts.',
+    ],
+    fix: 'Add explicit deny rules for credential paths (<code>.env</code>, <code>secrets/**</code>) and destructive commands, and ask rules for anything that leaves your machine (a push, a publish). A pattern rule is a filter, not a sandbox — pair a deny rule with real isolation for anything genuinely destructive.',
+  },
+  {
+    id: 'observability', name: 'Observability and memory', question: 'What happened, and what carries over?',
+    looksLike: 'A durable record of every tool call, decision and error, plus state that survives across sessions.',
+    levels: [
+      'No record. Failures are unreconstructable.',
+      'Logs exist somewhere. You have never opened them.',
+      'You read failed runs and act on what you find.',
+      'A failure log drives your backlog. State persists across sessions.',
+    ],
+    fix: 'Start a <code>failures.md</code>: one entry per failed run — date, what broke, which component was missing, the fix, whether it escalated to an automated check. Ten entries make your real pattern obvious, and it usually isn\'t the pattern you expected.',
+  },
+];
+
+const HA_SCORE_BANDS = [
+  { max: 4, label: 'Harness consumer', note: 'Using someone else\'s defaults' },
+  { max: 9, label: 'Real harness exists', note: 'Find the lowest-scoring component and take it to a 2 before touching anything else' },
+  { max: 13, label: 'Production grade', note: 'Read failures systematically and let the log set your priorities' },
+  { max: 15, label: 'Mature', note: 'Practice subtraction — ask which rules, tools and checks no longer earn their place' },
+];
+
+let haCurrentStep = 1;
+let haAnswers = {};
+
+function startHarnessAudit(){
+  haCurrentStep = 1;
+  haAnswers = {};
+  // Found during pre-merge review: #resultsShell has its own 'active' toggle independent of
+  // showScreen()'s screen array (see setSidebarThisAnalysisVisible's comment above) — a user
+  // with a real product analysis already showing who then opens this mode would otherwise see
+  // the old recommendation report still rendered alongside the harness-audit questionnaire.
+  // Same reasoning for the context-drawer and the sidebar's "This Analysis" button, which would
+  // otherwise keep pointing at that now-hidden stale analysis.
+  document.getElementById('resultsShell')?.classList.remove('active');
+  setSidebarThisAnalysisVisible(false);
+  closeContextPanel();
+  haRenderStep();
+  showScreen('screenHarnessAudit');
+}
+
+function haRenderStep(){
+  const total = HARNESS_COMPONENTS.length;
+  const c = HARNESS_COMPONENTS[haCurrentStep - 1];
+  document.getElementById('haFill').style.transform = `scaleX(${haCurrentStep / total})`;
+  document.getElementById('haStepLabel').textContent = `Step ${haCurrentStep} of ${total}`;
+  const selected = haAnswers[c.id];
+  document.getElementById('haSteps').innerHTML = `
+    <div class="wiz-step active">
+      <div class="wiz-q">${c.name} <span style="font-weight:400; font-style:italic; color:var(--muted2); font-size:13px;">— ${c.question}</span></div>
+      <div class="wiz-sub">${c.looksLike}</div>
+      <div class="radio-list" data-group="${c.id}" role="radiogroup" aria-label="${c.name}">
+        ${c.levels.map((label, i) => `
+          <div class="pick-radio ha-radio${selected === i ? ' selected' : ''}" data-val="${i}" aria-checked="${selected === i ? 'true' : 'false'}">
+            <div><div class="pr-main">${i} — ${label.split('.')[0]}.</div><div class="pr-sub">${label}</div></div><div class="pr-dot"></div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+  document.querySelectorAll('#haSteps .pick-radio').forEach(el => {
+    el.setAttribute('tabindex', '0');
+    el.setAttribute('role', 'radio');
+    const select = () => {
+      document.querySelectorAll('#haSteps .pick-radio').forEach(x => { x.classList.remove('selected'); x.setAttribute('aria-checked', 'false'); });
+      el.classList.add('selected');
+      el.setAttribute('aria-checked', 'true');
+      haAnswers[c.id] = parseInt(el.dataset.val, 10);
+      document.getElementById('haNextBtn').disabled = false;
+      document.getElementById('haNextBtn').textContent = haCurrentStep === total ? 'See my score' : 'Continue';
+    };
+    el.addEventListener('click', select);
+    el.addEventListener('keydown', e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); select(); } });
+  });
+  document.getElementById('haBackBtn').style.visibility = haCurrentStep === 1 ? 'hidden' : 'visible';
+  document.getElementById('haNextBtn').disabled = (haAnswers[c.id] === undefined);
+  document.getElementById('haNextBtn').textContent = haCurrentStep === total && haAnswers[c.id] !== undefined ? 'See my score' : 'Continue';
+}
+
+function haNext(){
+  if (haCurrentStep < HARNESS_COMPONENTS.length) {
+    haCurrentStep++;
+    haRenderStep();
+  } else {
+    haFinish();
+  }
+}
+function haBack(){
+  if (haCurrentStep > 1) { haCurrentStep--; haRenderStep(); }
+}
+
+function scoreHarnessAudit(answers){
+  const total = HARNESS_COMPONENTS.reduce((sum, c) => sum + (answers[c.id] || 0), 0);
+  const band = HA_SCORE_BANDS.find(b => total <= b.max);
+  // Found during pre-merge review: this used to always return exactly 3 components regardless
+  // of score, so a team scoring 3/3 on everything ("Mature — practice subtraction") still saw a
+  // 3-item fix list with full fix text, directly contradicting its own band message. Only
+  // components that actually warrant a fix belong here — same score<=1 threshold the
+  // per-component card already uses to decide whether to show its own "Fix:" text.
+  const fixOrder = HARNESS_COMPONENTS
+    .filter(c => (answers[c.id] || 0) <= 1)
+    .sort((a, b) => (answers[a.id] || 0) - (answers[b.id] || 0))
+    .slice(0, 3);
+  return { total, band, fixOrder };
+}
+
+function haFinish(){
+  const result = scoreHarnessAudit(haAnswers);
+  document.getElementById('haResultsSub').textContent = `${result.total} / 15 — ${result.band.label}. ${result.band.note}.`;
+  document.getElementById('haScoreCard').innerHTML = `
+    <div><div style="font-family:ui-monospace,monospace; font-weight:700; font-size:36px; color:var(--accent); line-height:1;">${result.total}<span style="font-size:18px; color:var(--muted2); font-weight:500;">/15</span></div><div style="font-size:11px; color:var(--muted2); text-transform:uppercase; letter-spacing:.05em; margin-top:4px;">Total score</div></div>
+    <div style="font-family:ui-monospace,monospace; font-size:13px; padding:8px 16px; border-radius:99px; background:var(--surface); border:1px solid var(--border); color:var(--muted2);">${result.band.label}</div>
+  `;
+  document.getElementById('haComponentCards').innerHTML = HARNESS_COMPONENTS.map(c => {
+    const score = haAnswers[c.id] || 0;
+    return `
+      <div class="ha-component-card">
+        <div class="ha-component-head">
+          <div class="ha-component-name">${c.name}</div>
+          <div class="ha-score-badge ha-score-${score}">${score} / 3</div>
+        </div>
+        <div style="font-size:13.5px; color:var(--muted2); margin-bottom:${score <= 1 ? '10px' : '0'};">${c.levels[score]}</div>
+        ${score <= 1 ? `<div style="font-size:13px; line-height:1.5; border-top:1px solid var(--border); padding-top:10px; margin-top:2px;"><b>Fix:</b> ${c.fix}</div>` : ''}
+      </div>
+    `;
+  }).join('');
+  document.getElementById('haFixOrderList').innerHTML = result.fixOrder.length
+    ? result.fixOrder.map((c, i) => `
+      <div class="ha-fix-row">
+        <div class="ha-fix-rank">${i + 1}</div>
+        <div style="font-size:13.5px; line-height:1.5;"><b>${c.name}</b> (scored ${haAnswers[c.id] || 0}) — ${c.fix}</div>
+      </div>
+    `).join('')
+    : `<div style="font-size:13.5px; color:var(--muted2);">Nothing scored 0 or 1 — no urgent fix. ${result.band.note}.</div>`;
+  showScreen('screenHarnessResults');
+}
 
 // Enterprise-shell Phase 1: the sidebar's "This Analysis" item only makes sense once a result
 // exists — mirrors the three call sites that toggle #resultsShell's own 'active' class (initial

@@ -1,0 +1,397 @@
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<title>Harness Readiness Scorecard</title>
+
+<style>
+  :root {
+    --bg: #f6f4f0;
+    --surface: #ffffff;
+    --surface-2: #efece5;
+    --border: #ddd8ce;
+    --ink: #1c1a16;
+    --ink-dim: #6b6558;
+    --ink-faint: #9a9384;
+    --accent: #c4501f;
+    --accent-bg: #fbeadf;
+    --score-0: #d8534a;
+    --score-1: #d99a3c;
+    --score-2: #4d8a6a;
+    --score-3: #2f6b4a;
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --bg: #15130f;
+      --surface: #1e1b16;
+      --surface-2: #262219;
+      --border: #382f22;
+      --ink: #f2ede2;
+      --ink-dim: #a89e8a;
+      --ink-faint: #756c5c;
+      --accent: #e2733a;
+      --accent-bg: #2e2015;
+      --score-0: #e2695f;
+      --score-1: #e0ac52;
+      --score-2: #5fa07d;
+      --score-3: #4a8f66;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15130f;
+    --surface: #1e1b16;
+    --surface-2: #262219;
+    --border: #382f22;
+    --ink: #f2ede2;
+    --ink-dim: #a89e8a;
+    --ink-faint: #756c5c;
+    --accent: #e2733a;
+    --accent-bg: #2e2015;
+    --score-0: #e2695f;
+    --score-1: #e0ac52;
+    --score-2: #5fa07d;
+    --score-3: #4a8f66;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    margin: 0;
+    padding: 48px 24px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; }
+
+  .status-flag {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: var(--accent-bg);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 5px 10px;
+    margin-bottom: 20px;
+  }
+
+  h1 {
+    font-size: clamp(28px, 4vw, 40px);
+    line-height: 1.15;
+    margin: 0 0 8px;
+    text-wrap: balance;
+    letter-spacing: -0.01em;
+  }
+  .subtitle {
+    color: var(--ink-dim);
+    font-size: 16px;
+    max-width: 60ch;
+    margin: 0 0 40px;
+    line-height: 1.55;
+  }
+
+  .total-bar {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+  }
+  .total-number {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 40px;
+    font-variant-numeric: tabular-nums;
+    color: var(--accent);
+    line-height: 1;
+  }
+  .total-number span { font-size: 20px; color: var(--ink-faint); font-weight: 500; }
+  .total-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-top: 6px;
+  }
+  .band-pill {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 16px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--ink-dim);
+  }
+
+  .component {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px 26px;
+    margin-bottom: 14px;
+  }
+  .component-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+  }
+  .component-name { font-size: 17px; font-weight: 600; }
+  .component-question {
+    font-style: italic;
+    color: var(--ink-faint);
+    font-size: 13px;
+  }
+  .component-looks-like {
+    color: var(--ink-dim);
+    font-size: 14px;
+    line-height: 1.5;
+    margin: 8px 0 16px;
+  }
+  .component-looks-like b { color: var(--ink); font-weight: 600; }
+
+  .score-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .score-btn {
+    flex: 1;
+    min-width: 130px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    cursor: pointer;
+    text-align: left;
+    font-family: var(--sans);
+    color: var(--ink-dim);
+    transition: border-color 0.12s ease, background 0.12s ease;
+  }
+  .score-btn:hover { border-color: var(--ink-faint); }
+  .score-btn .n {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 13px;
+    display: inline-block;
+    margin-right: 6px;
+  }
+  .score-btn .label { font-size: 12.5px; display: block; margin-top: 2px; line-height: 1.35; }
+  .score-btn[data-selected="true"] {
+    background: var(--accent-bg);
+    border-color: var(--accent);
+    color: var(--ink);
+  }
+  .score-btn[data-level="0"] .n { color: var(--score-0); }
+  .score-btn[data-level="1"] .n { color: var(--score-1); }
+  .score-btn[data-level="2"] .n { color: var(--score-2); }
+  .score-btn[data-level="3"] .n { color: var(--score-3); }
+
+  .fix-order {
+    margin-top: 40px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px 28px;
+  }
+  .fix-order h2 {
+    font-size: 13px;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ink-faint);
+    margin: 0 0 16px;
+  }
+  .fix-item {
+    display: flex;
+    gap: 14px;
+    padding: 12px 0;
+    border-top: 1px solid var(--border);
+  }
+  .fix-item:first-child { border-top: none; padding-top: 0; }
+  .fix-rank {
+    font-family: var(--mono);
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 13px;
+    flex-shrink: 0;
+    width: 20px;
+  }
+  .fix-text { font-size: 14px; color: var(--ink-dim); line-height: 1.5; }
+  .fix-text b { color: var(--ink); font-weight: 600; }
+  .fix-empty { color: var(--ink-faint); font-size: 14px; font-style: italic; }
+
+  footer {
+    margin-top: 40px;
+    font-size: 12.5px;
+    color: var(--ink-faint);
+    line-height: 1.6;
+    border-top: 1px solid var(--border);
+    padding-top: 20px;
+  }
+</style>
+
+<div class="wrap">
+  <div class="status-flag">◆ template — not wired to a real repo yet</div>
+  <h1>Harness Readiness Scorecard</h1>
+  <p class="subtitle">Click a level (0–3) for each component. This mirrors the self-audit rubric in the Harness Engineering Build Guide, Appendix B — the mechanic is real, the scoring here is manual/illustrative until we decide whether it's interview-based or repo-inspected.</p>
+
+  <div class="total-bar">
+    <div>
+      <div class="total-number" id="totalNum">0<span>/15</span></div>
+      <div class="total-label">Total score</div>
+    </div>
+    <div class="band-pill" id="bandPill">Answer all five to see your band</div>
+  </div>
+
+  <div id="components"></div>
+
+  <div class="fix-order">
+    <h2>Fix order (auto, lowest score first)</h2>
+    <div id="fixOrder"><div class="fix-empty">Score at least one component to see a suggested order.</div></div>
+  </div>
+
+  <footer>
+    Rubric source: Harness Engineering Build Guide, Appendix B (Aishwarya Srinivasan / The Gen
+    Academy). Component descriptions below are drawn directly from that handout. This page is a
+    UI template for internal review only — not published, not a scoring engine.
+  </footer>
+</div>
+
+<script>
+  const COMPONENTS = [
+    {
+      id: 'record', name: 'System of record', question: 'What does it need to know?',
+      looksLike: 'Instruction files the agent reads before it starts work — <b>AGENTS.md</b>, <b>CLAUDE.md</b>, a <b>docs/</b> tree the root file points into.',
+      levels: [
+        'No instruction file. Context is re-explained every session.',
+        'A file exists but is stale, or written once and never revised.',
+        'Under a page, accurate, commands verified, detail split by area.',
+        'Lines trace to real failures. Stale entries removed on a schedule.',
+      ],
+    },
+    {
+      id: 'tools', name: 'Tools', question: 'What can it actually do?',
+      looksLike: 'The set of actions the agent is allowed to take, and the schema for each — shell access, file edit, test runner, MCP servers into real systems.',
+      levels: [
+        'Chat only, or unrestricted access to everything.',
+        'Whatever the default was. Never reviewed.',
+        'A deliberate set. You can justify each one.',
+        'Scoped credentials, documented blast radius, unused tools removed.',
+      ],
+    },
+    {
+      id: 'verification', name: 'Feedback and verification', question: 'How does it know it worked?',
+      looksLike: 'Machinery that lets the agent check its own work without asking you — linter, type checker, real test suite, end-to-end run.',
+      levels: [
+        'You are the only check.',
+        'Tests exist but the agent does not reliably run them.',
+        'Checks fire automatically and the agent acts on the results.',
+        'Cannot finish on a failing check. Failures return actionable output.',
+      ],
+    },
+    {
+      id: 'guardrails', name: 'Guardrails and permissions', question: 'What must it never do?',
+      looksLike: 'Explicit boundaries — which paths are read-only, which commands need approval, where the agent stops and hands control back.',
+      levels: [
+        'Defaults, unexamined. Or all prompts bypassed.',
+        'Some approvals, chosen by convenience rather than risk.',
+        'Explicit allow, ask and deny rules. Sensitive paths denied.',
+        'Least privilege, isolated execution, checkpoints before irreversible acts.',
+      ],
+    },
+    {
+      id: 'observability', name: 'Observability and memory', question: 'What happened, and what carries over?',
+      looksLike: 'A durable record of every tool call, decision and error, plus state that survives across sessions.',
+      levels: [
+        'No record. Failures are unreconstructable.',
+        'Logs exist somewhere. You have never opened them.',
+        'You read failed runs and act on what you find.',
+        'A failure log drives your backlog. State persists across sessions.',
+      ],
+    },
+  ];
+
+  const scores = {};
+  const componentsEl = document.getElementById('components');
+
+  COMPONENTS.forEach(c => {
+    const card = document.createElement('div');
+    card.className = 'component';
+    card.innerHTML = `
+      <div class="component-head">
+        <div class="component-name">${c.name}</div>
+        <div class="component-question">${c.question}</div>
+      </div>
+      <div class="component-looks-like">${c.looksLike}</div>
+      <div class="score-row" data-id="${c.id}">
+        ${c.levels.map((label, i) => `
+          <button class="score-btn" data-level="${i}" data-id="${c.id}">
+            <span class="n">${i}</span><span class="label">${label}</span>
+          </button>
+        `).join('')}
+      </div>
+    `;
+    componentsEl.appendChild(card);
+  });
+
+  componentsEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('.score-btn');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    const level = parseInt(btn.dataset.level, 10);
+    scores[id] = level;
+    document.querySelectorAll(`.score-btn[data-id="${id}"]`).forEach(b => {
+      b.dataset.selected = String(parseInt(b.dataset.level, 10) === level);
+    });
+    render();
+  });
+
+  const BANDS = [
+    { max: 4, label: 'Harness consumer', note: 'Using someone else\'s defaults' },
+    { max: 9, label: 'Real harness exists', note: 'Find the lowest-scoring component' },
+    { max: 13, label: 'Production grade', note: 'Read failures systematically' },
+    { max: 15, label: 'Mature', note: 'Practice subtraction' },
+  ];
+
+  function render() {
+    const answered = Object.keys(scores).length;
+    const total = Object.values(scores).reduce((a, b) => a + b, 0);
+    document.getElementById('totalNum').innerHTML = `${total}<span>/15</span>`;
+
+    const bandEl = document.getElementById('bandPill');
+    if (answered === 0) {
+      bandEl.textContent = 'Answer all five to see your band';
+    } else {
+      const band = BANDS.find(b => total <= b.max);
+      bandEl.textContent = `${band.label} — ${band.note}`;
+    }
+
+    const fixEl = document.getElementById('fixOrder');
+    if (answered === 0) {
+      fixEl.innerHTML = '<div class="fix-empty">Score at least one component to see a suggested order.</div>';
+      return;
+    }
+    const ranked = COMPONENTS
+      .filter(c => scores[c.id] !== undefined)
+      .sort((a, b) => scores[a.id] - scores[b.id])
+      .slice(0, 3);
+    fixEl.innerHTML = ranked.map((c, i) => `
+      <div class="fix-item">
+        <div class="fix-rank">${i + 1}</div>
+        <div class="fix-text"><b>${c.name}</b> (scored ${scores[c.id]}) — ${c.levels[Math.min(scores[c.id] + 1, 3)]}</div>
+      </div>
+    `).join('');
+  }
+</script>
