@@ -168,6 +168,7 @@ def test_recommend_stack_returns_all_expected_categories():
         "network_boundary", "multi_cloud_bridging", "security_gates", "gitops", "gitops_vendor",
         "agent_framework_vendor", "inference_serving_vendor",
         "realtime_analytics", "realtime_analytics_vendor",
+        "llm_observability_vendor",
     }
     assert set(result["recommendations"].keys()) == expected_categories
 
