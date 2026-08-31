@@ -521,6 +521,8 @@ def detect_signals(text: str) -> dict:
         "langgraphMentioned": has(["langgraph"]),
         "pydanticAiMentioned": has(["pydantic ai", "pydanticai"]),
         "fastmcpMentioned": has(["fastmcp", "fast mcp"]),
+        "langfuseMentioned": has(["langfuse"]),
+        "braintrustMentioned": has(["braintrust"]),
         "mobile": has(["mobile", "flutter", "ios", "android", "react native"]),
         "web": has(["web app", "website", "web application", "react", "angular", "vue"]),
         # Domain floors (docs/manual-qa-test-matrix.csv TC-05/06/07/09) — mirrors index.html
@@ -1789,6 +1791,43 @@ def pick_agent_framework_vendor(s):
 
 AGENT_FRAMEWORK_NOTE = "LangGraph and Pydantic AI compete on the same job (orchestrating an agent's own reasoning/tool-use loop); FastMCP solves a different one (exposing tools via the MCP protocol so an agent — built with either of those, or anything else — can call them). Grouped here for convenience, not because all three compete head-to-head."
 
+# Langfuse and Braintrust both trace LLM calls and support evaluation, but genuinely differ in
+# posture, not just brand — Langfuse is open-source/self-hostable with no per-seat pricing
+# (acquired by ClickHouse in Jan 2026, staying open-source and self-hostable per ClickHouse's own
+# announcement); Braintrust is a commercial, more opinionated platform connecting production
+# traces directly to CI/CD-gated evaluations. Verified live against langfuse.com/pricing,
+# braintrust.dev/articles/langfuse-vs-braintrust, and clickhouse.com/blog (the acquisition post).
+LLM_OBSERVABILITY_VENDORS = [
+    {"id": "langfuse", "name": "Langfuse", "cat": "Open-source LLM tracing, evaluation & prompt management", "bestFor": "Teams wanting a genuinely free, self-hostable default with no per-seat pricing", "strength": "Open-source and self-hostable with no per-seat pricing; production-ready with 2,000+ paying customers and 26M+ monthly SDK installs; acquired by ClickHouse (Jan 2026) but stays open-source, self-hostable, and on its existing roadmap per ClickHouse's own announcement", "drawback": "Meters by unit (a trace plus its observations/scores is many units) rather than a flat per-GB rate, which can be less predictable at high trace volume than Braintrust's data-based metering", "pricing": "Free (OSS, self-hosted) — Cloud Hobby tier free up to 50k units/mo, then ~$8/100k units"},
+    {"id": "braintrust", "name": "Braintrust", "cat": "End-to-end LLM eval & observability platform", "bestFor": "Teams wanting production traces to become evaluation cases and gate CI/CD on eval results", "strength": "Production traces convert to evaluation cases in one click; eval results surface directly on pull requests for CI/CD-gated deployment; generous free tier (1M spans/mo, unlimited users, 10k evals) and a unified workspace for PMs and engineers to iterate together", "drawback": "Commercial-first (no self-hosted OSS option like Langfuse); meters by GB of processed data plus thousands of eval scores, a different cost shape to reason about than Langfuse's per-unit pricing", "pricing": "Free tier (1M spans/mo, 10k evals) — Pro $249/mo"},
+]
+
+
+def pick_llm_observability_vendor(s):
+    """Gated on `minimalProject` — a learning/portfolio project doesn't need dedicated LLM
+    tracing yet, mirroring this file's existing minimalProject gating used elsewhere rather than
+    inventing a new rule."""
+    if s["minimalProject"]:
+        return {"v": "Not applicable — a learning/portfolio project doesn't need dedicated LLM tracing yet", "why": "Langfuse and Braintrust both exist to trace and evaluate LLM calls at real usage volume — for a learning project, console logs or your framework's own debug output are enough. Revisit this once the project handles real user traffic.", "primaryId": None, "conf": "high"}
+    if s["langfuseMentioned"]:
+        return {"v": "Langfuse", "why": "Explicit Langfuse mention detected — matching existing familiarity over evaluating a new platform.", "primaryId": "langfuse", "conf": "high"}
+    if s["braintrustMentioned"]:
+        return {"v": "Braintrust", "why": "Explicit Braintrust mention detected — matching existing familiarity over evaluating a new platform.", "primaryId": "braintrust", "conf": "high"}
+    if s["enterprise"] or s["largeTeam"]:
+        return {
+            "v": "Braintrust",
+            "why": "At team/enterprise scale, gating deployment on eval results (Braintrust's CI/CD-integrated evals appearing directly on pull requests) and a shared PM/engineer workspace matter more than a self-hosted default — this is the harder problem to solve later if you start without it.",
+            "primaryId": "braintrust", "conf": "medium",
+        }
+    return {
+        "v": "Langfuse",
+        "why": "A genuinely free, self-hostable default with no per-seat pricing is the better starting point absent a specific need for Braintrust's CI/CD-gated eval workflow — move to Braintrust once evaluation results need to block a deployment pipeline, not just inform a dashboard.",
+        "primaryId": "langfuse", "conf": "medium",
+    }
+
+
+LLM_OBSERVABILITY_NOTE = "Langfuse and Braintrust both trace LLM calls and support evaluation, but differ in posture: Langfuse is open-source and self-hostable with no per-seat pricing (acquired by ClickHouse in Jan 2026, staying open-source); Braintrust is a commercial, more opinionated platform connecting production traces directly to CI/CD-gated evaluations."
+
 
 def pick_integration_guidance(s):
     # Pattern #2 (omnichannel) is architecturally different from pattern #1 (chatbot-only), not
@@ -2689,6 +2728,7 @@ def recommend_stack(requirement_text: str) -> dict:
         "llm": llm,
         "mcp_servers": pick_mcp(s),
         "agent_framework_vendor": pick_agent_framework_vendor(s),
+        "llm_observability_vendor": pick_llm_observability_vendor(s),
         "rag": rag,
         "guardrails": pick_guardrails(s),
         "integration_guidance": pick_integration_guidance(s),

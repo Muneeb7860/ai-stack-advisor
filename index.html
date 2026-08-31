@@ -2179,6 +2179,8 @@ function detectSignals(text){
     langgraphMentioned: has(['langgraph']),
     pydanticAiMentioned: has(['pydantic ai','pydanticai']),
     fastmcpMentioned: has(['fastmcp','fast mcp']),
+    langfuseMentioned: has(['langfuse']),
+    braintrustMentioned: has(['braintrust']),
     mobile: has(['mobile','flutter','ios','android','react native']),
     web: has(['web app','website','web application','react','angular','vue']),
     // Domain floors (docs/manual-qa-test-matrix.csv TC-05/06/07/09) — these describe things that
@@ -3385,6 +3387,30 @@ function pickAgentFrameworkVendor(s){
 }
 const AGENT_FRAMEWORK_NOTE = 'LangGraph and Pydantic AI compete on the same job (orchestrating an agent\'s own reasoning/tool-use loop); FastMCP solves a different one (exposing tools via the MCP protocol so an agent — built with either of those, or anything else — can call them). Grouped here for convenience, not because all three compete head-to-head.';
 
+// Langfuse and Braintrust both trace LLM calls and support evaluation, but genuinely differ in
+// posture, not just brand — Langfuse is open-source/self-hostable with no per-seat pricing
+// (acquired by ClickHouse in Jan 2026, staying open-source and self-hostable per ClickHouse's
+// own announcement); Braintrust is a commercial, more opinionated platform connecting production
+// traces directly to CI/CD-gated evaluations. Verified live against langfuse.com/pricing,
+// braintrust.dev/articles/langfuse-vs-braintrust, and clickhouse.com/blog (the acquisition post).
+const LLM_OBSERVABILITY_VENDORS = [
+  {id:'langfuse', name:'Langfuse', cat:'Open-source LLM tracing, evaluation &amp; prompt management', bestFor:'Teams wanting a genuinely free, self-hostable default with no per-seat pricing', strength:'Open-source and self-hostable with no per-seat pricing; production-ready with 2,000+ paying customers and 26M+ monthly SDK installs; acquired by ClickHouse (Jan 2026) but stays open-source, self-hostable, and on its existing roadmap per ClickHouse\'s own announcement', drawback:'Meters by unit (a trace plus its observations/scores is many units) rather than a flat per-GB rate, which can be less predictable at high trace volume than Braintrust\'s data-based metering', pricing:'Free (OSS, self-hosted) — Cloud Hobby tier free up to 50k units/mo, then ~$8/100k units'},
+  {id:'braintrust', name:'Braintrust', cat:'End-to-end LLM eval &amp; observability platform', bestFor:'Teams wanting production traces to become evaluation cases and gate CI/CD on eval results', strength:'Production traces convert to evaluation cases in one click; eval results surface directly on pull requests for CI/CD-gated deployment; generous free tier (1M spans/mo, unlimited users, 10k evals) and a unified workspace for PMs and engineers to iterate together', drawback:'Commercial-first (no self-hosted OSS option like Langfuse); meters by GB of processed data plus thousands of eval scores, a different cost shape to reason about than Langfuse\'s per-unit pricing', pricing:'Free tier (1M spans/mo, 10k evals) — Pro $249/mo'},
+];
+function pickLlmObservabilityVendor(s){
+  // A learning/portfolio project genuinely doesn't need dedicated LLM tracing — console logs
+  // are enough until it handles real user traffic. Mirrors this file's existing minimalProject
+  // gating used elsewhere (e.g. cost estimation, domain floors) rather than inventing a new rule.
+  if(s.minimalProject) return {v:'Not applicable — a learning/portfolio project doesn\'t need dedicated LLM tracing yet', why:'Langfuse and Braintrust both exist to trace and evaluate LLM calls at real usage volume — for a learning project, console logs or your framework\'s own debug output are enough. Revisit this once the project handles real user traffic.', primaryId:null, conf:'high'};
+  if(s.langfuseMentioned) return {v:'Langfuse', why:'Explicit Langfuse mention detected — matching existing familiarity over evaluating a new platform.', primaryId:'langfuse', conf:'high'};
+  if(s.braintrustMentioned) return {v:'Braintrust', why:'Explicit Braintrust mention detected — matching existing familiarity over evaluating a new platform.', primaryId:'braintrust', conf:'high'};
+  if(s.enterprise || s.largeTeam){
+    return {v:'Braintrust', why:'At team/enterprise scale, gating deployment on eval results (Braintrust\'s CI/CD-integrated evals appearing directly on pull requests) and a shared PM/engineer workspace matter more than a self-hosted default — this is the harder problem to solve later if you start without it.', primaryId:'braintrust', conf:'medium'};
+  }
+  return {v:'Langfuse', why:'A genuinely free, self-hostable default with no per-seat pricing is the better starting point absent a specific need for Braintrust\'s CI/CD-gated eval workflow — move to Braintrust once evaluation results need to block a deployment pipeline, not just inform a dashboard.', primaryId:'langfuse', conf:'medium'};
+}
+const LLM_OBSERVABILITY_NOTE = 'Langfuse and Braintrust both trace LLM calls and support evaluation, but differ in posture: Langfuse is open-source and self-hostable with no per-seat pricing (acquired by ClickHouse in Jan 2026, staying open-source); Braintrust is a commercial, more opinionated platform connecting production traces directly to CI/CD-gated evaluations.';
+
 // Brownfield/AI-only guidance (pattern #1 — chatbot-only). Distinct from every pickX() function
 // above: those all answer "what should we build," this answers "how does a new AI layer attach
 // to something that already exists" — integration surface, session handling, auth passthrough.
@@ -4264,6 +4290,7 @@ function computeRecommendations(s){
   const obsVendorPick = pickObservabilityVendor(s, obs);
   const feVendorPick = pickFrontendVendor(s, fe);
   const agentFrameworkVendorPick = pickAgentFrameworkVendor(s);
+  const llmObservabilityVendorPick = pickLlmObservabilityVendor(s);
 
   // Build the result first, THEN apply exclusions to it. Applying them to a separate object
   // literal would mutate a throwaway — the `const` bindings above stay bound to the original
@@ -4274,7 +4301,7 @@ function computeRecommendations(s){
     auditLogging, privilegedAccess, testingStrategy, networkBoundary, multiCloudBridging, securityGates,
     cloudVendorPick, computePlatformPick, orchestratorPick, gatewayVendorPick, dbVendorPick, msgVendorPick,
     llmProviderPick, vectorDbVendorPick, guardrailsVendorPick, cicdVendorPick, gitopsVendorPick, obsVendorPick, feVendorPick,
-    agentFrameworkVendorPick, inferenceServingVendorPick, realtimeAnalyticsVendorPick,
+    agentFrameworkVendorPick, inferenceServingVendorPick, realtimeAnalyticsVendorPick, llmObservabilityVendorPick,
     // No separate "base" GitOps/RealtimeAnalytics pick exists (unlike cicd/compute) —
     // pickGitopsVendor()/pickRealtimeAnalyticsVendor() each produce the recommendation and the
     // vendor primaryId together. Aliased under plain `gitops`/`realtimeAnalytics` keys too so
@@ -4296,7 +4323,7 @@ function computeRecommendations(s){
 // see. 'integration' is the one section that's brownfield-only in the other direction (it never
 // applies to greenfield, not even by default) — handled explicitly below, not by omission.
 const ALL_SECTION_IDS = ['stack','iamcompare','tradeoffs','llm','orchestration','hosting','topology',
-  'mcpapi','mcpservers','agentframework','rag','vectordb','guardrails','integration','cost','throughput','governance','docs'];
+  'mcpapi','mcpservers','agentframework','llmobservability','rag','vectordb','guardrails','integration','cost','throughput','governance','docs'];
 
 // The ONLY place the "which sections render" decision lives. sec() inside renderRecommendations
 // just checks membership against this function's output — no scattered if(showInfra)/
@@ -4326,7 +4353,7 @@ function renderRecommendations(s, rec){
     auditLogging, privilegedAccess, testingStrategy, networkBoundary, multiCloudBridging, securityGates,
     cloudVendorPick, computePlatformPick, orchestratorPick, gatewayVendorPick, dbVendorPick, msgVendorPick,
     llmProviderPick, vectorDbVendorPick, guardrailsVendorPick, cicdVendorPick, gitopsVendorPick, obsVendorPick, feVendorPick,
-    agentFrameworkVendorPick, inferenceServingVendorPick, realtimeAnalyticsVendorPick} = rec;
+    agentFrameworkVendorPick, inferenceServingVendorPick, realtimeAnalyticsVendorPick, llmObservabilityVendorPick} = rec;
 
   // `v === true`, not `v`: signals is no longer all-booleans — excluded/known/latencyTarget are
   // objects, and `{}` is truthy, so a plain truthiness filter would list them as detected signals.
@@ -4650,6 +4677,11 @@ function renderRecommendations(s, rec){
   sec('agentframework', 'Agent Framework', 'Agent Orchestration Framework',
     `<div class="card"><div class="rag-pick"><div class="head" style="display:flex; justify-content:space-between; align-items:center;"><div class="name">${agentFrameworkVendorPick.v}</div><span class="conf conf-${agentFrameworkVendorPick.conf||'low'}">${confLabel(agentFrameworkVendorPick.conf)}</span></div><div class="why">${agentFrameworkVendorPick.why}</div></div>
       ${s.agentic ? altToggle(AGENT_FRAMEWORK_VENDORS, agentFrameworkVendorPick, AGENT_FRAMEWORK_NOTE) : ''}
+    </div>`);
+
+  sec('llmobservability', 'LLM Observability', 'LLM Tracing &amp; Evaluation',
+    `<div class="card"><div class="rag-pick"><div class="head" style="display:flex; justify-content:space-between; align-items:center;"><div class="name">${llmObservabilityVendorPick.v}</div><span class="conf conf-${llmObservabilityVendorPick.conf||'low'}">${confLabel(llmObservabilityVendorPick.conf)}</span></div><div class="why">${llmObservabilityVendorPick.why}</div></div>
+      ${!s.minimalProject ? altToggle(LLM_OBSERVABILITY_VENDORS, llmObservabilityVendorPick, LLM_OBSERVABILITY_NOTE) : ''}
     </div>`);
 
   sec('rag', 'RAG', 'RAG Architecture',
