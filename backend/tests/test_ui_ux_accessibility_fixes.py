@@ -38,9 +38,12 @@ def test_export_and_share_buttons_have_title_and_aria_label():
 # ---------------------------------------------------------- 2. mode-card keyboard
 
 def test_mode_cards_are_keyboard_operable():
+    """4, not 3, as of the Harness Readiness audit mode (docs/harness-engineering/
+    HARNESS_READINESS_SCOPE.md) — the count itself isn't the point of this test, keyboard
+    operability of whichever cards exist is."""
     text = _text()
     cards = re.findall(r'<div class="mode-card"[^>]*>', text)
-    assert len(cards) == 3
+    assert len(cards) == 4
     for c in cards:
         assert 'tabindex="0"' in c
         assert 'role="button"' in c
