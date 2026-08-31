@@ -93,7 +93,7 @@ def test_no_backend_or_llm_call_anywhere_in_the_harness_audit_code():
     """Matches the scope's own stated invariant: pure client-side, no API involvement."""
     text = _text()
     start = text.index("// ============ Harness Readiness audit ============")
-    section = text[start:start + 10000]  # comfortably covers the whole feature block
+    section = text[start:start + 24000]  # comfortably covers the whole feature block, incl. evidence upload
     assert "function haFinish(){" in section, "sanity check: slice actually captured the feature"
     assert "fetch(" not in section
     assert "API_BASE" not in section
