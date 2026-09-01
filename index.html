@@ -1664,17 +1664,17 @@
   <div class="intro-col">
     <header>
       <h1>Upload Architecture Diagram</h1>
-      <div class="sub">Upload an existing Draw.io (.drawio/.xml), Mermaid (.mmd), PlantUML (.puml), or SVG diagram. The engine extracts components deterministically to run a rule-based analysis.</div>
+      <div class="sub">Upload an architecture diagram — Draw.io (.drawio/.xml), Mermaid (.mmd), PlantUML (.puml) or SVG — or a dependency manifest: package.json, requirements.txt, go.mod, Gemfile, pom.xml or docker-compose.yml. The engine extracts what it recognises deterministically and you confirm it before anything is analysed.</div>
       <div class="sub" style="margin-top:8px;"><a href="#" onclick="backToMode(); return false;" style="color:var(--accent); text-decoration:none;">← choose a different way to describe this</a></div>
     </header>
 
     <div class="card" style="padding:28px 24px;">
       <div class="dropzone" id="diagramDropzone" tabindex="0" role="button" aria-label="Upload architecture diagram file" onclick="document.getElementById('diagramFileInput').click()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('diagramFileInput').click();}">
-        <input type="file" id="diagramFileInput" accept=".drawio,.xml,.mmd,.mermaid,.puml,.plantuml,.svg,.txt" style="display:none;" onchange="handleDiagramFileSelect(event)">
+        <input type="file" id="diagramFileInput" accept=".drawio,.xml,.mmd,.mermaid,.puml,.plantuml,.svg,.txt,.json,.mod,.yml,.yaml,Gemfile" style="display:none;" onchange="handleDiagramFileSelect(event)">
         <div class="dropzone-icon">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"/></svg>
         </div>
-        <div class="dropzone-title">Drop your architecture diagram here, or <span style="color:var(--accent); text-decoration:underline;">browse files</span></div>
+        <div class="dropzone-title">Drop a diagram or a dependency manifest here, or <span style="color:var(--accent); text-decoration:underline;">browse files</span></div>
         <div class="dropzone-sub">Supports <strong>.drawio XML</strong>, <strong>Mermaid (.mmd)</strong>, <strong>PlantUML (.puml)</strong>, <strong>SVG</strong>, or paste text/XML directly with <strong>Cmd+V / Ctrl+V</strong></div>
       </div>
 
@@ -9394,6 +9394,9 @@ function onExportJsonClick() {
 
 // ---------------- Diagram Ingestion & Tier A Parsers (Wave 1) ----------------
 let uploadedDiagramEntities = [];
+// Which parser produced the current chips. Drives the synthesized wording in
+// analyzeDiagramEntities, where a manifest and a diagram must not claim the same thing.
+let uploadedSourceKind = 'diagram';
 
 function resetDiagramUpload() {
   uploadedDiagramEntities = [];
@@ -9503,10 +9506,151 @@ function parseSvgText(svgString) {
   return entities;
 }
 
+// ============ Dependency-manifest ingestion ============
+// Reads a real project manifest and turns it into the same confirmable-chips flow the diagram
+// upload already uses, so a brownfield user can start from what they actually run rather than
+// re-describing it in prose.
+//
+// The design constraint that shapes everything here: the value of a detected dependency is
+// ENTIRELY in whether the engines recognise the term it maps to. Emitting "psycopg2-binary" or
+// even "Postgres 15" would render a convincing chip that changes not one recommendation — a
+// feature that looks like it works and does nothing. So every value below is a surface term from
+// KNOWN_TERMS or from detectSignals' own phrase lists, and a test asserts exactly that, deriving
+// the permitted vocabulary from those two sources rather than from a copy of it.
+//
+// Deliberately conservative. A package that does not map to a term the engines know is dropped
+// rather than passed through as raw text: an unrecognised chip is a claim to the user that
+// something was understood when it was not.
+const MANIFEST_TECH_MAP = {
+  // --- Node / JS ---
+  express:'Node.js', fastify:'Node.js', koa:'Node.js', '@nestjs/core':'Node.js', nestjs:'Node.js',
+  next:'React', react:'React', 'react-dom':'React', 'react-native':'React',
+  vue:'Vue.js', nuxt:'Vue.js', '@angular/core':'Angular',
+  // --- Python ---
+  django:'Django', flask:'Flask', fastapi:'FastAPI', uvicorn:'Python', gunicorn:'Python',
+  // --- Ruby / PHP / .NET / JVM / Go ---
+  rails:'Rails', 'ruby-on-rails':'Rails', laravel:'Laravel', symfony:'PHP',
+  'microsoft.aspnetcore.app':'ASP.NET', 'spring-boot-starter':'Spring Boot',
+  'spring-boot-starter-web':'Spring Boot', 'spring-core':'Spring Boot',
+  // --- Datastores ---
+  pg:'PostgreSQL', psycopg2:'PostgreSQL', 'psycopg2-binary':'PostgreSQL', asyncpg:'PostgreSQL',
+  postgres:'PostgreSQL', postgresql:'PostgreSQL', 'org.postgresql':'PostgreSQL',
+  mysql:'MySQL', mysql2:'MySQL', pymysql:'MySQL', mariadb:'MySQL',
+  mongoose:'MongoDB', pymongo:'MongoDB', mongodb:'MongoDB',
+  redis:'Redis', ioredis:'Redis', 'redis-py':'Redis',
+  mssql:'SQL Server', pyodbc:'SQL Server',
+  // Go module tails. Found by running a real go.mod through this: `github.com/lib/pq` reduces to
+  // "pq", which matched nothing, so a Postgres-backed Go service reported only its cache.
+  pq:'PostgreSQL', pgx:'PostgreSQL', 'mongo-driver':'MongoDB', sarama:'Kafka', 'go-redis':'Redis',
+  elasticsearch:'Elasticsearch', '@elastic/elasticsearch':'Elasticsearch',
+  // --- Messaging ---
+  kafkajs:'Kafka', 'confluent-kafka':'Kafka', kafka:'Kafka', 'kafka-python':'Kafka',
+  amqplib:'RabbitMQ', pika:'RabbitMQ', rabbitmq:'RabbitMQ',
+  // --- Platform / ops ---
+  terraform:'Terraform', kubernetes:'Kubernetes', k8s:'Kubernetes',
+  prometheus:'Prometheus', grafana:'Prometheus', 'datadog-api-client':'Datadog', datadog:'Datadog',
+  'newrelic':'New Relic', 'elastic-apm-node':'Elasticsearch',
+  // --- Vector stores ---
+  pinecone:'Pinecone', 'pinecone-client':'Pinecone', weaviate:'Weaviate',
+  'weaviate-client':'Weaviate', 'qdrant-client':'Qdrant', qdrant:'Qdrant',
+};
+
+// Docker images are matched by substring because they carry registries and tags
+// ("postgres:16-alpine", "confluentinc/cp-kafka:7.5.0") rather than clean package names.
+const MANIFEST_IMAGE_HINTS = [
+  ['postgres', 'PostgreSQL'], ['mysql', 'MySQL'], ['mariadb', 'MySQL'], ['mongo', 'MongoDB'],
+  ['redis', 'Redis'], ['kafka', 'Kafka'], ['rabbitmq', 'RabbitMQ'],
+  ['elasticsearch', 'Elasticsearch'], ['prometheus', 'Prometheus'], ['grafana', 'Prometheus'],
+  ['nginx', 'Docker'], ['qdrant', 'Qdrant'], ['weaviate', 'Weaviate'],
+];
+
+function manifestKindFor(filename) {
+  const f = (filename || '').toLowerCase().split('/').pop();
+  if (f === 'package.json') return 'package.json';
+  if (f === 'requirements.txt' || /^requirements[-.\w]*\.txt$/.test(f)) return 'requirements.txt';
+  if (f === 'go.mod') return 'go.mod';
+  if (f === 'gemfile') return 'Gemfile';
+  if (f === 'pom.xml') return 'pom.xml';
+  if (/^docker-compose[-.\w]*\.ya?ml$/.test(f) || f === 'compose.yaml' || f === 'compose.yml') return 'docker-compose';
+  return null;
+}
+
+// Normalises one raw identifier to a recognised term, or null. Scoped npm names keep their scope
+// for lookup ('@angular/core') but also try the bare tail, and Maven/Go coordinates are reduced to
+// their last meaningful segment.
+function manifestTermFor(rawId) {
+  if (!rawId) return null;
+  const id = String(rawId).trim().toLowerCase();
+  if (!id) return null;
+  if (MANIFEST_TECH_MAP[id]) return MANIFEST_TECH_MAP[id];
+  const tail = id.split('/').pop();
+  if (MANIFEST_TECH_MAP[tail]) return MANIFEST_TECH_MAP[tail];
+  return null;
+}
+
+function parseManifest(content, filename) {
+  const kind = manifestKindFor(filename);
+  if (!kind) return { kind: null, entities: [] };
+  const found = new Map(); // term -> the identifier that produced it, for the chip's title
+  const add = (term, via) => { if (term && !found.has(term)) found.set(term, via); };
+
+  try {
+    if (kind === 'package.json') {
+      const pkg = JSON.parse(content);
+      const deps = Object.assign({}, pkg.dependencies, pkg.devDependencies, pkg.peerDependencies);
+      Object.keys(deps).forEach(d => add(manifestTermFor(d), d));
+    } else if (kind === 'requirements.txt') {
+      content.split('\n').forEach(line => {
+        const bare = line.split('#')[0].trim();
+        if (!bare) return;
+        // strips ==, >=, ~=, [extras] and environment markers
+        const name = bare.split(/[<>=!~;\[]/)[0].trim();
+        add(manifestTermFor(name), name);
+      });
+    } else if (kind === 'go.mod') {
+      content.split('\n').forEach(line => {
+        const m = line.trim().match(/^(?:require\s+)?([\w.\-]+\/[\w.\-\/]+)\s+v/);
+        if (m) add(manifestTermFor(m[1]), m[1]);
+      });
+    } else if (kind === 'Gemfile') {
+      (content.match(/gem\s+['"]([^'"]+)['"]/g) || []).forEach(g => {
+        const name = g.match(/gem\s+['"]([^'"]+)['"]/)[1];
+        add(manifestTermFor(name), name);
+      });
+    } else if (kind === 'pom.xml') {
+      (content.match(/<artifactId>([^<]+)<\/artifactId>/g) || []).forEach(a => {
+        const name = a.replace(/<\/?artifactId>/g, '').trim();
+        add(manifestTermFor(name), name);
+      });
+    } else if (kind === 'docker-compose') {
+      (content.match(/^\s*image:\s*["']?([^"'\s]+)/gm) || []).forEach(l => {
+        const img = l.replace(/^\s*image:\s*["']?/, '').toLowerCase();
+        const hit = MANIFEST_IMAGE_HINTS.find(([frag]) => img.includes(frag));
+        if (hit) add(hit[1], img);
+      });
+    }
+  } catch (e) {
+    // A manifest that doesn't parse is a silent no-match, not an error: handleDiagramFile falls
+    // through to the diagram parsers, which is the correct outcome for a file that merely happens
+    // to share a name.
+    return { kind, entities: [] };
+  }
+
+  return {
+    kind,
+    entities: Array.from(found, ([term, via]) => ({ text: term, source: `${kind}:${via}` })),
+  };
+}
+
 function parseDiagramInput(content, filename = 'diagram') {
   const lower = filename.toLowerCase();
   const trimmed = content.trim();
-  
+
+  // Manifests are checked first: package.json would otherwise be caught by no diagram parser at
+  // all and fall through to the raw-line fallback, producing chips of JSON punctuation.
+  const manifest = parseManifest(content, filename);
+  if (manifest.entities.length) return { type: 'manifest', entities: manifest.entities };
+
   if (lower.endsWith('.drawio') || lower.endsWith('.xml') || trimmed.startsWith('<mxfile') || trimmed.startsWith('<mxGraphModel')) {
     return { type: 'drawio', entities: parseDrawioXml(content) };
   } else if (lower.endsWith('.mmd') || lower.endsWith('.mermaid') || trimmed.startsWith('graph ') || trimmed.startsWith('flowchart ') || trimmed.startsWith('C4Context')) {
@@ -9546,8 +9690,13 @@ function handleDiagramFileSelect(event) {
 
 function displayDiagramPreview(fileName, type, entities) {
   uploadedDiagramEntities = entities;
+  uploadedSourceKind = type === 'manifest' ? 'manifest' : 'diagram';
   document.getElementById('diagramFileName').textContent = fileName;
-  document.getElementById('diagramSourceBadge').textContent = `Format: ${type.toUpperCase()} · ${entities.length} components detected`;
+  // A manifest yields technologies, not diagram components, and saying "components detected" for
+  // a package.json would misdescribe what the user is being asked to confirm.
+  document.getElementById('diagramSourceBadge').textContent = type === 'manifest'
+    ? `Dependency manifest · ${entities.length} recognised ${entities.length === 1 ? 'technology' : 'technologies'}`
+    : `Format: ${type.toUpperCase()} · ${entities.length} components detected`;
   
   const grid = document.getElementById('diagramEntitiesGrid');
   grid.innerHTML = '';
@@ -9619,7 +9768,17 @@ function analyzeDiagramEntities() {
     return;
   }
 
-  const synthesizedText = 'Existing architecture diagram components: ' + activeEntities.join(', ') + '. Evaluate stack modernization and AI additions.';
+  // Manifests get their own framing, and the wording is load-bearing in a way that is easy to get
+  // wrong. The obvious phrasing — "we already have an existing application" — is the authoritative
+  // trigger for detectSignals' brownfieldAiOnly, which SUPPRESSES the infrastructure sections
+  // (see synthesizeRequirementText's own comment). That is right for the wizard's brownfield
+  // "only add AI" path and exactly wrong here: someone who just handed over their package.json is
+  // asking what to do about their infrastructure, so suppressing it would answer a question they
+  // did not ask. This wording names the stack without claiming the AI-only scope.
+  const synthesizedText = uploadedSourceKind === 'manifest'
+    ? 'Current stack detected from a dependency manifest: ' + activeEntities.join(', ')
+      + '. Assess this stack and recommend what to keep, what to change, and what is missing.'
+    : 'Existing architecture diagram components: ' + activeEntities.join(', ') + '. Evaluate stack modernization and AI additions.';
   document.getElementById('input').value = synthesizedText;
   
   setAnalysis(synthesizedText, detectSignals(synthesizedText));
