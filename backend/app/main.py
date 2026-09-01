@@ -32,6 +32,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Logged at startup because a CORS misconfiguration is the single most confusing way this backend
+# fails: the API is up, `curl` works perfectly, and the browser shows an opaque network error with
+# no server-side trace. Printing the effective allowlist turns "why does the frontend get nothing"
+# into a one-line check. The default is localhost-only, so a real deployment that forgets to set
+# CORS_ORIGINS hits exactly this — the warning names that case explicitly.
+logging.getLogger(__name__).info(
+    "CORS allow_origins=%s — a browser on any other origin will be refused. "
+    "Set CORS_ORIGINS to the frontend's real origin for a hosted deployment.",
+    settings.cors_origin_list,
+)
+
 app.include_router(share.router)
 app.include_router(refine.router)
 app.include_router(ask.router)
