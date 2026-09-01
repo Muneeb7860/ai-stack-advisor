@@ -1714,8 +1714,8 @@
   </div>
 
   <div class="view-toggle" id="viewToggle">
-    <button id="viewCardsBtn" class="active icon-btn" onclick="setView('cards')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z"/></svg> Cards</button>
-    <button id="viewFlowBtn" class="icon-btn" onclick="setView('flow')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 7.125C2.25 6.504 2.754 6 3.375 6h6c.621 0 1.125.504 1.125 1.125v3.75c0 .621-.504 1.125-1.125 1.125h-6a1.125 1.125 0 0 1-1.125-1.125v-3.75ZM14.25 8.625c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v8.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-8.25ZM3.75 16.125c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v2.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-2.25Z"/></svg> Flow</button>
+    <button id="viewCardsBtn" class="icon-btn" onclick="setView('cards')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z"/></svg> Cards</button>
+    <button id="viewFlowBtn" class="active icon-btn" onclick="setView('flow')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 7.125C2.25 6.504 2.754 6 3.375 6h6c.621 0 1.125.504 1.125 1.125v3.75c0 .621-.504 1.125-1.125 1.125h-6a1.125 1.125 0 0 1-1.125-1.125v-3.75ZM14.25 8.625c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v8.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-8.25ZM3.75 16.125c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v2.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-2.25Z"/></svg> Flow</button>
   </div>
  </div>
 </div>
@@ -4957,12 +4957,13 @@ function renderRecommendations(s, rec){
   // exactly the thing this mode suppressed. Cards-only, forced, until Flow gets its own
   // AI-only-aware graph (a real follow-up, not done here).
   document.getElementById('viewToggle').style.display = s.brownfieldAiOnly ? 'none' : 'flex';
-  if (s.brownfieldAiOnly) setView('cards');
+  if (s.brownfieldAiOnly) setView('cards', false);
   document.getElementById('resultsShell').scrollIntoView({behavior:'smooth', block:'start'});
 
   const graph = buildFlowGraph({cloud,gw,iam,lang,arch,compute,msg,mesh,cache,db,containers,obs,fe,cicd,dns,llm,rag,mcp,guardrails,vectorDb,hybridConnectivity,multiCloudBridging}, s);
   renderFlow(graph);
-  setView(currentView); // preserve whichever view (Cards/Flow) the user had open across re-analysis
+  // Honour the per-analysis force without persisting it, so the user's preference survives.
+  setView(s.brownfieldAiOnly ? 'cards' : currentView, !s.brownfieldAiOnly);
 }
 
 let lastRequirementText = '', lastSignals = null, lastRecommendations = null;
@@ -5130,8 +5131,13 @@ function analyze(){
   if(!text){ alert('Please describe your business/product requirements first.'); return; }
   setAnalysis(text, detectSignals(text));
 }
-function setView(v){
-  currentView = v;
+// `remember` distinguishes the user's standing preference from a view forced for one analysis.
+// Found when Flow became the default: brownfieldAiOnly calls setView('cards'), which used to
+// overwrite currentView permanently — so a single brownfield analysis silently stranded the user
+// on Cards for every later analysis. Invisible while Cards was the default, a real leak once it
+// wasn't.
+function setView(v, remember = true){
+  if (remember) currentView = v;
   document.getElementById('viewCardsBtn').classList.toggle('active', v==='cards');
   document.getElementById('viewFlowBtn').classList.toggle('active', v==='flow');
   document.getElementById('results').style.display = v==='cards' ? 'block' : 'none';
@@ -5160,7 +5166,15 @@ function toggleAll(){
 // Flow View — n8n / Voiceflow / VectorShift-style node canvas rendering
 // of the same recommendation data as the card view above.
 // =====================================================================
-let currentView = 'cards';
+// Flow is the default view. The canvas shows the same picks as the card grid PLUS the
+// relationships between them, and since the cards collapsed to one-line summaries the comparison
+// stopped being "rich cards vs. sparse canvas" — both are now scan-first with detail on demand,
+// and only one of them shows how the pieces connect.
+// Gated on the narrow-screen layout landing first: before that, a 20-node graph auto-fit to
+// scale 0.25 on a phone and every label was unreadable, so defaulting to it would have been
+// worse than the boring option. brownfieldAiOnly still forces cards (see renderRecommendations)
+// because Flow renders infra topology that mode deliberately suppresses.
+let currentView = 'flow';
 const FLOW_CATS = {
   client:  {label:'Client',  color:'#ef5b8d'},
   edge:    {label:'Edge',    color:'#5b8def'},
@@ -5524,7 +5538,7 @@ if (typeof window !== 'undefined' && window.addEventListener) {
     flowResizeTimer = setTimeout(() => {
       if (flowShouldUseVerticalLayout() === !!flowState.vertical) return;
       renderFlow(layoutFlowGraph(flowState.graph));
-      if (currentView === 'flow') flowFit();
+      if (document.getElementById('flowWrap')?.style.display === 'block') flowFit();
     }, 150);
   });
 }
