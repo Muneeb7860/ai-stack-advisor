@@ -135,6 +135,33 @@ def test_unknown_card_title_is_treated_as_cheap_to_reverse_not_crashed_on():
     assert out == [1, False, 3]
 
 
+# ------------------------------------------------- Tier 2: visual hierarchy within the list
+
+def test_only_rank_one_is_alarm_coloured():
+    """Found by looking at the rendered block, not the DOM: every row carried an amber badge, so
+    the colour discriminated nothing while being the loudest thing on screen — the one genuinely
+    urgent item read exactly like the three "fine, just moderate" ones below it. A triage list
+    has to differentiate, so the alarm colour is reserved for rank 1."""
+    text = _text()
+    assert ".attention-row.rank-1 .attention-rank{color:var(--warn);}" in text
+    m = re.search(r"\.attention-rank\{([^}]*)\}", text)
+    assert m and "var(--muted2)" in m.group(1), "the base rank marker must not be alarm-coloured"
+
+
+def test_hard_to_reverse_flag_is_context_not_alarm():
+    """It is true of most items that qualify for this list, so it cannot also be the thing that
+    signals urgency. Confidence is what actually varies, so that carries the colour."""
+    text = _text()
+    m = re.search(r"\.attention-flag\.hard\{([^}]*)\}", text)
+    assert m and "var(--warn)" not in m.group(1), "'hard to reverse' must not be alarm-coloured here"
+    m2 = re.search(r"\.attention-flag\.conf-low\{([^}]*)\}", text)
+    assert m2 and "var(--warn)" in m2.group(1), "low confidence is the differentiator and keeps the colour"
+
+
+def test_rank_class_is_emitted_on_each_row():
+    assert 'class="attention-row rank-${it.rank}"' in _text()
+
+
 # --------------------------------------------------------------- Tier 3: collapsed by default
 
 def test_sections_are_no_longer_all_hardcoded_open():

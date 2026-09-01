@@ -458,10 +458,15 @@
   }
   .attention-row:first-of-type{border-top:none;}
   .attention-row:hover .attention-title{color:var(--accent);}
+  /* Only rank 1 is alarm-coloured. Found by actually looking at the rendered block: every row
+     carried an amber badge, so the colour discriminated nothing while being the loudest thing
+     on screen — and the one genuinely urgent item (hard to reverse AND low signal) read exactly
+     like the three "fine, just moderate" ones below it. A triage list has to differentiate. */
   .attention-rank{
-    font-family:var(--font-mono); font-weight:700; color:var(--warn); flex-shrink:0;
+    font-family:var(--font-mono); font-weight:700; color:var(--muted2); flex-shrink:0;
     width:16px; text-align:center; line-height:1.5;
   }
+  .attention-row.rank-1 .attention-rank{color:var(--warn);}
   .attention-body{flex:1; min-width:0;}
   .attention-title{font-size:14px; font-weight:600; color:var(--text); display:block;}
   .attention-pick{font-family:var(--font-mono); font-weight:400; color:var(--muted2); font-size:13px;}
@@ -471,7 +476,10 @@
     font-size:10px; text-transform:uppercase; letter-spacing:0.04em; white-space:nowrap;
     padding:2px 7px; border-radius:99px; border:1px solid var(--border); color:var(--muted);
   }
-  .attention-flag.hard{color:var(--warn); border-color:color-mix(in srgb, var(--warn) 35%, transparent);}
+  /* "Hard to reverse" is context, not alarm — it's true of most items that qualify for this
+     list, so colouring it amber made all four rows look equally urgent. Confidence is what
+     actually varies here, so that's what carries the colour, and only at its worst value. */
+  .attention-flag.hard{color:var(--muted2);}
   .attention-flag.conf-low{color:var(--warn); border-color:color-mix(in srgb, var(--warn) 35%, transparent);}
   @media (max-width:560px){
     .attention-row{flex-wrap:wrap;}
@@ -4613,7 +4621,7 @@ function renderRecommendations(s, rec){
       <div class="attention-head">Needs your attention</div>
       <div class="attention-sub">${attentionItems.length} of ${stackCards.length} picks worth a second look before you commit — ranked by how expensive they are to reverse against how much signal supported them.</div>
       ${attentionItems.map(it => `
-        <a class="attention-row" href="#stack">
+        <a class="attention-row rank-${it.rank}" href="#stack">
           <span class="attention-rank">${it.rank === 1 ? '!' : '·'}</span>
           <span class="attention-body">
             <span class="attention-title">${it.title}<span class="attention-pick"> — ${String(it.pick).split(/[(—·]/)[0].trim()}</span></span>
@@ -6853,7 +6861,11 @@ function computeAttentionItems(stackCards){
       reason = 'Expensive to reverse, and we had little signal to go on — worth deciding deliberately rather than accepting the default.';
     } else if (hardToReverse && conf === 'medium') {
       rank = 2;
-      reason = 'Expensive to reverse, and the signal behind it was only moderate — worth a second look before committing.';
+      // Deliberately terser than rank 1's. Seen in the rendered block: when several rank-2 items
+      // appear together they repeated one identical sentence that the two badges beside them
+      // already stated, which is bulk rather than information. The top item earns the fuller
+      // explanation because its combination is the one that actually needs explaining.
+      reason = 'Moderate signal behind a pick that is expensive to undo.';
     } else if (conf === 'low') {
       rank = 3;
       reason = 'Little signal behind this one, though it is comparatively cheap to change later.';
