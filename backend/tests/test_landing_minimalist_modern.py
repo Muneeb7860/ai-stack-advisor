@@ -130,9 +130,41 @@ def test_entrance_motion_has_a_failsafe():
     IntersectionObserver did not fire at all in the browser used to build this."""
     t = _landing()
     assert "IntersectionObserver" in t
-    m = re.search(r"setTimeout\(function\(\)\{\s*Array\.prototype\.forEach\.call\(targets[^}]*\}\s*\);?\s*\}, (\d+)\);", t, re.S)
-    assert m, "no unconditional reveal failsafe found"
-    assert int(m.group(1)) <= 2000, "the failsafe must fire promptly, not eventually"
+    m = re.search(r"setTimeout\(function\(\)\{(.*?)\}, (\d+)\);", t, re.S)
+    assert m, "no reveal failsafe found"
+    assert int(m.group(2)) <= 2000, "the failsafe must fire promptly, not eventually"
+
+
+def test_the_failsafe_does_not_depend_on_transitions():
+    """The failsafe went through three versions, each defeated by the next thing measured:
+
+      1. add .in  -> reveals via a CSS transition, and a context with a dead observer is often one
+         with dead transitions too (hidden/throttled tab).
+      2. also remove js-motion -> the cascade then says opacity:1, but a transition ALREADY in
+         flight keeps running and holds the old value. Six staggered elements sat frozen at
+         opacity 0 while reporting playState 'running'.
+      3. inline transition:none + opacity/transform -> cancels running transitions outright, and
+         inline styles cannot be lost to a cascade change.
+
+    A last line of defence must not depend on machinery that could itself be broken. Verified in a
+    hidden tab where transitions freeze and requestAnimationFrame never fires: all 13 elements
+    visible, zero running transitions."""
+    t = _landing()
+    m = re.search(r"setTimeout\(function\(\)\{(.*?)\}, \d+\);", t, re.S)
+    body = m.group(1)
+    assert "classList.remove('js-motion')" in body, "must drop the class that hides content"
+    assert "style.transition = 'none'" in body, "must cancel transitions already in flight"
+    assert "style.opacity = '1'" in body, "must set the value inline, not via the cascade"
+    # Ordering matters: cancelling the transition has to happen before the value is set.
+    assert body.index("style.transition") < body.index("style.opacity")
+
+
+def test_the_failsafe_yields_to_a_working_observer():
+    """A page whose observer works should keep its scroll animation, not have it cancelled a
+    second in."""
+    t = _landing()
+    m = re.search(r"setTimeout\(function\(\)\{(.*?)\}, \d+\);", t, re.S)
+    assert "if (document.querySelector('.reveal.in')) return;" in m.group(1)
 
 
 def test_hidden_state_is_opt_in_from_javascript():

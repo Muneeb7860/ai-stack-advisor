@@ -369,8 +369,31 @@
   // that if the observer never fires, the page is permanently blank below the hero: the worst
   // failure a landing page can have, and silent. Verified as a real risk, not theoretical —
   // IntersectionObserver did not fire at all in the browser this was built in.
+  //
+  // It works by REMOVING js-motion rather than adding .in, which matters: .in reveals via a CSS
+  // transition, and a context where the observer is dead is often one where transitions are dead
+  // too (a hidden or throttled tab — measured: visibilityState 'hidden', rAF never firing,
+  // transitions frozen at their start value). A failsafe must not depend on the machinery it
+  // exists to compensate for. Dropping js-motion makes the base `.reveal{opacity:1}` apply with
+  // no transition involved at all.
+  //
+  // Skipped entirely if the observer already revealed something, so a working page keeps its
+  // scroll animation instead of having it cancelled a second in.
   setTimeout(function(){
-    Array.prototype.forEach.call(targets, function(el){ el.classList.add('in'); });
+    if (document.querySelector('.reveal.in')) return;
+    document.documentElement.classList.remove('js-motion');
+    Array.prototype.forEach.call(targets, function(el){
+      // Inline, with transition:none FIRST. Removing the class alone was not enough: a transition
+      // already in flight keeps running and holds the old value, and in a hidden or throttled tab
+      // it never advances — measured here with six staggered elements frozen at opacity 0 while
+      // their transitions reported playState 'running'. Setting transition:none cancels them
+      // outright, and inline styles cannot be lost to a cascade change. This is the last line of
+      // defence, so it depends on nothing that could itself be broken.
+      el.style.transition = 'none';
+      el.style.opacity = '1';
+      el.style.transform = 'none';
+      el.classList.add('in');
+    });
   }, 1200);
 })();
 </script>
