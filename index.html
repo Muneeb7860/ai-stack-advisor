@@ -1107,6 +1107,14 @@
   .doc-signal-src{font-size:12px; color:var(--muted2); line-height:1.5; margin-top:4px; padding-left:22px;}
   .doc-dropped{font-size:12px; color:var(--muted); line-height:1.55; padding:9px 11px; margin-top:4px;
     background:color-mix(in srgb, var(--warn) 8%, transparent); border-radius:var(--radius-sm);}
+  /* The low-priority signals — detected, but changing them changes nothing. Same collapsed-by-
+     default idiom as summary.section-title, quieter styling since this is a lower-stakes list. */
+  .doc-noeffect{margin-top:6px;}
+  .doc-noeffect summary{font-size:12px; color:var(--muted); cursor:pointer; padding:4px 2px; list-style:none;}
+  .doc-noeffect summary::-webkit-details-marker{display:none;}
+  .doc-noeffect summary::before{content:'▸'; display:inline-block; margin-right:5px; font-size:10px; color:var(--muted2);}
+  .doc-noeffect[open] summary::before{content:'▾';}
+  .doc-noeffect .doc-signal{opacity:0.72;}
   .ha-evidence-result{font-size:12.5px; line-height:1.5; margin-top:8px; padding:8px 12px; border-radius:var(--radius-sm);}
   /* Was #2f8a5a / #d9534f — one-off literals that ignored the theme and, measured against their
      own tinted grounds, failed WCAG in BOTH themes as text (3.78/3.70 for match, 4.20/3.50 for
@@ -10592,14 +10600,48 @@ function renderDocumentConfirmHtml(doc){
   const esc = (x) => String(x == null ? '' : x)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const sigs = Object.keys(doc.provenance || {}).sort();
-  const rows = sigs.map(k => {
+
+  // Found live against this repo's own PRD.docx: a real 8,767-word document produced 46 signal
+  // checkboxes. Technically every one was correct — the PRD mentions AWS, Azure, Datadog etc. as
+  // examples in its own spec prose — but 46 checkboxes is not a confirm step anyone reads, it is
+  // the wall this session's earlier "too much data popping up" complaint was about, recurring in a
+  // feature built after that lesson.
+  //
+  // Split by DERIVED effect, not by guessing which mentions are "real": for each signal, actually
+  // remove it and diff the recommendation. Reusing the exact check the what-if levers use to avoid
+  // shipping a dead control — applied here in reverse, to avoid showing a checkbox for a mention
+  // that changes nothing. Measured on that same PRD: 46 detected, 12 changed a pick, 34 did not.
+  //
+  // This is a triage heuristic, not the actual correction mechanism — opting a signal out later
+  // works by appending a sentence to the requirement text and re-running detectSignals (see
+  // analyzeDiagramEntities), which is text-level and can in principle differ from a direct signal
+  // flip. The two are expected to agree in the overwhelming case (a sentence like "onPrem was
+  // inferred from this document but is not a requirement" is not designed to accidentally trip
+  // another keyword), and this split only decides review PRIORITY, never what gets counted.
+  const baseSignals = detectSignals(doc.text);
+  const baseRec = computeRecommendations(baseSignals);
+  const withEffect = [], noEffect = [];
+  sigs.forEach(k => {
+    const probe = Object.assign({}, baseSignals, {[k]: false});
+    const changed = diffRecommendations(baseRec, computeRecommendations(probe)).length > 0;
+    (changed ? withEffect : noEffect).push(k);
+  });
+
+  const row = (k) => {
     const src = (doc.provenance[k] || [])[0] || {};
     const where = src.heading ? `from “${esc(src.heading)}”` : 'from the document body';
     return `<div class="doc-signal" data-signal="${esc(k)}">
         <label><input type="checkbox" checked onchange="onDocumentSignalToggle('${esc(k)}', this.checked)"> <b>${esc(k)}</b></label>
         <div class="doc-signal-src">${where} — “${esc((src.excerpt || '').slice(0, 110))}…”</div>
       </div>`;
-  }).join('');
+  };
+
+  const rows = withEffect.map(row).join('');
+  const noEffectHtml = noEffect.length ? `
+    <details class="doc-noeffect">
+      <summary>${noEffect.length} more detected, with no effect on this recommendation</summary>
+      ${noEffect.map(row).join('')}
+    </details>` : '';
 
   const dropped = (doc.excludedBlocks || []).map(b => esc(b.heading)).filter(Boolean);
   const droppedHtml = dropped.length ? `
@@ -10612,7 +10654,8 @@ function renderDocumentConfirmHtml(doc){
 
   return `<div class="doc-confirm">
       <div class="doc-confirm-head">Uncheck anything the document did not actually ask for. Everything below was inferred, and the wording that produced it is shown so you can judge it.</div>
-      ${rows || '<div class="doc-signal-src">No signals were detected in this document.</div>'}
+      ${sigs.length ? (rows || '<div class="doc-signal-src">Nothing detected here changes the recommendation — see below.</div>') : '<div class="doc-signal-src">No signals were detected in this document.</div>'}
+      ${noEffectHtml}
       ${droppedHtml}
     </div>`;
 }
