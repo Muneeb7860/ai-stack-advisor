@@ -14,7 +14,7 @@ children.push(...coverTitle(
   'Product Requirements Document',
   'Functional & technical specification',
   [
-    ['Document Version', '1.11'],
+    ['Document Version', '1.12'],
     ['Status', 'v1 and v2 shipped, frontend actually wired to the backend — see Section 7.7, Section 9.2, and Release Plan (Section 11). Hexagonal diagram-export architecture, AI Opportunity Layer, technology-catalog unification, Huawei Cloud vendor support, and Hybrid Connectivity added in a later session — see Section 7.2, 7.7, 9.4, and Release Plan.'],
     ['Prepared by', 'Muneeb, with Claude (Cowork)'],
     ['Date', new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })],
@@ -40,6 +40,7 @@ children.push(reqTable(
     ['1.10', 'Later session: the results presentation was restructured, which is the largest change to how this product is read since v1. Added Section 7.11 (FR-58 through FR-62): the report leads with the recommendation instead of echoing the user\'s own detected signals back at them, a ranked "needs your attention" list surfaces the picks that are expensive to reverse AND weakly supported, and the 19 sections plus 24 stack cards now default to collapsed rather than all-expanded. Flow View became the default view with Cards as the alternative, after Flow gained a single-column layout for narrow screens (it was previously illegible on a phone). Also: Harness Readiness gained score history and feedback capture (FR-56, FR-57), and four deployment-configuration gaps were closed (NFR-6). See BRD Section 8.2.'],
     ['1.9', 'Later session: two additions. (1) Harness Readiness evidence upload (Section 7.9, FR-50 through FR-52) — an optional per-question file attachment that checks a real file against the user\'s self-reported score and flags mismatches without overriding them; the Shape A/B hybrid scoped in docs/harness-engineering/HARNESS_EVIDENCE_SCOPE.md, staying inside NFR-1 by reading one user-picked file in the browser. (2) LLM Observability as a new recommendation category (Section 7.10, FR-53 through FR-55) — Langfuse/Braintrust, closing a real gap where the product recommended AI stacks but said nothing about tracing or evaluating the LLM calls it recommended. Both client-side only. Note for future maintainers: FR-53\'s not-applicable gating was found wrong in post-merge review (it recommended LLM tracing to stacks with no LLM at all) and is documented here in its corrected form.'],
     ['1.11', 'Later session: closed the last two items from the interface audit. A command palette and keyboard-first navigation (Section 7.12, FR-63 through FR-65) address what the audit scored as the weakest dimension by a wide margin — only Enter, Space and Escape were handled anywhere, with zero meta/ctrl shortcuts. A density pass (FR-66) retired redundant nested borders. The audit\'s third item, empty states, was investigated and found NOT to be a real gap: that score came from a grep for a class name rather than a check of behaviour, and every empty case is in fact handled. Also applied a design system to landing.html only (FR-67), deliberately not to the dashboard.'],
+    ['1.12', 'Later session: three fixes found by using the product rather than reading it. A light-theme colour defect (Section 7.13, FR-68) — the semantic signal colours were hardcoded as the dark theme\'s values in eleven rules, so the guardrails list rendered at 1.59:1 contrast on a white card and the "recommended vendor" border at 1.37:1. The Harness Readiness evidence check confirmed under-claims as correct (FR-69), telling a user their score checked out while holding a file that showed otherwise. And the MCP server, shipped and tested since the rule-engine port, was promoted nowhere in the interface (FR-70).'],
   ]
 ));
 
@@ -255,6 +256,15 @@ children.push(p('See BRD Section 7 for the full metric definitions (completion r
 
 // ---------- Release plan ----------
 children.push(h1('11. Release Plan'));
+children.push(h2('7.13 Accessibility, Evidence Integrity & Agent Access'));
+children.push(p('Three defects found by exercising the product rather than reviewing it: rendering it in the light theme, running a real audit through the evidence checker with actual repository files, and asking what a shipped capability looks like to someone who has not read the source. None was visible from the code alone.'));
+children.push(reqTable(['ID', 'Requirement', 'Status'], [1000, 5600, 1800], [
+  ['FR-68', 'Semantic signal colours resolve per theme. They were hardcoded as the dark theme\'s literal values in eleven rules, so they did not follow the light-theme override: the guardrails list rendered at 1.59:1 contrast against WCAG\'s 4.5:1 minimum, and the border marking which vendor was recommended at 1.37:1 against a 3:1 minimum for a boundary that carries information. Text now uses separate text-safe tokens rather than the signal colours, because the signal colours are tuned for a dark ground and are not legible as text on a light one — the obvious fix would have left the text unreadable.', 'Shipped — client-side only'],
+  ['FR-69', 'Evidence that supports a HIGHER level than the user selected is reported as such, rather than confirmed as a match. Previously any selection at or below what the file showed rendered "Evidence checks out", so a component scored 0 whose evidence showed 3 was confirmed and then named as the recommended place to start — the one area the user demonstrably already had. Still a ceiling test and still never overrides: the score is left where the user put it.', 'Shipped — client-side only'],
+  ['FR-70', 'The MCP server is reachable from the interface: an install modal with a copy-ready configuration, a persistent sidebar entry, a command-palette action, and a landing-page section. Available before any analysis has been run, unlike the export actions. The advertised configuration is verified against the server itself — module path against the filesystem, tool name against its definition, and the required DATABASE_URL against the startup validator that enforces it — so a snippet that could not work fails in this repository rather than on a user\'s machine.', 'Shipped'],
+]));
+children.push(p('Evidence uploads are also size-limited and report read failures. A failure log is exactly the kind of evidence that can be large, and the audit is a five-step form, so an unbounded read costs the user every answer already given; a failed read was previously indistinguishable from the checker legitimately having nothing to say.'));
+
 children.push(reqTable(['Release', 'Contents', 'Status'], [1600, 6000, 1800], [
   ['v1.0', 'Core stack (15 categories) + AI/LLM recommendation + RAG + guardrails + MCP servers needed', 'Shipped'],
   ['v1.1', 'Trade-off decisions, cost/throughput, governance sections; persona tagging', 'Shipped'],
@@ -275,6 +285,8 @@ children.push(reqTable(['Release', 'Contents', 'Status'], [1600, 6000, 1800], [
   ['v2.10', 'Deployment prerequisites (NFR-6) — API base resolution, migrations and port binding in the image, and a startup CORS log. No infrastructure provisioned; see docs/deployment/GCP_DEPLOYMENT_PLAN.md', 'Shipped'],
   ['v2.11', 'Command palette and keyboard-first navigation (FR-63 through FR-65) — closes the interface audit\'s weakest dimension', 'Shipped'],
   ['v2.12', 'Density pass (FR-66) and the landing-page visual treatment (FR-67)', 'Shipped'],
+  ['v2.13', 'Light-theme colour defect (FR-68) and Harness Readiness evidence integrity (FR-69)', 'Shipped'],
+  ['v2.14', 'MCP server surfaced in the interface (FR-70)', 'Shipped'],
 ]));
 
 // ---------- Known limitations ----------
