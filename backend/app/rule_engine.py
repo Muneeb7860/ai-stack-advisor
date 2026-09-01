@@ -2574,6 +2574,12 @@ def apply_domain_floors(rec: dict, s: dict) -> None:
         rec["messaging"] = domain_floor_pick("no server-side services to connect via messaging", why)
         rec["compute"] = domain_floor_pick("logic runs inside the browser sandbox, not on a provisioned compute tier", why)
         rec["architecture"] = domain_floor_pick("a single browser extension has no service architecture style to choose", why)
+        # Added after review: this floor said "nothing runs server-side" while the
+        # sandbox category still recommended a hosted SaaS. Same incoherence the
+        # on-prem branch in pick_sandbox_vendor already avoided.
+        rec["sandbox"] = domain_floor_pick(
+            "nothing runs on infrastructure you provision, so a hosted multi-tenant sandbox service has nothing to attach to — isolate locally instead (a container, or gVisor/Firecracker if the code is genuinely untrusted)", why)
+        rec["sandbox_vendor"] = rec["sandbox"]
         rec["frontend"] = {
             "v": "Manifest V3 browser extension (background service worker + popup UI in vanilla JS or a lightweight framework)",
             "conf": "high", "why": why,
@@ -2608,6 +2614,12 @@ def apply_domain_floors(rec: dict, s: dict) -> None:
         rec["architecture"] = domain_floor_pick("a single CLI tool has no service architecture style to choose", why)
         rec["frontend"] = domain_floor_pick(
             "command-line interface only — no web/mobile frontend (argparse, Click, or Typer for Python; Cobra for Go; etc.)", why)
+        # Added after review: this floor said "nothing runs server-side" while the
+        # sandbox category still recommended a hosted SaaS. Same incoherence the
+        # on-prem branch in pick_sandbox_vendor already avoided.
+        rec["sandbox"] = domain_floor_pick(
+            "nothing runs on infrastructure you provision, so a hosted multi-tenant sandbox service has nothing to attach to — isolate locally instead (a container, or gVisor/Firecracker if the code is genuinely untrusted)", why)
+        rec["sandbox_vendor"] = rec["sandbox"]
         rec["database"] = domain_floor_pick(
             "no server-side database — read/write local files directly, or add embedded SQLite only if you need structured queries over the data", why)
     elif s.get("staticSite"):
@@ -2624,6 +2636,12 @@ def apply_domain_floors(rec: dict, s: dict) -> None:
             "no server infrastructure to observe — a lightweight client-side analytics snippet is enough if desired", why)
         rec["messaging"] = domain_floor_pick("no server-side services to connect via messaging", why)
         rec["compute"] = domain_floor_pick("pure static delivery — no server compute tier", why)
+        # Added after review: this floor said "nothing runs server-side" while the
+        # sandbox category still recommended a hosted SaaS. Same incoherence the
+        # on-prem branch in pick_sandbox_vendor already avoided.
+        rec["sandbox"] = domain_floor_pick(
+            "nothing runs on infrastructure you provision, so a hosted multi-tenant sandbox service has nothing to attach to — isolate locally instead (a container, or gVisor/Firecracker if the code is genuinely untrusted)", why)
+        rec["sandbox_vendor"] = rec["sandbox"]
         rec["architecture"] = domain_floor_pick("a static site has no application architecture style — just markup and assets", why)
 
 

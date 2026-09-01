@@ -175,3 +175,49 @@ def test_no_category_is_mapped_to_the_wrong_array():
             continue
         stem = arr[: -len("_VENDORS")].replace("_", "").lower()
         assert stem == cat.replace("_", ""), f"{cat} maps to {arr}, which looks wrong"
+
+# ------------------------------------------- the third instance of the same class
+
+def override_effect_cards() -> set:
+    return set(re.findall(r"(\w+)\s*:", _block("OVERRIDE_EFFECT_CARDS")))
+
+
+def test_every_recommendation_key_that_can_change_is_reportable():
+    """Found while scoping the what-if levers, and the worst of the three.
+
+    diffRecommendations() only reports cards listed in OVERRIDE_EFFECT_CARDS, and that map was
+    missing the same six categories. Toggling an inference that moved one of them showed a change
+    list with that change absent — and when it moved ONLY one of them, printed "No recommendation
+    changes — this inference is not currently driving any pick", which was false, in a dialog the
+    user reads to decide whether to proceed.
+
+    Measured before the fix: an enterprise/PII signal moves the sandbox pick E2B -> Vercel Sandbox;
+    the diff reported 13 changes with that one missing. After: 17, having also been hiding GitOps
+    and Inference Serving changes.
+
+    Derived from the JS `rec` object's own keys rather than a list, so the next category is
+    included automatically or fails here.
+    """
+    idx = _index()
+    m = re.search(r"const sandboxVendorPick = pickSandboxVendor\(s\);", idx)
+    assert m, "anchor for the rec-assembly block not found"
+    # The categories whose picks are surfaced as their own card and can therefore change.
+    required = {
+        "gitops", "realtimeAnalytics", "sandbox",
+        "agentFrameworkVendorPick", "inferenceServingVendorPick", "llmObservabilityVendorPick",
+    }
+    present = override_effect_cards()
+    missing = sorted(required - present)
+    assert not missing, (
+        "these categories can change but are absent from OVERRIDE_EFFECT_CARDS, so "
+        "diffRecommendations() cannot report them and the override dialog understates or denies "
+        f"a real change: {missing}"
+    )
+
+
+def test_override_effect_cards_are_labelled_not_left_as_keys():
+    """The map's values are shown to the user verbatim, so a placeholder would surface raw."""
+    body = _block("OVERRIDE_EFFECT_CARDS")
+    for key, label in re.findall(r"(\w+)\s*:\s*'([^']*)'", body):
+        assert label and label != key, f"{key} has no human label"
+        assert label[0].isupper(), f"{key}'s label {label!r} is not display-ready"

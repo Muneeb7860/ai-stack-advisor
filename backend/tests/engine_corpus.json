@@ -37,6 +37,9 @@
     "Enterprise agent running untrusted code for customers, PII in scope, strict security review.",
     "Air-gapped environment, no public cloud. The agent must execute untrusted code locally.",
     "We already use Daytona to run generated code in our agent product.",
-    "A code interpreter feature for our SaaS, sandboxed execution of arbitrary code, high concurrency."
+    "A code interpreter feature for our SaaS, sandboxed execution of arbitrary code, high concurrency.",
+    "A local CLI tool that executes untrusted code snippets on the operator's machine.",
+    "A browser extension that runs untrusted user scripts in the page.",
+    "A static marketing site plus a code interpreter that runs untrusted code."
   ]
 }

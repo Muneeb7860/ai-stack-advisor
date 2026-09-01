@@ -225,3 +225,43 @@ def test_the_alternatives_note_carries_the_burst_caveat():
     assert m, "SANDBOX_NOTE not found"
     note = m.group(1).lower()
     assert "sequential" in note and "burst" in note
+
+# --------------------------------------------------------------------- domain floors
+
+@pytest.mark.parametrize("text,label", [
+    ("A local CLI tool that executes untrusted code snippets.", "cliTool"),
+    ("A browser extension that runs untrusted user scripts.", "browserExtension"),
+])
+def test_a_stack_with_no_provisioned_infrastructure_gets_no_hosted_sandbox(text, label):
+    """Found in review.
+
+    The domain-floor blocks already said, for these stacks, "no server-side hosting", "nothing
+    runs server-side to containerize" and "compute: not applicable" — and the sandbox category
+    still answered E2B, a hosted multi-tenant SaaS. The engine was contradicting itself inside one
+    set of recommendations.
+
+    It is the same reasoning pick_sandbox_vendor's own on-prem branch already applied, just not
+    applied here, because the floors enumerate categories by hand and this one was added after
+    they were written. Fourth instance in this codebase of "a new category missed a place that
+    enumerates categories" — see test_category_wiring.py for the other three.
+    """
+    rec = recommend_stack(text)["recommendations"]
+    pick = rec["sandbox"]
+    assert "Not applicable" in pick["v"], (
+        f"{label}: compute is {rec['compute']['v'][:40]!r} but sandbox recommends "
+        f"{pick['v'][:40]!r} — a hosted service for a stack with nothing to host it against"
+    )
+    for vendor in ("E2B", "Vercel Sandbox", "Modal", "Daytona"):
+        assert vendor not in pick["v"]
+
+
+def test_the_floor_still_names_a_real_local_alternative():
+    """"Not applicable" alone would be unhelpful here: the user genuinely does run untrusted code,
+    they just have nowhere hosted to run it. The answer is local isolation, not silence."""
+    pick = recommend_stack("A local CLI tool that executes untrusted code snippets.")["recommendations"]["sandbox"]
+    assert "gVisor" in pick["v"] or "Firecracker" in pick["v"] or "container" in pick["v"]
+
+
+def test_the_floor_does_not_fire_for_an_ordinary_service():
+    """Guards the opposite error — a floor that swallows the normal case."""
+    assert recommend_stack(CODE_EXEC)["recommendations"]["sandbox"]["v"] == "E2B"

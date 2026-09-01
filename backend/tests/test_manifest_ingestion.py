@@ -291,9 +291,56 @@ def test_manifest_and_diagram_uploads_are_labelled_differently():
 def test_the_upload_screen_says_manifests_are_accepted():
     """It previously described diagrams only, so the capability would have been invisible."""
     text = _text()
-    m = re.search(r'<input type="file" id="diagramFileInput"[^>]*accept="([^"]*)"', text)
-    assert m, "the file input was not found"
-    assert ".json" in m.group(1), "package.json cannot be chosen in the file picker"
     screen = text[text.index('id="screenUpload"'):]
     screen = screen[:screen.index("</div>\n</div>")] if "</div>\n</div>" in screen else screen[:6000]
     assert "package.json" in screen
+
+
+def test_every_advertised_manifest_format_is_actually_selectable():
+    """Found in review, and the first version of this test is why it survived: it asserted only
+    that ".json" appeared in the accept filter, which was true while Gemfile was unreachable.
+
+    `accept` can only express extensions or MIME types. A Gemfile has neither — the literal token
+    "Gemfile" was ignored by the browser, so the picker filtered Gemfiles out entirely. The screen
+    advertised Gemfile support and the parser handled it, but it could only be supplied by
+    drag-and-drop, which takes the same code path and applies no filter. Two input routes
+    disagreeing about what is acceptable was the real defect.
+
+    Asserted as a property rather than a fixed list: every format the copy names must be reachable
+    through the picker.
+    """
+    text = _text()
+    m = re.search(r'<input type="file" id="diagramFileInput"([^>]*)>', text)
+    assert m, "the file input was not found"
+    accept = re.search(r'accept="([^"]*)"', m.group(1))
+
+    screen = text[text.index('id="screenUpload"'):][:6000]
+    advertised = set(re.findall(
+        r"\b(package\.json|requirements\.txt|go\.mod|Gemfile|pom\.xml|docker-compose\.yml)\b", screen))
+    assert advertised, "the screen no longer names any manifest format"
+
+    if accept is None:
+        return  # unfiltered: everything the parser handles is reachable
+
+    tokens = {tok.strip().lower() for tok in accept.group(1).split(",")}
+    bad = [t for t in tokens if not t.startswith(".") and "/" not in t]
+    assert not bad, f"accept contains tokens that are neither an extension nor a MIME type: {bad}"
+
+    unreachable = [
+        f for f in sorted(advertised)
+        if "." not in f or ("." + f.rsplit(".", 1)[1].lower()) not in tokens
+    ]
+    assert not unreachable, (
+        f"these formats are advertised on the upload screen but cannot be chosen in the file "
+        f"picker: {unreachable}"
+    )
+
+
+@requires_node
+@pytest.mark.parametrize("filename", [
+    "package.json", "requirements.txt", "go.mod", "Gemfile", "pom.xml", "docker-compose.yml",
+])
+def test_every_advertised_format_is_recognised_by_the_parser(filename):
+    """The other half of the same property: advertised, selectable, AND understood."""
+    out = _js(f"console.log(JSON.stringify(manifestKindFor({json.dumps(filename)})));")
+    assert out is not None, f"{filename} is advertised but manifestKindFor does not recognise it"

@@ -1688,7 +1688,15 @@
 
     <div class="card" style="padding:28px 24px;">
       <div class="dropzone" id="diagramDropzone" tabindex="0" role="button" aria-label="Upload architecture diagram file" onclick="document.getElementById('diagramFileInput').click()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('diagramFileInput').click();}">
-        <input type="file" id="diagramFileInput" accept=".drawio,.xml,.mmd,.mermaid,.puml,.plantuml,.svg,.txt,.json,.mod,.yml,.yaml,Gemfile" style="display:none;" onchange="handleDiagramFileSelect(event)">
+        <!-- No accept= filter, deliberately. A Gemfile has no extension, and accept can only
+           express extensions or MIME types — "Gemfile" is neither, so the browser ignored it
+           and the picker filtered Gemfiles out entirely. The screen advertised Gemfile support
+           and the parser handled it, but it was unreachable through the browse button while
+           working fine via drag-and-drop, which took the same code path. Two input routes
+           disagreeing about what is acceptable is the actual bug; an unfiltered picker matches
+           the drop zone, and parseDiagramInput already falls through harmlessly on anything
+           it does not recognise. -->
+        <input type="file" id="diagramFileInput" style="display:none;" onchange="handleDiagramFileSelect(event)">
         <div class="dropzone-icon">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"/></svg>
         </div>
@@ -4458,6 +4466,10 @@ function applyDomainFloors(rec, s){
     rec.msg = domainFloorPick('no server-side services to connect via messaging', why);
     rec.compute = domainFloorPick('logic runs inside the browser sandbox, not on a provisioned compute tier', why);
     rec.arch = domainFloorPick('a single browser extension has no service architecture style to choose', why);
+    // Twin of rule_engine.py's sandbox floor — added after review: this floor said
+    // "nothing runs server-side" while the sandbox category still recommended a
+    // hosted SaaS.
+    rec.sandbox = domainFloorPick('nothing runs on infrastructure you provision, so a hosted multi-tenant sandbox service has nothing to attach to — isolate locally instead (a container, or gVisor/Firecracker if the code is genuinely untrusted)', why);
     rec.fe = {v: 'Manifest V3 browser extension (background service worker + popup UI in vanilla JS or a lightweight framework)', conf: 'high', why};
   } else if (s.desktopApp){
     const why = 'A cross-platform desktop application with no backend server runs entirely on the user\'s own machine — there is nothing to host, scale, or authenticate against server-side.';
@@ -4481,6 +4493,10 @@ function applyDomainFloors(rec, s){
     rec.arch = domainFloorPick('a single CLI tool has no service architecture style to choose', why);
     rec.fe = domainFloorPick('command-line interface only — no web/mobile frontend (argparse, Click, or Typer for Python; Cobra for Go; etc.)', why);
     rec.db = domainFloorPick('no server-side database — read/write local files directly, or add embedded SQLite only if you need structured queries over the data', why);
+    // Twin of rule_engine.py's sandbox floor — added after review: this floor said
+    // "nothing runs server-side" while the sandbox category still recommended a
+    // hosted SaaS.
+    rec.sandbox = domainFloorPick('nothing runs on infrastructure you provision, so a hosted multi-tenant sandbox service has nothing to attach to — isolate locally instead (a container, or gVisor/Firecracker if the code is genuinely untrusted)', why);
   } else if (s.staticSite){
     const why = 'A static site with no backend has nothing to compute or persist server-side — it only needs files served from a CDN.';
     rec.cloud = {v: 'Static hosting / CDN (Cloudflare Pages, Vercel, Netlify, or S3 + CloudFront) — not a full IaaS cloud tier', conf: 'high', why};
@@ -4490,6 +4506,10 @@ function applyDomainFloors(rec, s){
     rec.obs = domainFloorPick('no server infrastructure to observe — a lightweight client-side analytics snippet is enough if desired', why);
     rec.msg = domainFloorPick('no server-side services to connect via messaging', why);
     rec.compute = domainFloorPick('pure static delivery — no server compute tier', why);
+    // Twin of rule_engine.py's sandbox floor — added after review: this floor said
+    // "nothing runs server-side" while the sandbox category still recommended a
+    // hosted SaaS.
+    rec.sandbox = domainFloorPick('nothing runs on infrastructure you provision, so a hosted multi-tenant sandbox service has nothing to attach to — isolate locally instead (a container, or gVisor/Firecracker if the code is genuinely untrusted)', why);
     rec.arch = domainFloorPick('a static site has no application architecture style — just markup and assets', why);
   }
 }
@@ -5208,6 +5228,17 @@ const OVERRIDE_EFFECT_CARDS = {
   // recommendation changes" when several categories actually changed underneath them.
   auditLogging:'Audit Logging', privilegedAccess:'Privileged Access', testingStrategy:'Testing Strategy',
   networkBoundary:'Network Boundary', multiCloudBridging:'Multi-Cloud Bridging', securityGates:'Security Gates (CI/CD)',
+  // The six vendor categories added after this map was written. Their absence was not cosmetic:
+  // diffRecommendations() only reports cards listed here, so toggling an inference that moved one
+  // of them showed the user a change list with that change missing — and, when it moved ONLY one
+  // of them, printed "No recommendation changes — this inference is not currently driving any
+  // pick", which was simply false in a dialog the user was reading to decide whether to proceed.
+  // Verified: an enterprise/PII signal moves the sandbox pick E2B -> Vercel Sandbox, and the diff
+  // reported 13 changes with that one absent. Third instance of this same map-fell-behind class,
+  // after test_engine_differential.py's KEYMAP and CATEGORY_VENDORS.
+  gitops:'GitOps / Continuous Deployment', realtimeAnalytics:'Real-Time Analytics',
+  sandbox:'Code Execution Sandbox', agentFrameworkVendorPick:'Agent Framework',
+  inferenceServingVendorPick:'Inference Serving Engine', llmObservabilityVendorPick:'LLM Observability',
 };
 
 function diffRecommendations(before, after){
