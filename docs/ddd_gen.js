@@ -14,7 +14,7 @@ children.push(...coverTitle(
   'Domain-Driven Design Document',
   'Bounded contexts, ubiquitous language, and aggregates for v2',
   [
-    ['Document Version', '1.3'],
+    ['Document Version', '1.4'],
     ['Status', 'Implemented — all v2 contexts (Analysis, Refinement, Sharing, Integration) built and tested, including RAG grounding for the Refinement Context'],
     ['Prepared by', 'Muneeb, with Claude (Cowork)'],
     ['Date', new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })],
@@ -90,6 +90,13 @@ children.push(p('Added later session for the "Challenge This Pick" widget (PRD F
 children.push(bulletBold('Invariant: ', 'append-only, same rationale as RefinementResult (Section 4.2) — a disagreement is a fact about a moment; editing it later would corrupt the rate calculation, not just the record. No update/delete route exists.'));
 children.push(bulletBold('Boundary: ', 'references an analysis_id but is not a child Analysis owns internally, matching every other aggregate\'s relationship to Analysis in this document. Requires the referenced Analysis to already exist server-side — the client never creates an Analysis row purely to log a disagreement about it; a disagreement about an Analysis that was never persisted stays client-side-only (localStorage), consistent with NFR-1.'));
 
+children.push(h2('4.6 HarnessFeedback (aggregate root — its own context)'));
+children.push(p('Added for the Harness Readiness feedback capture (PRD FR-57). The only aggregate in this document with NO relationship to Analysis, deliberately: a harness self-audit scores a team\'s own development process, which is not a product requirement, so there is no Analysis for it to reference and none should be created to give it one. Forcing an Analysis row into existence purely to hang this off would corrupt the meaning of that table and every metric derived from it.', { italics: true, color: MUTED, size: 19 }));
+children.push(bulletBold('Invariant: ', 'append-only, same rationale as RefinementResult (4.2) and Disagreement (4.5) — feedback is a fact about a moment. No update/delete route exists.'));
+children.push(bulletBold('Invariant: ', 'carries the audit score and per-component answers alongside the comment. The comment is close to unreadable without them — the same words from a team scoring 14/15 and one scoring 2/15 mean different things — so they are part of the aggregate rather than a separate lookup.'));
+children.push(bulletBold('Boundary: ', 'no foreign key at all, unlike every other aggregate here. The closest precedent is McpInvocation (4.4), whose analysis_id is nullable for a related reason — a record that is legitimately created before, or entirely without, an Analysis.'));
+children.push(bulletBold('Note: ', 'written only on an explicit user action, never as background telemetry, and best-effort — an unreachable backend degrades to a thank-you rather than an error, consistent with NFR-5.'));
+
 // ---------- Domain events ----------
 children.push(h1('5. Domain Events'));
 children.push(p('Named for a future event-driven implementation, though v2 as designed is a simple synchronous request/response system — these are documented now so that if the system later needs to react to its own state changes (e.g. triggering an eval run per BRD\'s open questions), the vocabulary already exists.'));
@@ -104,6 +111,7 @@ children.push(reqTable(
     ['FollowUpAsked', 'Refinement Context', 'A user submitted a question scoped to an existing Analysis'],
     ['McpToolInvoked', 'Integration Context', 'An external MCP client called recommend_stack()'],
     ['DisagreementLogged', 'Refinement Context', 'A user stated a preferred alternative to a specific pick and why, on an Analysis that already exists server-side'],
+    ['HarnessFeedbackSubmitted', 'Harness Feedback Context', 'A user rated a completed harness self-audit, with the score and per-component answers that produced it'],
   ]
 ));
 
