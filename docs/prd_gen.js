@@ -14,7 +14,7 @@ children.push(...coverTitle(
   'Product Requirements Document',
   'Functional & technical specification',
   [
-    ['Document Version', '1.13'],
+    ['Document Version', '1.14'],
     ['Status', 'v1 and v2 shipped, frontend actually wired to the backend — see Section 7.7, Section 9.2, and Release Plan (Section 11). Hexagonal diagram-export architecture, AI Opportunity Layer, technology-catalog unification, Huawei Cloud vendor support, and Hybrid Connectivity added in a later session — see Section 7.2, 7.7, 9.4, and Release Plan.'],
     ['Prepared by', 'Muneeb, with Claude (Cowork)'],
     ['Date', new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })],
@@ -42,6 +42,7 @@ children.push(reqTable(
     ['1.11', 'Later session: closed the last two items from the interface audit. A command palette and keyboard-first navigation (Section 7.12, FR-63 through FR-65) address what the audit scored as the weakest dimension by a wide margin — only Enter, Space and Escape were handled anywhere, with zero meta/ctrl shortcuts. A density pass (FR-66) retired redundant nested borders. The audit\'s third item, empty states, was investigated and found NOT to be a real gap: that score came from a grep for a class name rather than a check of behaviour, and every empty case is in fact handled. Also applied a design system to landing.html only (FR-67), deliberately not to the dashboard.'],
     ['1.12', 'Later session: three fixes found by using the product rather than reading it. A light-theme colour defect (Section 7.13, FR-68) — the semantic signal colours were hardcoded as the dark theme\'s values in eleven rules, so the guardrails list rendered at 1.59:1 contrast on a white card and the "recommended vendor" border at 1.37:1. The Harness Readiness evidence check confirmed under-claims as correct (FR-69), telling a user their score checked out while holding a file that showed otherwise. And the MCP server, shipped and tested since the rule-engine port, was promoted nowhere in the interface (FR-70).'],
     ['1.13', 'Later session: two new entry/decision capabilities and one integrity fix. Dependency-manifest ingestion (Section 7.14, FR-71) lets a brownfield user start from a real package.json, requirements.txt, go.mod, Gemfile, pom.xml or docker-compose.yml. A Code Execution Sandbox category (FR-72) covers isolating model-generated code, which no existing category addressed. FR-73 records a wiring defect found by auditing rather than by a bug report: six vendor categories had shipped claiming dual-engine parity while none was actually being compared, and three of them were also missing from the map the challenge widget reads.'],
+    ['1.14', 'Later session: three signals the engine parsed and then ignored are now read (Section 7.16, FR-74 through FR-76), and the first phase of interactive exploration shipped (FR-77). The common defect: a requirement stating a concurrency figure, a team size, or a delivery deadline produced the same recommendation as one omitting it — the value was extracted, stored, and never consumed, so a reader who answered precisely was shown evidence of understanding that had not been acted on.'],
   ]
 ));
 
@@ -279,6 +280,20 @@ children.push(reqTable(['ID', 'Requirement', 'Status'], [1000, 5600, 1800], [
   ['FR-73', 'Adding a recommendation category must wire it into every place a category is looked up: both engines, the behavioural comparison between them, the refinement allow-list, and the alternatives offered when a user challenges a pick. Six categories added over successive releases each stated that they maintained parity between the two engines; none was in fact being compared, and a deliberate divergence introduced as a check passed silently. Three of the same six were also absent from the list the challenge widget reads, so challenging those picks offered an empty text box instead of the real alternatives — visible only one interaction below the card, which is why it survived. All are now wired, and the tests derive the required set from the code rather than restating it, so a category cannot be added without it.', 'Shipped'],
 ]));
 
+children.push(h2('7.16 Reading What the Requirement States'));
+children.push(p('Three numeric details were parsed by the signal detector and read by nothing. The consequence was identical output for materially different requirements, which is worse than not parsing them at all: the interface showed the figure had been understood, and the recommendation showed it had not been used.'));
+children.push(reqTable(['ID', 'Requirement', 'Status'], [1000, 5600, 1800], [
+  ['FR-74', 'A stated concurrency figure influences the recommendation. Above a stated threshold it counts as evidence of scale in its own right, reaching every decision that already depended on that signal rather than being threaded into individual picks. Measured: a requirement naming 500,000 concurrent users previously produced a byte-identical stack to one naming 1,000; it now differs in eight decisions, including language, compute model, and messaging. Evidence is additive — a low stated figure cannot cancel an explicit statement of high traffic made in the same sentence.', 'Shipped'],
+  ['FR-75', 'A stated team size is read in both directions. Previously only small teams were detected numerically, across a hand-written span of phrasings, so a stated sixty engineers registered as nothing at all; the most common phrasings for a one-person team also registered as nothing. Two named thresholds now apply, with a deliberate gap between them, because a mid-sized figure is genuinely neither and forcing it into one would assert more than the requirement says. The largest stated figure governs, so a small team named inside a large organisation does not read as a small organisation.', 'Shipped'],
+  ['FR-76', 'A stated delivery window is surfaced as the leading tradeoff, quoted verbatim, with different guidance by length — a six-week window and a two-year window imply opposite choices. Deliberately NOT treated as evidence that a project is an early-stage build: an established organisation working to a short regulatory deadline is still an established organisation, and conflating the two would reclassify the project rather than inform it.', 'Shipped'],
+]));
+
+children.push(h2('7.17 Interactive Exploration'));
+children.push(reqTable(['ID', 'Requirement', 'Status'], [1000, 5600, 1800], [
+  ['FR-77', 'Four exploration controls above the results — team size, scale, compliance, and stage — each offering three named positions, the middle being the requirement\'s own answer. Moving one re-runs the deterministic engine and reports which recommendations changed, or states plainly that none did. Presented as discrete named positions rather than continuous sliders: almost every signal the engine reads is a yes/no, so a continuous control would sit motionless across most of its range and then change everything in a single step, misrepresenting the resolution of what it controls. A control whose positions change no recommendation is the failure this feature most invites, so each one is verified to move real decisions.', 'Shipped — client-side only'],
+]));
+children.push(p('Not built: a budget control. No cost-sensitivity signal exists to drive one, and adding it would require deciding whether this product will state a single overall cost figure — which it deliberately does not, since its cost guidance is per-category and some categories are capital rather than operational spend. That is a product decision rather than an implementation one, and remains open.'));
+
 children.push(reqTable(['Release', 'Contents', 'Status'], [1600, 6000, 1800], [
   ['v1.0', 'Core stack (15 categories) + AI/LLM recommendation + RAG + guardrails + MCP servers needed', 'Shipped'],
   ['v1.1', 'Trade-off decisions, cost/throughput, governance sections; persona tagging', 'Shipped'],
@@ -303,6 +318,8 @@ children.push(reqTable(['Release', 'Contents', 'Status'], [1600, 6000, 1800], [
   ['v2.14', 'MCP server surfaced in the interface (FR-70)', 'Shipped'],
   ['v2.15', 'Dependency-manifest ingestion (FR-71)', 'Shipped'],
   ['v2.16', 'Code Execution Sandbox category (FR-72) and the cross-category wiring fix (FR-73)', 'Shipped'],
+  ['v2.17', 'Signals read rather than merely parsed (FR-74 through FR-76)', 'Shipped'],
+  ['v2.18', 'Interactive exploration controls (FR-77)', 'Shipped'],
 ]));
 
 // ---------- Known limitations ----------
