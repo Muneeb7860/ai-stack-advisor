@@ -1078,6 +1078,28 @@
   .ha-evidence-toggle:hover{border-color:var(--accent); color:var(--accent);}
   /* Document confirm step. Deliberately plain: this is a checklist the reader audits, not a
      result to admire, and the source excerpt is the part doing the work. */
+  /* What-if levers. Segmented stops, not sliders: 146 of 152 signals are boolean, so a
+     continuous control would move nothing across most of its travel and then flip the stack in
+     one step — a control that lies about its own resolution. */
+  .wi-panel{margin-top:14px; padding:12px 14px; background:var(--surface); border-radius:var(--radius-sm);}
+  .wi-head{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px;
+    font-size:var(--fs-xs); text-transform:uppercase; letter-spacing:0.06em; color:var(--muted2); font-weight:700;}
+  .wi-reset{background:none; border:none; color:var(--accent); font-size:12px; cursor:pointer; padding:0;
+    text-transform:none; letter-spacing:0; font-weight:600;}
+  .wi-reset:hover{text-decoration:underline;}
+  .wi-levers{display:flex; flex-wrap:wrap; gap:14px;}
+  .wi-lever{display:flex; flex-direction:column; gap:5px;}
+  .wi-label{font-size:11.5px; color:var(--muted); font-weight:600;}
+  .wi-stops{display:inline-flex; border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden;}
+  .wi-stop{background:transparent; border:none; border-right:1px solid var(--border); color:var(--muted2);
+    font-size:12px; padding:5px 10px; cursor:pointer; font-family:inherit;}
+  .wi-stop:last-child{border-right:none;}
+  .wi-stop:hover{background:var(--chip); color:var(--text);}
+  .wi-stop.on{background:color-mix(in srgb, var(--accent) 16%, transparent); color:var(--text); font-weight:600;}
+  .wi-effect{margin-top:10px; font-size:12px; color:var(--muted); line-height:1.55;}
+  .wi-effect b{color:var(--text);}
+  .wi-effect-none{color:var(--muted2); font-style:italic;}
+  @media (max-width:860px){ .wi-levers{gap:10px;} .wi-lever{flex:1 1 100%;} }
   .doc-confirm{display:flex; flex-direction:column; gap:8px; text-align:left; width:100%;}
   .doc-confirm-head{font-size:12.5px; color:var(--muted); line-height:1.55; margin-bottom:2px;}
   .doc-signal{background:var(--surface); border-radius:var(--radius-sm); padding:8px 11px;}
@@ -4939,6 +4961,7 @@ function renderRecommendations(s, rec){
       ${lowSignalBanner}
       ${ambiguousShortInputBanner}
       ${brownfieldBanner}
+      ${renderWhatIfLeversHtml()}
       <details class="rh-evidence">
         <summary>Why this — ${activeSignals.length} signal${activeSignals.length===1?'':'s'} detected${excludedList.length?`, ${excludedList.length} exclusion${excludedList.length===1?'':'s'}`:''}</summary>
         <div class="signals" style="margin-top:10px;">${activeSignals.length? activeSignals.map(x=>`<span class="sig sig-stated">${x}</span>`).join('') : '<span class="sig">generic / no strong signals — defaults applied</span>'}</div>
@@ -5251,7 +5274,15 @@ let lastRawSignals = null;
 // inferences they have switched off. Cleared whenever the requirement text changes, since the
 // inferences are re-derived from scratch at that point and a stale override would silently apply
 // to a different sentence than the one it was made about.
-let signalOverrides = { excluded: {}, known: {} };
+// `levers` carries boolean-signal overrides, alongside the existing exclusion/known-technology
+// ones. 146 of the engine's 152 signals are boolean, which is why the controls that drive these
+// are named stops rather than sliders: a slider over a boolean is a lie the interface tells — you
+// drag from 1 to 40 engineers, nothing moves, then one step flips the whole stack. See
+// docs/design/WHATIF_LEVERS_SCOPE.md.
+//
+// This is deliberately the same mechanism the document-ingestion confirm step needs for turning a
+// wrongly-inferred signal off. Built once here rather than twice.
+let signalOverrides = { excluded: {}, known: {}, levers: {} };
 
 function applySignalOverrides(raw){
   const out = Object.assign({}, raw, {
@@ -5260,7 +5291,124 @@ function applySignalOverrides(raw){
   });
   for (const k in signalOverrides.excluded) if (signalOverrides.excluded[k] === false) delete out.excluded[k];
   for (const k in signalOverrides.known) if (signalOverrides.known[k] === false) delete out.known[k];
+  // Applied last and by assignment, not deletion: a lever states what the signal IS for this
+  // exploration, which is a different act from withdrawing an inference the engine made.
+  for (const k in (signalOverrides.levers || {})) out[k] = signalOverrides.levers[k];
   return out;
+}
+
+// ---- What-if levers ----
+// Four levers, each three named stops. The middle stop is always "as written" — no override, the
+// requirement's own answer — so a lever is never a claim that the engine got it wrong, only a way
+// to ask what a different answer would produce.
+//
+// Every signal below was checked to move real picks before being given a control. Measured on a
+// plain e-commerce requirement: smallTeam 4, largeTeam 5, highScale 8, compliance 7,
+// startupMvp 17, enterprise 19. A lever whose stops move nothing is a control that does nothing,
+// which is the failure this feature most invites, so the test suite asserts each one still moves
+// something rather than trusting these numbers to stay true.
+//
+// Not offered as levers: a budget control, because no cost-sensitivity signal exists to drive it
+// (see the scope doc — adding one is a product decision about whether this tool will claim a
+// single cost figure, which it currently refuses to do).
+const WHATIF_LEVERS = [
+  { id:'team', label:'Team size',
+    stops:[ {label:'Small', set:{smallTeam:true, largeTeam:false}},
+            {label:'As written', set:null},
+            {label:'Large', set:{smallTeam:false, largeTeam:true}} ] },
+  { id:'scale', label:'Scale',
+    stops:[ {label:'Modest', set:{highScale:false}},
+            {label:'As written', set:null},
+            {label:'High', set:{highScale:true}} ] },
+  { id:'compliance', label:'Compliance',
+    stops:[ {label:'None', set:{compliance:false}},
+            {label:'As written', set:null},
+            {label:'Regulated', set:{compliance:true}} ] },
+  { id:'stage', label:'Stage',
+    stops:[ {label:'Startup / MVP', set:{startupMvp:true, enterprise:false}},
+            {label:'As written', set:null},
+            {label:'Enterprise', set:{startupMvp:false, enterprise:true}} ] },
+];
+
+// Which stop each lever is currently on. 1 is "as written" for every lever.
+let whatIfStops = {};
+
+function resetWhatIfLevers(){
+  whatIfStops = {};
+  WHATIF_LEVERS.forEach(l => { whatIfStops[l.id] = 1; });
+}
+resetWhatIfLevers();
+
+// Applies a stop and re-renders. Deliberately NOT the confirm() dialog toggleInference uses: that
+// is right for permanently withdrawing an inference, and wrong for a control someone is sweeping
+// to explore. Exploration and revision are different acts, and a modal per step is how a what-if
+// tool becomes annoying enough to ignore. The change is shown instead, after the fact.
+function setWhatIfLever(leverId, stopIndex){
+  const lever = WHATIF_LEVERS.find(l => l.id === leverId);
+  if (!lever || !lever.stops[stopIndex] || !lastRawSignals) return;
+
+  const before = computeRecommendations(applySignalOverrides(lastRawSignals));
+
+  // Clear every signal this lever owns before applying the new stop, or moving Team from Large to
+  // Small would leave largeTeam:false alongside smallTeam:true from two different stops.
+  const owned = new Set();
+  lever.stops.forEach(s => { if (s.set) Object.keys(s.set).forEach(k => owned.add(k)); });
+  owned.forEach(k => { delete signalOverrides.levers[k]; });
+
+  const stop = lever.stops[stopIndex];
+  if (stop.set) Object.assign(signalOverrides.levers, stop.set);
+  whatIfStops[leverId] = stopIndex;
+
+  const after = computeRecommendations(applySignalOverrides(lastRawSignals));
+  whatIfLastChanges = diffRecommendations(before, after);
+
+  setAnalysis(lastRequirementText, lastRawSignals, { resetOverrides: false });
+}
+
+let whatIfLastChanges = [];
+
+function whatIfIsActive(){
+  return WHATIF_LEVERS.some(l => whatIfStops[l.id] !== 1);
+}
+
+function resetWhatIf(){
+  signalOverrides.levers = {};
+  resetWhatIfLevers();
+  whatIfLastChanges = [];
+  if (lastRawSignals) setAnalysis(lastRequirementText, lastRawSignals, { resetOverrides: false });
+}
+
+function renderWhatIfLeversHtml(){
+  const esc = (x) => String(x == null ? '' : x)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const rows = WHATIF_LEVERS.map(l => {
+    const cur = whatIfStops[l.id];
+    const stops = l.stops.map((s, i) => `
+      <button type="button" class="wi-stop${i === cur ? ' on' : ''}"
+        onclick="setWhatIfLever('${esc(l.id)}', ${i})"
+        aria-pressed="${i === cur ? 'true' : 'false'}">${esc(s.label)}</button>`).join('');
+    return `<div class="wi-lever"><div class="wi-label">${esc(l.label)}</div><div class="wi-stops">${stops}</div></div>`;
+  }).join('');
+
+  // The changed-list is the whole point: a lever that moves nothing should say so plainly rather
+  // than leave the reader hunting the page for a difference that is not there.
+  let effect = '';
+  if (whatIfIsActive()) {
+    effect = whatIfLastChanges.length
+      ? `<div class="wi-effect"><b>That changed ${whatIfLastChanges.length} recommendation${whatIfLastChanges.length===1?'':'s'}:</b> `
+        + whatIfLastChanges.slice(0, 6).map(c => esc(c.card)).join(' · ')
+        + (whatIfLastChanges.length > 6 ? ` and ${whatIfLastChanges.length - 6} more` : '') + '</div>'
+      : `<div class="wi-effect wi-effect-none">That changed nothing — no recommendation on this page depends on it for your requirement.</div>`;
+  }
+
+  return `<div class="wi-panel">
+      <div class="wi-head">
+        <span>What if…</span>
+        ${whatIfIsActive() ? `<button type="button" class="wi-reset" onclick="resetWhatIf()">Reset to what you wrote</button>` : ''}
+      </div>
+      <div class="wi-levers">${rows}</div>
+      ${effect}
+    </div>`;
 }
 
 // Cards whose pick is a plain {v} — used to describe an override's effect in terms of what the
@@ -5376,7 +5524,7 @@ function setAnalysis(text, rawSignals, opts){
   const resetOverrides = (opts && typeof opts.resetOverrides === 'boolean')
     ? opts.resetOverrides
     : (text !== lastRequirementText);
-  if (resetOverrides) signalOverrides = { excluded: {}, known: {} };
+  if (resetOverrides) signalOverrides = { excluded: {}, known: {}, levers: {} };
 
   lastRequirementText = text;
   lastRawSignals = rawSignals;
