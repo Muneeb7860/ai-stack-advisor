@@ -320,6 +320,14 @@ def detect_latency_target(text: str):
     return best
 
 
+# Above this, a stated concurrency figure trips highScale on its own. The number is a judgement
+# call and is deliberately not presented as precise: below roughly ten thousand concurrent users a
+# modest horizontally-scaled tier generally copes, and the things highScale actually turns on —
+# read replicas and sharding, queue-based load levelling, Kubernetes over serverless, a dedicated
+# cache tier — start being load-bearing rather than premature above it. Stated here as one named
+# constant so it can be argued with, rather than buried as a literal in the signal expression.
+CONCURRENCY_HIGH_SCALE_THRESHOLD = 10_000
+
 _CONCURRENCY_RE = re.compile(
     r"([0-9][0-9,.]*)\s*(k|m)?\s*(?:\+\s*)?(?:concurrent|simultaneous|parallel|peak|active)\s+"
     r"(?:users|sessions|connections|requests|clients)")
@@ -443,6 +451,10 @@ def detect_signals(text: str) -> dict:
     def has_raw(words):
         return any(w in raw for w in words)
 
+    # Parsed once and reused: the returned signal and the highScale expression below must be
+    # derived from the same value, or a change to one silently stops matching the other.
+    _ct = detect_concurrency_target(text)
+
     strong_on_prem = has_raw(
         [
             "air-gapped", "air gapped", "airgapped", "cannot use any public cloud",
@@ -492,7 +504,7 @@ def detect_signals(text: str) -> dict:
         "excludedLanguageTerms": sorted(detect_excluded_language_terms(text)),
         "known": detect_known_tech(text, _exclusions),
         "latencyTarget": detect_latency_target(text),
-        "concurrencyTarget": detect_concurrency_target(text),
+        "concurrencyTarget": _ct,
         "timeline": detect_timeline(text),
         "brownfieldOmnichannel": has([
             "omnichannel ai support", "omnichannel support", "omni-channel ai",
@@ -513,7 +525,14 @@ def detect_signals(text: str) -> dict:
             "just for learning", "just to learn", "proof of concept", "weekend project",
             "solo project", "learning exercise",
         ]),
-        "highScale": has(["high traffic", "high volume", "high transaction", "scale", "millions of users", "peak load", "sales event", "black friday"]),
+        # A stated number now counts as evidence of scale, which it did not before: this
+        # function parsed "500,000 concurrent users" into a structured count and then nothing read
+        # it, so a requirement naming half a million concurrent users produced an identical stack
+        # to one naming a thousand. detect_concurrency_target's own docstring recorded the gap.
+        # Strictly additive — OR'd with the keywords, never replacing them — so a low stated number
+        # cannot cancel an explicit "high traffic" claim made in the same sentence.
+        "highScale": has(["high traffic", "high volume", "high transaction", "scale", "millions of users", "peak load", "sales event", "black friday"])
+                     or bool(_ct and _ct["count"] >= CONCURRENCY_HIGH_SCALE_THRESHOLD),
         "realtime": has(["real-time", "real time", "low latency", "streaming", "live"]),
         "chatbot": has(["chatbot", "conversational", "customer support bot", "assistant", "virtual agent"]),
         "knowledgeBase": has(["knowledge base", "internal documents", "policy documents", "confluence", "wiki", "document search", "faq"]),
@@ -2505,6 +2524,25 @@ def pick_concurrency(s):
                            f"criterion rather than a general aspiration. {budget} Measure at P95 against "
                            f"the full user-visible path, not per-component averages — component budgets "
                            f"that each look fine routinely add up past the target."})
+    # Same treatment latencyTarget already gets above, and for the same reason: a number the
+    # user stated is the binding constraint for this section, so it is quoted verbatim rather than
+    # left to generic advice. Before this, "500,000 concurrent users" was parsed, stored, and
+    # never mentioned anywhere the reader could see.
+    ct = s.get("concurrencyTarget")
+    if ct:
+        n = int(ct["count"])
+        if n >= CONCURRENCY_HIGH_SCALE_THRESHOLD:
+            sizing = (f"At {n:,} concurrent you are past the point where a single primary and a "
+                      f"vertically-scaled tier hold up — the read-replica, cache and queue items "
+                      f"below are load-bearing here, not optional hardening.")
+        else:
+            sizing = (f"At {n:,} concurrent a modest horizontally-scaled tier generally copes, so "
+                      f"treat the items below as the order to reach for them in rather than a set "
+                      f"to build up front.")
+        _lead.append({"t": f"Design to your stated load: {ct['text']}",
+                      "w": f'You specified "{ct["text"]}", so size against it explicitly instead of '
+                           f"a general aspiration. {sizing} Load-test at that figure before launch — "
+                           f"a target nobody has reproduced is a guess with a number attached."})
     items = [
         {"t": "Async, non-blocking I/O throughout the request path", "w": "Blocking calls (especially to LLMs or external APIs) are the most common throughput killer — async lets one instance serve many concurrent requests."},
         {"t": "Connection pooling for database and external API clients", "w": "Avoids connection-setup overhead becoming the bottleneck under concurrent load."},

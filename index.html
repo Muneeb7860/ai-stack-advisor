@@ -2310,6 +2310,11 @@ function detectKnownTech(text, excluded){
 // highScale signal, whose keywords are "high traffic"/"millions of users". Both end up in the
 // exported quality scenarios, which is why those were all _TBD_ even for a requirement that
 // stated real figures.
+// Twin of rule_engine.py's CONCURRENCY_HIGH_SCALE_THRESHOLD — see that file for the reasoning
+// behind the figure. Must stay equal in both engines or the two disagree on every requirement
+// stating a number between the two values.
+const CONCURRENCY_HIGH_SCALE_THRESHOLD = 10000;
+
 function detectConcurrencyTarget(text){
   const t = String(text || '').toLowerCase();
   const RE = /([0-9][0-9,\.]*)\s*(k|m)?\s*(?:\+\s*)?(?:concurrent|simultaneous|parallel|peak|active)\s+(?:users|sessions|connections|requests|clients)/g;
@@ -2425,6 +2430,9 @@ function detectSignals(text){
   ].filter(Boolean).length;
   const multiCloudMentioned = cloudVendorCount >= 2;
   const _exclusions = detectExclusions(text);
+  // Parsed once and reused: the returned signal and the highScale expression below must
+  // derive from the same value, or a change to one silently stops matching the other.
+  const _ct = detectConcurrencyTarget(text);
   return {
     onPrem: strongOnPrem || softOnPrem,
     hybridConnectivity,
@@ -2439,7 +2447,7 @@ function detectSignals(text){
     // Explicit numeric latency/response-time target, e.g. "under 3 seconds", "sub-200ms",
     // "p95 below 500ms". null when the requirement states no number (see detectLatencyTarget).
     latencyTarget: detectLatencyTarget(text),
-    concurrencyTarget: detectConcurrencyTarget(text),
+    concurrencyTarget: _ct,
     timeline: detectTimeline(text),
     healthcare: has(['health','hipaa','patient','clinical','ehr','medical']),
     finance: has(['fintech','bank','payment','fraud','pci','transaction','trading','ledger','finance']),
@@ -2456,7 +2464,12 @@ function detectSignals(text){
       'coursework','capstone','final year project','class assignment','course assignment',
       'toy project','practice project','just for learning','just to learn','proof of concept',
       'weekend project','solo project','learning exercise']),
-    highScale: has(['high traffic','high volume','high transaction','scale','millions of users','peak load','sales event','black friday']),
+    // Twin of rule_engine.py's highScale. A stated number now counts as evidence of scale:
+    // "500,000 concurrent users" was parsed into a structured count that nothing read, so it
+    // produced an identical stack to "1,000". Strictly additive — OR'd with the keywords, never
+    // replacing them — so a low stated number cannot cancel an explicit "high traffic" claim.
+    highScale: has(['high traffic','high volume','high transaction','scale','millions of users','peak load','sales event','black friday'])
+               || !!(_ct && _ct.count >= CONCURRENCY_HIGH_SCALE_THRESHOLD),
     realtime: has(['real-time','real time','low latency','streaming','live']),
     chatbot: has(['chatbot','conversational','customer support bot','assistant','virtual agent']),
     knowledgeBase: has(['knowledge base','internal documents','policy documents','confluence','wiki','document search','faq']),
@@ -4391,6 +4404,18 @@ function pickConcurrency(s){
       : `At ${lt.ms}ms end-to-end there is no room for a synchronous LLM call in the request path — serve from cache/precomputed results, or return async and stream.`;
     items.push({t:`Meet your stated target: ${lt.text} end-to-end`,
       w:`You specified "${lt.text}", so treat it as this section's acceptance criterion rather than a general aspiration. ${budget} Measure at P95 against the full user-visible path, not per-component averages — component budgets that each look fine routinely add up past the target.`});
+  }
+  // Twin of rule_engine.py's concurrencyTarget lead item — same treatment latencyTarget already
+  // gets above, and for the same reason: a number the user stated is the binding constraint, so it
+  // is quoted verbatim rather than left to generic advice.
+  if (s.concurrencyTarget){
+    const ct = s.concurrencyTarget;
+    const n = Math.round(ct.count);
+    const sizing = n >= CONCURRENCY_HIGH_SCALE_THRESHOLD
+      ? `At ${n.toLocaleString('en-US')} concurrent you are past the point where a single primary and a vertically-scaled tier hold up — the read-replica, cache and queue items below are load-bearing here, not optional hardening.`
+      : `At ${n.toLocaleString('en-US')} concurrent a modest horizontally-scaled tier generally copes, so treat the items below as the order to reach for them in rather than a set to build up front.`;
+    items.push({t:`Design to your stated load: ${ct.text}`,
+      w:`You specified "${ct.text}", so size against it explicitly instead of a general aspiration. ${sizing} Load-test at that figure before launch — a target nobody has reproduced is a guess with a number attached.`});
   }
   items.push({t:'Async, non-blocking I/O throughout the request path', w:'Blocking calls (especially to LLMs or external APIs) are the most common throughput killer — async lets one instance serve many concurrent requests.'});
   items.push({t:'Connection pooling for database and external API clients', w:'Avoids connection-setup overhead becoming the bottleneck under concurrent load.'});
