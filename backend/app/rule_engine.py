@@ -328,6 +328,46 @@ def detect_latency_target(text: str):
 # constant so it can be argued with, rather than buried as a literal in the signal expression.
 CONCURRENCY_HIGH_SCALE_THRESHOLD = 10_000
 
+# Team size, stated as a number. Previously only smallTeam looked at numbers, and only for a
+# hand-written span: "2 engineers" through "6 engineers" as literal strings, plus 1-12 for
+# "N people" and "team of N". largeTeam looked at no numbers at all, so "We have 60 engineers"
+# fired neither signal — the engine read the number, understood nothing by it, and answered as
+# though team size had not been mentioned. Same shape as the concurrency defect: extraction
+# without consumption.
+#
+# The two thresholds are judgement calls and are named so they can be argued with. Twelve is the
+# existing smallTeam ceiling, kept as-is. Thirty is where one or two teams becomes several, which
+# is what largeTeam's own keywords describe ("many teams", "multiple teams", "platform team") —
+# the coordination and platform concerns it drives start applying there.
+#
+# The gap between them is deliberate. A stated 20 is neither a small team nor a large one, and
+# forcing it into one would be a claim the requirement does not support.
+TEAM_SMALL_MAX = 12
+TEAM_LARGE_MIN = 30
+
+_TEAM_SIZE_RE = re.compile(
+    # [\s-]* not \s*: "200-engineer org" is written with a hyphen at least as often as a space,
+    # and missing it made the extractor read the sub-team in "a platform team of 8 inside a
+    # 200-engineer org" — returning 8, and firing smallTeam and largeTeam at the same time.
+    r"\b(\d{1,4})[\s-]*\+?[\s-]*(?:person|people|engineers?|developers?|devs?)\b"
+    r"|\bteam of\s*(\d{1,4})\b")
+
+
+def detect_team_size(text: str):
+    """Largest stated team size, or None. Largest rather than first: "a platform team of 8 inside a
+    200-engineer org" is a 200-engineer org, and the smaller number is a detail within it."""
+    best = None
+    for m in _TEAM_SIZE_RE.finditer(str(text or "").lower()):
+        raw = m.group(1) or m.group(2)
+        try:
+            n = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if best is None or n > best:
+            best = n
+    return best
+
+
 _CONCURRENCY_RE = re.compile(
     r"([0-9][0-9,.]*)\s*(k|m)?\s*(?:\+\s*)?(?:concurrent|simultaneous|parallel|peak|active)\s+"
     r"(?:users|sessions|connections|requests|clients)")
@@ -454,6 +494,7 @@ def detect_signals(text: str) -> dict:
     # Parsed once and reused: the returned signal and the highScale expression below must be
     # derived from the same value, or a change to one silently stops matching the other.
     _ct = detect_concurrency_target(text)
+    _team = detect_team_size(text)
 
     strong_on_prem = has_raw(
         [
@@ -505,6 +546,7 @@ def detect_signals(text: str) -> dict:
         "known": detect_known_tech(text, _exclusions),
         "latencyTarget": detect_latency_target(text),
         "concurrencyTarget": _ct,
+        "teamSize": _team,
         "timeline": detect_timeline(text),
         "brownfieldOmnichannel": has([
             "omnichannel ai support", "omnichannel support", "omni-channel ai",
@@ -684,12 +726,17 @@ def detect_signals(text: str) -> dict:
         "sonarqubeMentioned": has(["sonarqube", "sonar", "sonarcloud"]),
         "jprofilerMentioned": has(["jprofiler"]),
         "visualvmMentioned": has(["visualvm"]),
+        # "solo developer"/"solo engineer" were missing: only "solo founder" was listed, so the
+        # most common way a single-person team is described fired nothing.
         "smallTeam": (
-            has(["small team", "2 engineers", "3 engineers", "4 engineers", "5 engineers", "6 engineers", "solo founder", "few engineers"])
-            or bool(re.search(r"\b([1-9]|1[0-2])[- ]?(person|people)\b", t))
-            or bool(re.search(r"team of\s*([1-9]|1[0-2])\b", t))
+            has(["small team", "solo founder", "solo developer", "solo engineer", "single developer",
+                 "one engineer", "few engineers", "just me"])
+            or bool(_team is not None and _team <= TEAM_SMALL_MAX)
         ),
-        "largeTeam": has(["large team", "many teams", "multiple teams", "platform team"]),
+        "largeTeam": (
+            has(["large team", "many teams", "multiple teams", "platform team"])
+            or bool(_team is not None and _team >= TEAM_LARGE_MIN)
+        ),
         "globalMultiRegion": has(["global", "multi-region", "worldwide", "international"]),
         "search": has(["search engine", "semantic search", "recommendation"]),
         "email": has(["email drafting", "email assistant", "draft email"]),
@@ -2315,6 +2362,38 @@ def pick_vector_db_placement(s, rag_result):
 
 def pick_tradeoffs(s):
     t = []
+
+    # A stated delivery window leads, the same treatment latencyTarget gets in pick_concurrency and
+    # concurrencyTarget in this pass. detect_timeline() has always parsed this — "we must launch in
+    # six weeks" produced {days: 42} — and nothing read it, so the number was extracted, stored,
+    # and never mentioned anywhere the reader could see.
+    #
+    # Deliberately surfaced as a tradeoff rather than routed into a signal. A tight deadline is not
+    # evidence that a project is an MVP: an enterprise with a six-week regulatory deadline is still
+    # an enterprise, and folding the two together would reclassify the project rather than inform
+    # it. The right move is to say what the constraint costs and let the reader decide.
+    tl = s.get("timeline")
+    if tl:
+        days = int(tl["days"])
+        if days <= 60:
+            rec = "Cut scope, not rigour"
+            why = (f'You stated a delivery window of {tl["text"]} (~{days} days). That is short enough that '
+                   f"the binding constraint is what you leave out, not what you build faster. Managed "
+                   f"services over self-hosted, one datastore rather than three, and a single deployable "
+                   f"unit — every additional moving part costs setup time you have not got. Dropping "
+                   f"tests to save time reverses the saving within the same window.")
+        elif days <= 180:
+            rec = "Sequence the hard parts first"
+            why = (f'You stated a delivery window of {tl["text"]} (~{days} days). That is enough time to '
+                   f"build properly and not enough to discover a fundamental problem late. Put the "
+                   f"riskiest architectural decision — the one that would force a rewrite if wrong — in "
+                   f"the first third, not the last.")
+        else:
+            rec = "Long enough to build for change"
+            why = (f'You stated a delivery window of {tl["text"]} (~{days} days). That is long enough that '
+                   f"requirements will move before you ship, so favour the choices that stay cheap to "
+                   f"reverse over the ones that are fastest to stand up.")
+        t.append({"d": f"Delivery window — {tl['text']}", "rec": rec, "why": why})
 
     # 0/1. On-prem overrides cloud strategy; else single-cloud vs multi-cloud
     if s["onPrem"]:

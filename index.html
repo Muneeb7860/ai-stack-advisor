@@ -2363,6 +2363,25 @@ function detectKnownTech(text, excluded){
 // stating a number between the two values.
 const CONCURRENCY_HIGH_SCALE_THRESHOLD = 10000;
 
+// Twins of rule_engine.py's TEAM_SMALL_MAX / TEAM_LARGE_MIN and detect_team_size. See that file
+// for the reasoning behind the two numbers and why the gap between them is deliberate.
+const TEAM_SMALL_MAX = 12;
+const TEAM_LARGE_MIN = 30;
+
+const TEAM_SIZE_RE = /\b(\d{1,4})[\s-]*\+?[\s-]*(?:person|people|engineers?|developers?|devs?)\b|\bteam of\s*(\d{1,4})\b/g;
+
+function detectTeamSize(text){
+  const s = String(text || '').toLowerCase();
+  let best = null, m;
+  TEAM_SIZE_RE.lastIndex = 0;   // the regex is global and module-scoped; without this a second
+                                // call resumes mid-string and misses matches before that point
+  while ((m = TEAM_SIZE_RE.exec(s)) !== null) {
+    const n = parseInt(m[1] || m[2], 10);
+    if (!isNaN(n) && (best === null || n > best)) best = n;
+  }
+  return best;
+}
+
 function detectConcurrencyTarget(text){
   const t = String(text || '').toLowerCase();
   const RE = /([0-9][0-9,\.]*)\s*(k|m)?\s*(?:\+\s*)?(?:concurrent|simultaneous|parallel|peak|active)\s+(?:users|sessions|connections|requests|clients)/g;
@@ -2481,6 +2500,7 @@ function detectSignals(text){
   // Parsed once and reused: the returned signal and the highScale expression below must
   // derive from the same value, or a change to one silently stops matching the other.
   const _ct = detectConcurrencyTarget(text);
+  const _team = detectTeamSize(text);
   return {
     onPrem: strongOnPrem || softOnPrem,
     hybridConnectivity,
@@ -2496,6 +2516,7 @@ function detectSignals(text){
     // "p95 below 500ms". null when the requirement states no number (see detectLatencyTarget).
     latencyTarget: detectLatencyTarget(text),
     concurrencyTarget: _ct,
+    teamSize: _team,
     timeline: detectTimeline(text),
     healthcare: has(['health','hipaa','patient','clinical','ehr','medical']),
     finance: has(['fintech','bank','payment','fraud','pci','transaction','trading','ledger','finance']),
@@ -2697,9 +2718,13 @@ function detectSignals(text){
     // including the LLM pick itself (see computeVisibleSections). "We already have AI built" is
     // the distinguishing phrase from plain brownfieldAiOnly, which only says the APP exists.
     brownfieldGuardrailsOnly: has(['guardrails and safety layer reviewed','guardrails only','already have ai built','we already have ai built','review our guardrails','guardrails reviewed']),
-    smallTeam: has(['small team','2 engineers','3 engineers','4 engineers','5 engineers','6 engineers','solo founder','few engineers'])
-      || /\b([1-9]|1[0-2])[- ]?(person|people)\b/.test(t) || /team of\s*([1-9]|1[0-2])\b/.test(t),
-    largeTeam: has(['large team','many teams','multiple teams','platform team']),
+    // "solo developer"/"solo engineer" were missing: only "solo founder" was listed, so the most
+    // common way a single-person team is described fired nothing.
+    smallTeam: has(['small team','solo founder','solo developer','solo engineer','single developer',
+                    'one engineer','few engineers','just me'])
+      || !!(_team !== null && _team <= TEAM_SMALL_MAX),
+    largeTeam: has(['large team','many teams','multiple teams','platform team'])
+      || !!(_team !== null && _team >= TEAM_LARGE_MIN),
     globalMultiRegion: has(['global','multi-region','worldwide','international']),
     search: has(['search engine','semantic search','recommendation']),
     email: has(['email drafting','email assistant','draft email']),
@@ -4191,6 +4216,26 @@ function pickVectorDBPlacement(s, ragResult){
 // ---------- Head-to-head trade-off decisions (why + when to switch) ----------
 function pickTradeoffs(s){
   const t = [];
+
+  // Twin of rule_engine.py's delivery-window tradeoff. detectTimeline() has always parsed this and
+  // nothing read it. Surfaced as a tradeoff rather than routed into a signal: a tight deadline is
+  // not evidence a project is an MVP — an enterprise with a six-week regulatory deadline is still
+  // an enterprise — so this says what the constraint costs instead of reclassifying the project.
+  if (s.timeline){
+    const days = Math.round(s.timeline.days);
+    let rec, why;
+    if (days <= 60){
+      rec = 'Cut scope, not rigour';
+      why = `You stated a delivery window of ${s.timeline.text} (~${days} days). That is short enough that the binding constraint is what you leave out, not what you build faster. Managed services over self-hosted, one datastore rather than three, and a single deployable unit — every additional moving part costs setup time you have not got. Dropping tests to save time reverses the saving within the same window.`;
+    } else if (days <= 180){
+      rec = 'Sequence the hard parts first';
+      why = `You stated a delivery window of ${s.timeline.text} (~${days} days). That is enough time to build properly and not enough to discover a fundamental problem late. Put the riskiest architectural decision — the one that would force a rewrite if wrong — in the first third, not the last.`;
+    } else {
+      rec = 'Long enough to build for change';
+      why = `You stated a delivery window of ${s.timeline.text} (~${days} days). That is long enough that requirements will move before you ship, so favour the choices that stay cheap to reverse over the ones that are fastest to stand up.`;
+    }
+    t.push({d:`Delivery window — ${s.timeline.text}`, rec, why});
+  }
 
   // 0. On-prem overrides the whole cloud-strategy question
   if(s.onPrem){
