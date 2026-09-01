@@ -10,7 +10,7 @@
      money, licence codes, payloads") — combined into the existing Inter request rather than a
      second <link>, one request either way. --font-mono already falls back to the prior system
      stack if this ever fails to load. -->
-<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&family=Calistoga&display=swap" rel="stylesheet">
 <script>
   // Runs before the <style> block below is applied, so the saved theme is set before first
   // paint — otherwise a returning light-theme user would see one dark frame flash before JS
@@ -27,6 +27,8 @@
     --bg:#0a0c11; --panel:#12151d; --panel2:#151922; --border:#1f2430;
     --text:#e8ebf1; --muted:#828a99; --muted2:#9aa1ae; --accent:#5b8def; --accent2:#7c5bef;
     --good:#34c98a; --warn:#e0a23c; --chip:#171b24; --surface:#0a0e15;
+    --font-display:'Calistoga', Georgia, 'Times New Roman', serif;
+    --font-body:'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     /* --bad had a light-theme value and no dark one, so it was a token that only existed in one
        theme — the same shape of bug as --surface being collapsed onto --panel in light. Nothing
        reads it yet; defined here so the set is complete in both themes rather than half-defined.
@@ -379,8 +381,24 @@
   .wrap{max-width:1180px; margin:0 auto;}
   .intro-col{max-width:920px;}
   header{margin-bottom:18px;}
-  h1{font-size:21px; margin:0 0 5px; letter-spacing:-0.02em; font-weight:700; display:flex; align-items:center; gap:8px;}
+  h1{font-size:22px; margin:0 0 5px; letter-spacing:-0.02em; font-weight:700; display:flex; align-items:center; gap:8px; font-family:var(--font-display); font-weight:400;}
   .sub{color:var(--muted); font-size:13px; line-height:1.5; max-width:600px; letter-spacing:-0.006em;}
+  .gradient-text{
+    background:linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+    -webkit-background-clip:text;
+    background-clip:text;
+    color:transparent;
+  }
+  .pulse-dot{
+    display:inline-block; width:7px; height:7px; border-radius:50%;
+    background:var(--good); box-shadow:0 0 0 color-mix(in srgb, var(--good) 40%, transparent);
+    animation:pulseDot 2s infinite ease-in-out; vertical-align:middle; margin-right:6px;
+  }
+  @keyframes pulseDot{
+    0%{box-shadow:0 0 0 0 color-mix(in srgb, var(--good) 70%, transparent);}
+    70%{box-shadow:0 0 0 6px color-mix(in srgb, var(--good) 0%, transparent);}
+    100%{box-shadow:0 0 0 0 color-mix(in srgb, var(--good) 0%, transparent);}
+  }
   .card{
     background:var(--panel); box-shadow:0 1px 6px rgba(17,24,39,0.05);
     border:1px solid var(--border); border-radius:var(--radius-lg);
@@ -441,7 +459,7 @@
     padding:18px 20px; margin-bottom:18px;
   }
   .results-hero .rh-eyebrow{font-size:var(--fs-xs); text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); font-weight:600; margin-bottom:6px;}
-  .results-hero .rh-headline{font-size:var(--fs-xl); font-weight:800; letter-spacing:-0.015em; color:var(--text); line-height:1.25; margin-bottom:10px;}
+  .results-hero .rh-headline{font-family:var(--font-display); font-size:var(--fs-xl); font-weight:400; letter-spacing:-0.015em; color:var(--text); line-height:1.25; margin-bottom:10px;}
   .results-hero .signals{margin-top:0;}
   /* Tier 1 spine — the answer, stated as scannable pairs rather than prose. Grid rather than
      flex so the labels line up as a row of columns at desktop width and stack cleanly below it. */
@@ -2462,6 +2480,17 @@ function detectSignals(text){
     compliance: has(['soc2','hipaa','pci','gdpr','compliance','regulated','audit']),
     security: has(['security','pii','sensitive data','encryption','zero trust']),
     dataHeavy: has(['big data','analytics','data pipeline','data lake','etl','warehouse']),
+    // Sandbox / code-execution isolation. Mirrors rule_engine.py's codeExecution block exactly —
+    // see the SANDBOX_VENDORS comment there for why this gates on explicit code execution rather
+    // than on the broader `agentic` signal.
+    codeExecution: has(['code interpreter','execute code','executes code','execute untrusted',
+      'run untrusted','untrusted code','code execution','run generated code','runs generated code',
+      'execute generated code','executes generated code',
+      'code sandbox','sandboxed execution','arbitrary code']),
+    e2bMentioned: has(['e2b']),
+    modalSandboxMentioned: has(['modal sandbox','modal.com']),
+    vercelSandboxMentioned: has(['vercel sandbox']),
+    daytonaMentioned: has(['daytona']),
     tinybirdMentioned: has(['tinybird']),
     clickhouseMentioned: has(['clickhouse']),
     structured: has(['structured data','relational','transactional','sql','ledger','orders']),
@@ -2904,6 +2933,31 @@ const DATABASE_NOTE = 'CockroachDB and DynamoDB aren\'t drop-in swaps for Postgr
 // warehouse. Tinybird is itself built on managed ClickHouse (not an independent competitor to
 // it) — its own docs describe it as "a managed ClickHouse platform" — so the `cat`/drawback
 // fields say so explicitly rather than presenting these as two unrelated options.
+// Twin of rule_engine.py's SANDBOX_VENDORS / pick_sandbox_vendor — see that file's comment for
+// the full rationale, including why the ordering deliberately contradicts the vendors' own
+// published cold-start figures (they are measured sequentially; agents create in concurrent
+// bursts, under which the ranking inverts).
+const SANDBOX_NOTE = 'Cold-start figures published by these vendors are measured sequentially, one create at a time. An agent that opens a sandbox per tool call creates in concurrent bursts, and under that load the ranking inverts — the provider advertising the fastest start has by far the highest failure rate. Benchmark your own concurrency pattern before choosing on headline latency.';
+const SANDBOX_VENDORS = [
+  {id:'e2b', name:'E2B', cat:'Firecracker microVM sandbox, open-source SDK', bestFor:'Teams wanting hardware-level isolation with a self-hostable escape hatch and the lowest per-vCPU rate', drawback:'Slowest burst cold start of the zero-failure options (~1.6s), and bills wall-clock for as long as the sandbox is alive rather than on active CPU'},
+  {id:'vercelsandbox', name:'Vercel Sandbox', cat:'Firecracker microVM with a credential-injecting egress proxy', bestFor:'Agents handling secrets: the proxy injects bearer tokens at the sandbox boundary, so API keys never enter the model\'s context at all', drawback:'Highest per-vCPU rate of the group, and pulls you toward the wider Vercel platform'},
+  {id:'modal', name:'Modal', cat:'Proprietary container runtime with first-class GPU support', bestFor:'Sandboxes that also need GPUs — inference or training alongside code execution, which the microVM options cover less well', drawback:'Not isolation-equivalent to a microVM, and the only option here with a non-zero burst failure rate (~1.2%)'},
+  {id:'daytona', name:'Daytona', cat:'Linux container sandbox marketed on sub-90ms cold start', bestFor:'Sequential, low-concurrency workloads where the headline start time is genuinely achievable', drawback:'That figure is measured one-create-at-a-time. Under concurrent burst — the load an agent loop actually produces — independent testing puts its failure rate near 37%, and container isolation is weaker than a microVM for untrusted code'},
+];
+
+function pickSandboxVendor(s){
+  if(!s.codeExecution) return {v:'Not applicable — nothing in this stack executes untrusted or model-generated code', why:'These products isolate code the operator did not write. Without that requirement your own trusted services are already covered by the compute and container choices, and adding a sandbox would be cost and latency for an absent threat.', primaryId:null, conf:'high'};
+  if(s.e2bMentioned) return {v:'E2B', why:'Explicit E2B mention detected — matching existing familiarity over evaluating a new platform.', primaryId:'e2b', conf:'high'};
+  if(s.vercelSandboxMentioned) return {v:'Vercel Sandbox', why:'Explicit Vercel Sandbox mention detected — matching existing familiarity over evaluating a new platform.', primaryId:'vercelsandbox', conf:'high'};
+  if(s.modalSandboxMentioned) return {v:'Modal', why:'Explicit Modal mention detected — matching existing familiarity over evaluating a new platform.', primaryId:'modal', conf:'high'};
+  if(s.daytonaMentioned) return {v:'Daytona — verify it under YOUR concurrency first', why:'Explicit Daytona mention detected, so this keeps your choice rather than overriding it. One thing to test before committing: the headline sub-90ms cold start is measured sequentially, and independent burst testing at ~50 concurrent creates reports a failure rate near 37%. If your agent starts a sandbox per tool call, benchmark that pattern specifically.', primaryId:'daytona', conf:'medium'};
+  // Same class of fix as the Neon/Turso and Tinybird/ClickHouse on-prem branches: every entry in
+  // this catalog is a hosted service with no air-gapped option.
+  if(s.onPrem) return {v:'Self-hosted gVisor or Firecracker — no managed option fits an air-gapped requirement', why:'Every managed sandbox here is a hosted multi-tenant service and none offers an air-gapped deployment. The isolation primitives underneath them are open-source, so run them yourself: gVisor for a syscall-filtering runtime under your existing orchestrator, or Firecracker directly for microVM-grade isolation.', primaryId:null, conf:'medium'};
+  if(s.security || s.enterprise) return {v:'Vercel Sandbox', why:'With sensitive data in scope the deciding feature is that its egress proxy injects credentials at the sandbox boundary, so API keys never enter the model\'s context — the leak path prompt injection actually exploits. Firecracker isolation and a 0% burst failure rate come with it; the highest per-vCPU rate of the group is the trade being made.', primaryId:'vercelsandbox', conf:'medium'};
+  return {v:'E2B', why:'The default for plain untrusted-code execution: microVM isolation, the lowest per-vCPU rate of the group, a 0% burst failure rate, and an open-source SDK you can self-host if the managed service stops fitting. Its ~1.6s burst cold start is the cost, and it only matters if you create a sandbox per tool call rather than reusing one per session.', primaryId:'e2b', conf:'medium'};
+}
+
 const REALTIME_ANALYTICS_VENDORS = [
   {id:'clickhouse', name:'ClickHouse Cloud', cat:'Fully managed real-time OLAP (the underlying engine)', bestFor:'Teams wanting maximum control over schema/query tuning with sub-second performance at scale, across AWS/GCP/Azure', strength:'Sub-second queries via columnar storage + vectorized execution; ClickPipes for managed ingestion from Kafka/S3/Postgres/MongoDB; separates storage/compute for automatic elastic scaling; reported ~70% cost reduction vs. comparable warehouses in published case studies', drawback:'Still a database you design schemas/materialized views for — more operational modeling work than a fully-abstracted API layer; open-source ClickHouse is also self-hostable if you want zero vendor spend and can own the ops yourself', pricing:'Pay-for-use, autoscaling compute/storage — no fixed published free tier; self-hosted OSS ClickHouse is free'},
   {id:'tinybird', name:'Tinybird', cat:'Managed ClickHouse platform with a developer-first API layer', bestFor:'Developers wanting to ship a real-time analytics API (not just a queryable database) fast, without hand-building the ingestion+API layer on top of raw ClickHouse', strength:'Built on managed ClickHouse but adds an Events API for ingestion, instant SQL-to-REST-API "pipes," zero-copy data branches for dev/staging, and built-in connectors (Kafka/S3/GCS/DynamoDB) — meaningfully less to build than wiring the same pipeline yourself on ClickHouse Cloud directly', drawback:'An abstraction layer over ClickHouse, not a different underlying engine — if you already have deep ClickHouse expertise and want direct control, ClickHouse Cloud itself may be the more natural fit; advanced features (connectors, data branches, horizontal scaling) are gated to paid/enterprise tiers', pricing:'Free: 10GB storage, 1,000 requests/day, shared 0.25 vCPU · Developer: from $49/mo, 25GB storage · Enterprise: custom, compute overage ~$0.0002/sec'},
@@ -4537,6 +4591,7 @@ function computeRecommendations(s){
   // No separate "base" pick exists (same shape as pickGitopsVendor) — pickRealtimeAnalyticsVendor()
   // produces the recommendation and the vendor primaryId together.
   const realtimeAnalyticsVendorPick = pickRealtimeAnalyticsVendor(s);
+  const sandboxVendorPick = pickSandboxVendor(s);
 
   const cost = pickCostOptimization(s), throughput = pickConcurrency(s), gov = pickGovernance(s), tradeoffs = pickTradeoffs(s);
   const orchestration = pickModelOrchestration(s), hosting = pickHostingLocation(s), computeTier = pickComputeTier(s),
@@ -4574,13 +4629,13 @@ function computeRecommendations(s){
     auditLogging, privilegedAccess, testingStrategy, networkBoundary, multiCloudBridging, securityGates,
     cloudVendorPick, computePlatformPick, orchestratorPick, gatewayVendorPick, dbVendorPick, msgVendorPick,
     llmProviderPick, vectorDbVendorPick, guardrailsVendorPick, cicdVendorPick, gitopsVendorPick, obsVendorPick, feVendorPick,
-    agentFrameworkVendorPick, inferenceServingVendorPick, realtimeAnalyticsVendorPick, llmObservabilityVendorPick,
+    agentFrameworkVendorPick, inferenceServingVendorPick, realtimeAnalyticsVendorPick, llmObservabilityVendorPick, sandboxVendorPick,
     // No separate "base" GitOps/RealtimeAnalytics pick exists (unlike cicd/compute) —
     // pickGitopsVendor()/pickRealtimeAnalyticsVendor() each produce the recommendation and the
     // vendor primaryId together. Aliased under plain `gitops`/`realtimeAnalytics` keys too so
     // STACK_CARD_CATEGORY / the refine-ask-challenge UI can look them up the same way every
     // other card's category key works (see the Python twin for the identical dual-key rationale).
-    gitops: gitopsVendorPick, realtimeAnalytics: realtimeAnalyticsVendorPick};
+    gitops: gitopsVendorPick, realtimeAnalytics: realtimeAnalyticsVendorPick, sandbox: sandboxVendorPick};
 
   // Domain floors run BEFORE exclusions: if the requirement both describes a domain floor (e.g.
   // a CLI tool) AND explicitly excludes something (e.g. "no logging"), the more specific,
@@ -4626,7 +4681,8 @@ function renderRecommendations(s, rec){
     auditLogging, privilegedAccess, testingStrategy, networkBoundary, multiCloudBridging, securityGates,
     cloudVendorPick, computePlatformPick, orchestratorPick, gatewayVendorPick, dbVendorPick, msgVendorPick,
     llmProviderPick, vectorDbVendorPick, guardrailsVendorPick, cicdVendorPick, gitopsVendorPick, obsVendorPick, feVendorPick,
-    agentFrameworkVendorPick, inferenceServingVendorPick, realtimeAnalyticsVendorPick, llmObservabilityVendorPick} = rec;
+    agentFrameworkVendorPick, inferenceServingVendorPick, realtimeAnalyticsVendorPick, llmObservabilityVendorPick,
+    sandboxVendorPick = (rec && (rec.sandboxVendorPick || rec.sandbox)) || {v: 'None needed', why: '', conf: 'low'}} = (rec || {});
 
   // `v === true`, not `v`: signals is no longer all-booleans — excluded/known/latencyTarget are
   // objects, and `{}` is truthy, so a plain truthiness filter would list them as detected signals.
@@ -4656,6 +4712,7 @@ function renderRecommendations(s, rec){
     ['Service Mesh', mesh.v, mesh.why, mesh.conf, 'Enterprise Architect', '', getCardBasis('mesh', mesh.conf)],
     ['Caching', cache.v, cache.why, cache.conf, 'SDE', renderAltToggle(CACHE_VENDORS, 'redis', CACHE_NOTE), getCardBasis('cache', cache.conf)],
     ['Primary Database(s)', db.v, db.why, db.conf, 'Application Architect', altToggle(DATABASE_VENDORS, dbVendorPick, DATABASE_NOTE), getCardBasis('database', db.conf)],
+    ['Code Execution Sandbox', sandboxVendorPick.v, sandboxVendorPick.why, sandboxVendorPick.conf, 'Security Architect', altToggle(SANDBOX_VENDORS, sandboxVendorPick, SANDBOX_NOTE), getCardBasis('sandbox', sandboxVendorPick.conf)],
     ['Real-Time Analytics', realtimeAnalyticsVendorPick.v, realtimeAnalyticsVendorPick.why, realtimeAnalyticsVendorPick.conf, 'Application Architect', altToggle(REALTIME_ANALYTICS_VENDORS, realtimeAnalyticsVendorPick, REALTIME_ANALYTICS_NOTE), getCardBasis('realtimeanalytics', realtimeAnalyticsVendorPick.conf)],
     ['Containers / Orchestration', containers.v, containers.why, containers.conf, 'SDE', altToggle(ORCHESTRATOR_VENDORS, orchestratorPick, ORCHESTRATOR_NOTE), getCardBasis('containers', containers.conf)],
     ['Observability', obs.v, obs.why, obs.conf, 'SDE / TPM', altToggle(OBSERVABILITY_VENDORS, obsVendorPick, OBSERVABILITY_NOTE), getCardBasis('observability', obs.conf)],
@@ -7207,7 +7264,7 @@ const STACK_CARD_CATEGORY = {
   'Cloud Provider':'cloud', 'API Gateway / Edge':'gateway', 'Identity & Access (IAM)':'iam',
   'Backend Language(s)':'languages', 'Architecture Style':'architecture', 'Compute Model':'compute',
   'Messaging / Streaming':'messaging', 'Service Mesh':'mesh', 'Caching':'cache',
-  'Primary Database(s)':'database', 'Real-Time Analytics':'realtimeanalytics', 'Containers / Orchestration':'containers',
+  'Primary Database(s)':'database', 'Real-Time Analytics':'realtimeanalytics', 'Code Execution Sandbox':'sandbox', 'Containers / Orchestration':'containers',
   'Observability':'observability', 'Frontend':'frontend', 'CI/CD & Deployment':'cicd',
   'GitOps / Continuous Deployment':'gitops', 'DNS':'dns',
   // Was missing entirely, including for the pre-existing Hybrid Connectivity card — its refine

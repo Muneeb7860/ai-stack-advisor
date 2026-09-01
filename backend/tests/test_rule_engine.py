@@ -169,6 +169,7 @@ def test_recommend_stack_returns_all_expected_categories():
         "agent_framework_vendor", "inference_serving_vendor",
         "realtime_analytics", "realtime_analytics_vendor",
         "llm_observability_vendor",
+        "sandbox", "sandbox_vendor",
     }
     assert set(result["recommendations"].keys()) == expected_categories
 

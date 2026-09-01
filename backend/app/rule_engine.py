@@ -539,6 +539,16 @@ def detect_signals(text: str) -> dict:
         "compliance": has(["soc2", "hipaa", "pci", "gdpr", "compliance", "regulated", "audit"]),
         "security": has(["security", "pii", "sensitive data", "encryption", "zero trust"]),
         "dataHeavy": has(["big data", "analytics", "data pipeline", "data lake", "etl", "warehouse"]),
+        "codeExecution": has([
+            "code interpreter", "execute code", "executes code", "execute untrusted",
+            "run untrusted", "untrusted code", "code execution", "run generated code",
+            "runs generated code", "execute generated code", "executes generated code",
+            "code sandbox", "sandboxed execution", "arbitrary code",
+        ]),
+        "e2bMentioned": has(["e2b"]),
+        "modalSandboxMentioned": has(["modal sandbox", "modal.com"]),
+        "vercelSandboxMentioned": has(["vercel sandbox"]),
+        "daytonaMentioned": has(["daytona"]),
         "tinybirdMentioned": has(["tinybird"]),
         "clickhouseMentioned": has(["clickhouse"]),
         "structured": has(["structured data", "relational", "transactional", "sql", "ledger", "orders"]),
@@ -982,6 +992,74 @@ DATABASE_NOTE = "CockroachDB and DynamoDB aren't drop-in swaps for Postgres/Mong
 # warehouse. Tinybird is itself built on managed ClickHouse (not an independent competitor to
 # it) — its own docs describe it as "a managed ClickHouse platform" — so the `cat`/drawback
 # fields say so explicitly rather than presenting these as two unrelated options.
+# Distinct from ORCHESTRATOR_VENDORS (Kubernetes/ECS/Nomad) and from pick_compute: those run
+# YOUR OWN trusted, long-lived services, and the isolation they provide is between your workloads
+# and your other workloads. This category is the opposite problem — ephemeral, per-task execution
+# of code the operator did not write and cannot review, where the threat model is the code itself.
+# An agent that only calls read-only APIs does not need one, which is why this gates on an
+# explicit code-execution signal rather than on `agentic` generally.
+#
+# The ordering here encodes a finding that contradicts the vendors' own marketing, and it is the
+# reason this category is worth having rather than deferring to a search: published cold-start
+# figures are measured SEQUENTIALLY, one create at a time, while an agent loop that starts a
+# sandbox per tool call generates concurrent bursts. Under burst the ranking inverts and the
+# provider advertising the fastest start has by far the worst failure rate. Encoding only the
+# headline numbers would actively mislead, which is what most comparisons of these tools do.
+SANDBOX_VENDORS = [
+    {"id": "e2b", "name": "E2B", "cat": "Firecracker microVM sandbox, open-source SDK", "bestFor": "Teams wanting hardware-level isolation with a self-hostable escape hatch and the lowest per-vCPU rate", "drawback": "Slowest burst cold start of the zero-failure options (~1.6s), and bills wall-clock for as long as the sandbox is alive rather than on active CPU"},
+    {"id": "vercelsandbox", "name": "Vercel Sandbox", "cat": "Firecracker microVM with a credential-injecting egress proxy", "bestFor": "Agents handling secrets: the proxy injects bearer tokens at the sandbox boundary, so API keys never enter the model's context at all", "drawback": "Highest per-vCPU rate of the group, and pulls you toward the wider Vercel platform"},
+    {"id": "modal", "name": "Modal", "cat": "Proprietary container runtime with first-class GPU support", "bestFor": "Sandboxes that also need GPUs — inference or training alongside code execution, which the microVM options cover less well", "drawback": "Not isolation-equivalent to a microVM, and the only option here with a non-zero burst failure rate (~1.2%)"},
+    {"id": "daytona", "name": "Daytona", "cat": "Linux container sandbox marketed on sub-90ms cold start", "bestFor": "Sequential, low-concurrency workloads where the headline start time is genuinely achievable", "drawback": "That figure is measured one-create-at-a-time. Under concurrent burst — the load an agent loop actually produces — independent testing puts its failure rate near 37%, and container isolation is weaker than a microVM for untrusted code"},
+]
+
+
+def pick_sandbox_vendor(s):
+    """Gated on an explicit code-execution signal, not on `agentic`.
+
+    An agentic workflow that only calls read-only APIs has no untrusted-code problem to solve, and
+    recommending a sandbox for it would be the same over-firing mistake that
+    pick_realtime_analytics_vendor avoids by requiring realtime alongside dataHeavy.
+    """
+    if not s["codeExecution"]:
+        return {
+            "v": "Not applicable — nothing in this stack executes untrusted or model-generated code",
+            "why": "These products isolate code the operator did not write. Without that requirement your own trusted services are already covered by the compute and container choices, and adding a sandbox would be cost and latency for an absent threat.",
+            "primaryId": None, "conf": "high",
+        }
+    if s["e2bMentioned"]:
+        return {"v": "E2B", "why": "Explicit E2B mention detected — matching existing familiarity over evaluating a new platform.", "primaryId": "e2b", "conf": "high"}
+    if s["vercelSandboxMentioned"]:
+        return {"v": "Vercel Sandbox", "why": "Explicit Vercel Sandbox mention detected — matching existing familiarity over evaluating a new platform.", "primaryId": "vercelsandbox", "conf": "high"}
+    if s["modalSandboxMentioned"]:
+        return {"v": "Modal", "why": "Explicit Modal mention detected — matching existing familiarity over evaluating a new platform.", "primaryId": "modal", "conf": "high"}
+    if s["daytonaMentioned"]:
+        return {
+            "v": "Daytona — verify it under YOUR concurrency first",
+            "why": "Explicit Daytona mention detected, so this keeps your choice rather than overriding it. One thing to test before committing: the headline sub-90ms cold start is measured sequentially, and independent burst testing at ~50 concurrent creates reports a failure rate near 37%. If your agent starts a sandbox per tool call, benchmark that pattern specifically.",
+            "primaryId": "daytona", "conf": "medium",
+        }
+    if s["onPrem"]:
+        # Same class of fix as the Neon/Turso and Tinybird/ClickHouse on-prem branches: every
+        # entry in this catalog is a hosted service with no air-gapped option, so naming one for
+        # an air-gapped requirement would recommend something the reader cannot deploy.
+        return {
+            "v": "Self-hosted gVisor or Firecracker — no managed option fits an air-gapped requirement",
+            "why": "Every managed sandbox here is a hosted multi-tenant service and none offers an air-gapped deployment. The isolation primitives underneath them are open-source, so run them yourself: gVisor for a syscall-filtering runtime under your existing orchestrator, or Firecracker directly for microVM-grade isolation.",
+            "primaryId": None, "conf": "medium",
+        }
+    if s["security"] or s["enterprise"]:
+        return {
+            "v": "Vercel Sandbox",
+            "why": "With sensitive data in scope the deciding feature is that its egress proxy injects credentials at the sandbox boundary, so API keys never enter the model's context — the leak path prompt injection actually exploits. Firecracker isolation and a 0% burst failure rate come with it; the highest per-vCPU rate of the group is the trade being made.",
+            "primaryId": "vercelsandbox", "conf": "medium",
+        }
+    return {
+        "v": "E2B",
+        "why": "The default for plain untrusted-code execution: microVM isolation, the lowest per-vCPU rate of the group, a 0% burst failure rate, and an open-source SDK you can self-host if the managed service stops fitting. Its ~1.6s burst cold start is the cost, and it only matters if you create a sandbox per tool call rather than reusing one per session.",
+        "primaryId": "e2b", "conf": "medium",
+    }
+
+
 REALTIME_ANALYTICS_VENDORS = [
     {"id": "clickhouse", "name": "ClickHouse Cloud", "cat": "Fully managed real-time OLAP (the underlying engine)", "bestFor": "Teams wanting maximum control over schema/query tuning with sub-second performance at scale, across AWS/GCP/Azure", "strength": "Sub-second queries via columnar storage + vectorized execution; ClickPipes for managed ingestion from Kafka/S3/Postgres/MongoDB; separates storage/compute for automatic elastic scaling; reported ~70% cost reduction vs. comparable warehouses in published case studies", "drawback": "Still a database you design schemas/materialized views for — more operational modeling work than a fully-abstracted API layer; open-source ClickHouse is also self-hostable if you want zero vendor spend and can own the ops yourself", "pricing": "Pay-for-use, autoscaling compute/storage — no fixed published free tier; self-hosted OSS ClickHouse is free"},
     {"id": "tinybird", "name": "Tinybird", "cat": "Managed ClickHouse platform with a developer-first API layer", "bestFor": "Developers wanting to ship a real-time analytics API (not just a queryable database) fast, without hand-building the ingestion+API layer on top of raw ClickHouse", "strength": "Built on managed ClickHouse but adds an Events API for ingestion, instant SQL-to-REST-API \"pipes,\" zero-copy data branches for dev/staging, and built-in connectors (Kafka/S3/GCS/DynamoDB) — meaningfully less to build than wiring the same pipeline yourself on ClickHouse Cloud directly", "drawback": "An abstraction layer over ClickHouse, not a different underlying engine — if you already have deep ClickHouse expertise and want direct control, ClickHouse Cloud itself may be the more natural fit; advanced features (connectors, data branches, horizontal scaling) are gated to paid/enterprise tiers", "pricing": "Free: 10GB storage, 1,000 requests/day, shared 0.25 vCPU · Developer: from $49/mo, 25GB storage · Enterprise: custom, compute overage ~$0.0002/sec"},
@@ -2691,6 +2769,7 @@ def recommend_stack(requirement_text: str) -> dict:
     # No separate "base" pick exists (same shape as gitops) — pick_realtime_analytics_vendor()
     # produces the recommendation and the vendor primaryId together.
     realtime_analytics = pick_realtime_analytics_vendor(s)
+    sandbox = pick_sandbox_vendor(s)
     containers = pick_containers(s)
     obs = pick_observability(s)
     fe = pick_frontend(s)
@@ -2721,6 +2800,8 @@ def recommend_stack(requirement_text: str) -> dict:
         "database": db,
         "realtime_analytics": realtime_analytics,
         "realtime_analytics_vendor": realtime_analytics,
+        "sandbox": sandbox,
+        "sandbox_vendor": sandbox,
         "containers": containers,
         "observability": obs,
         "frontend": fe,
