@@ -429,6 +429,54 @@
   .results-hero .rh-eyebrow{font-size:var(--fs-xs); text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); font-weight:600; margin-bottom:6px;}
   .results-hero .rh-headline{font-size:var(--fs-xl); font-weight:800; letter-spacing:-0.015em; color:var(--text); line-height:1.25; margin-bottom:10px;}
   .results-hero .signals{margin-top:0;}
+  /* Tier 1 spine — the answer, stated as scannable pairs rather than prose. Grid rather than
+     flex so the labels line up as a row of columns at desktop width and stack cleanly below it. */
+  .results-hero .rh-spine{display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:14px; margin:14px 0 4px;}
+  .results-hero .rh-spine-label{font-size:var(--fs-xs); text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); margin-bottom:3px;}
+  .results-hero .rh-spine-value{font-family:var(--font-mono); font-size:14.5px; font-weight:500; color:var(--text); line-height:1.35;}
+  /* Signals demoted to evidence-behind-a-disclosure. Styled to read as a quiet secondary
+     control, not a third call to action competing with the answer above it. */
+  .results-hero .rh-evidence{margin-top:14px; border-top:1px solid color-mix(in srgb, var(--accent) 18%, transparent); padding-top:10px;}
+  .results-hero .rh-evidence > summary{cursor:pointer; font-size:12px; color:var(--muted); list-style:none;}
+  .results-hero .rh-evidence > summary::-webkit-details-marker{display:none;}
+  .results-hero .rh-evidence > summary::before{content:'▸ '; color:var(--muted);}
+  .results-hero .rh-evidence[open] > summary::before{content:'▾ ';}
+  .results-hero .rh-evidence > summary:hover{color:var(--text);}
+
+  /* Tier 2 — "Needs your attention". Deliberately NOT a .card: it sits between the hero and the
+     report as its own register, and giving it the same treatment as the 19 sections below would
+     bury the one thing this restructure exists to surface. */
+  .attention-block{
+    border:1px solid var(--border); border-left:2px solid var(--warn);
+    border-radius:var(--radius-lg); background:var(--panel); padding:16px 18px; margin-bottom:18px;
+  }
+  .attention-head{font-size:var(--fs-xs); text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); font-weight:600;}
+  .attention-sub{font-size:12.5px; color:var(--muted); margin:5px 0 12px; line-height:1.5; max-width:70ch;}
+  .attention-row{
+    display:flex; gap:12px; align-items:flex-start; padding:11px 0; text-decoration:none; color:inherit;
+    border-top:1px solid var(--border);
+  }
+  .attention-row:first-of-type{border-top:none;}
+  .attention-row:hover .attention-title{color:var(--accent);}
+  .attention-rank{
+    font-family:var(--font-mono); font-weight:700; color:var(--warn); flex-shrink:0;
+    width:16px; text-align:center; line-height:1.5;
+  }
+  .attention-body{flex:1; min-width:0;}
+  .attention-title{font-size:14px; font-weight:600; color:var(--text); display:block;}
+  .attention-pick{font-family:var(--font-mono); font-weight:400; color:var(--muted2); font-size:13px;}
+  .attention-reason{display:block; font-size:12.5px; color:var(--muted); line-height:1.5; margin-top:2px;}
+  .attention-flags{display:flex; flex-direction:column; gap:4px; align-items:flex-end; flex-shrink:0;}
+  .attention-flag{
+    font-size:10px; text-transform:uppercase; letter-spacing:0.04em; white-space:nowrap;
+    padding:2px 7px; border-radius:99px; border:1px solid var(--border); color:var(--muted);
+  }
+  .attention-flag.hard{color:var(--warn); border-color:color-mix(in srgb, var(--warn) 35%, transparent);}
+  .attention-flag.conf-low{color:var(--warn); border-color:color-mix(in srgb, var(--warn) 35%, transparent);}
+  @media (max-width:560px){
+    .attention-row{flex-wrap:wrap;}
+    .attention-flags{flex-direction:row; align-items:center; width:100%; padding-left:28px;}
+  }
   .brownfield-banner{margin-top:14px; padding:12px 14px; border-radius:var(--radius-sm);
     background:var(--conf-high-bg); border:1px solid var(--conf-high-border);
     font-size:var(--fs-sm); color:var(--muted2); line-height:1.5;}
@@ -4534,16 +4582,47 @@ function renderRecommendations(s, rec){
           : `. They are shown so you can judge the report against them; overriding is only available
             on an analysis you run yourself.`}
       </div>` : '');
+  // Tier 1 — the answer (docs/design/RESULTS_HIERARCHY_SCOPE.md). This block used to open with
+  // "N signals detected" and the signal chips: the lead space spent restating the user's OWN
+  // input back at them, with the recommendation starting below it in section 1 of 19. The
+  // headline was already the answer ("AWS + PostgreSQL"); it just wasn't leading. Signals are
+  // evidence FOR the answer, not the answer, so they move below into a disclosure — still one
+  // interaction away, and still duplicated per-card by the existing "why this pick" inspection.
+  const attentionItems = computeAttentionItems(stackCards);
+  const heroSpine = [
+    ['Cloud', cloud.v], ['Database', db.v], ['Compute', compute.v],
+  ].filter(([, v]) => v).map(([label, v]) =>
+    `<div class="rh-spine-item"><div class="rh-spine-label">${label}</div><div class="rh-spine-value">${String(v).split(/[(—·]/)[0].trim()}</div></div>`
+  ).join('');
+
   const signalsHtml = `<div class="results-hero">
-      <div class="rh-eyebrow">${activeSignals.length} signal${activeSignals.length===1?'':'s'} detected${excludedList.length?` · ${excludedList.length} exclusion${excludedList.length===1?'':'s'}`:''}</div>
+      <div class="rh-eyebrow">Recommended stack</div>
       <div class="rh-headline">${heroHeadline}</div>
-      <div class="signals">${activeSignals.length? activeSignals.map(x=>`<span class="sig sig-stated">${x}</span>`).join('') : '<span class="sig">generic / no strong signals — defaults applied</span>'}</div>
-      ${excludedHtml}
-      ${renderTokenBudgetHtml(rec, s)}
+      ${s.brownfieldGuardrailsOnly || s.brownfieldAiOnly ? '' : `<div class="rh-spine">${heroSpine}</div>`}
       ${lowSignalBanner}
       ${ambiguousShortInputBanner}
       ${brownfieldBanner}
-    </div>`;
+      <details class="rh-evidence">
+        <summary>Why this — ${activeSignals.length} signal${activeSignals.length===1?'':'s'} detected${excludedList.length?`, ${excludedList.length} exclusion${excludedList.length===1?'':'s'}`:''}</summary>
+        <div class="signals" style="margin-top:10px;">${activeSignals.length? activeSignals.map(x=>`<span class="sig sig-stated">${x}</span>`).join('') : '<span class="sig">generic / no strong signals — defaults applied</span>'}</div>
+        ${excludedHtml}
+        ${renderTokenBudgetHtml(rec, s)}
+      </details>
+    </div>
+    ${attentionItems.length ? `<div class="attention-block">
+      <div class="attention-head">Needs your attention</div>
+      <div class="attention-sub">${attentionItems.length} of ${stackCards.length} picks worth a second look before you commit — ranked by how expensive they are to reverse against how much signal supported them.</div>
+      ${attentionItems.map(it => `
+        <a class="attention-row" href="#stack">
+          <span class="attention-rank">${it.rank === 1 ? '!' : '·'}</span>
+          <span class="attention-body">
+            <span class="attention-title">${it.title}<span class="attention-pick"> — ${String(it.pick).split(/[(—·]/)[0].trim()}</span></span>
+            <span class="attention-reason">${it.reason}</span>
+          </span>
+          <span class="attention-flags">${it.hardToReverse ? '<span class="attention-flag hard">Hard to reverse</span>' : ''}<span class="attention-flag conf-${it.conf}">${it.conf} confidence</span></span>
+        </a>
+      `).join('')}
+    </div>` : ''}`;
 
   const sections = [];
   const visibleSections = computeVisibleSections(s);
@@ -4767,14 +4846,25 @@ function renderRecommendations(s, rec){
   sec('docs', 'Docs', 'Architecture Documentation',
     `<div class="card"><div class="docs-row">${docs.map(d=>`<div class="doc-chip"><b>${d.label}</b>${d.text}</div>`).join('')}</div></div>`);
 
+  // Sections now default to collapsed (Tier 3), so a nav link must OPEN its target as well as
+  // scroll to it — otherwise clicking one jumps to a closed accordion and appears to do nothing.
+  // Called out in the scope doc as the likeliest bug in this change; locked by a test.
+  // The toggle-all button's label starts at "Expand all" for the same reason: it derives its
+  // next action from its own text, so seeding it wrong would invert the control on first click.
   const navHtml = `
       <a href="#sig-anchor" onclick="return true;">Signals</a>
-      ${sections.map(x=>`<a href="#${x.id}">${x.navLabel}</a>`).join('')}
-      <button class="toc-toggle" onclick="toggleAll()" id="toggleAllBtn">Collapse all</button>
+      ${sections.map(x=>`<a href="#${x.id}" onclick="openSectionFromNav('${x.id}')">${x.navLabel}</a>`).join('')}
+      <button class="toc-toggle" onclick="toggleAll()" id="toggleAllBtn">Expand all</button>
     `;
 
+  // Tier 3 — everything else, collapsed by default (docs/design/RESULTS_HIERARCHY_SCOPE.md).
+  // This used to hardcode `open` on all 19 sections, so the disclosure mechanism existed and
+  // worked but was never actually used as disclosure. Only the stack grid — the detail behind
+  // the Tier 1 answer — stays open; the rest are one click away. Nothing is removed, and
+  // export/share still serialise the full recommendation object rather than the DOM.
+  const DEFAULT_OPEN_SECTIONS = new Set(['stack']);
   const accordionHtml = sections.map(x=>
-    `<details class="section-block" id="${x.id}" open><summary class="section-title">${x.titleHtml}</summary>${x.bodyHtml}</details>`
+    `<details class="section-block" id="${x.id}"${DEFAULT_OPEN_SECTIONS.has(x.id) ? ' open' : ''}><summary class="section-title">${x.titleHtml}</summary>${x.bodyHtml}</details>`
   ).join('');
 
   const html = `
@@ -4974,6 +5064,15 @@ function setView(v){
   document.getElementById('flowPopover').style.display = 'none';
   if(v==='flow' && flowState.graph){ requestAnimationFrame(flowFit); }
 }
+// Opens a section before the browser's own anchor jump lands on it. Returns true so the
+// href="#id" navigation still happens — this augments the anchor, it doesn't replace it, so
+// the URL still carries the section and back/forward still work.
+function openSectionFromNav(id){
+  const el = document.getElementById(id);
+  if (el && el.tagName === 'DETAILS') el.open = true;
+  return true;
+}
+
 function toggleAll(){
   const details = document.querySelectorAll('#results details.section-block');
   const btn = document.getElementById('toggleAllBtn');
@@ -6730,6 +6829,42 @@ function renderExitCostBadge(title){
   const category = STACK_CARD_CATEGORY[title] || null;
   if (!category || !EXIT_COST_CATEGORIES.has(category)) return '';
   return `<span class="exit-cost-badge" title="Expensive to change later — worth the extra review time before committing">⚠️ Hard to reverse</span>`;
+}
+
+// ============ Tier 2: "Needs your attention" (docs/design/RESULTS_HIERARCHY_SCOPE.md) ============
+// Crosses two things the engine ALREADY computes — exit cost (how expensive a pick is to reverse)
+// and confidence (how much signal supported it) — into a ranking neither gives alone. The top
+// rank is the genuinely valuable one: "you are being asked to commit to something expensive to
+// reverse, on weak signal." Nothing surfaced that before this.
+//
+// Deliberately NOT a new rule-engine output: this is a pure function of the stackCards array that
+// renderRecommendations already builds, so it adds no picks, no signals, and nothing the Python
+// twin would need to mirror (the dual-engine parity surface is untouched by design).
+const ATTENTION_MAX = 4;
+
+function computeAttentionItems(stackCards){
+  const ranked = [];
+  for (const [title, pick, , conf] of (stackCards || [])) {
+    const category = STACK_CARD_CATEGORY[title] || null;
+    const hardToReverse = !!category && EXIT_COST_CATEGORIES.has(category);
+    let rank = null, reason = '';
+    if (hardToReverse && conf === 'low') {
+      rank = 1;
+      reason = 'Expensive to reverse, and we had little signal to go on — worth deciding deliberately rather than accepting the default.';
+    } else if (hardToReverse && conf === 'medium') {
+      rank = 2;
+      reason = 'Expensive to reverse, and the signal behind it was only moderate — worth a second look before committing.';
+    } else if (conf === 'low') {
+      rank = 3;
+      reason = 'Little signal behind this one, though it is comparatively cheap to change later.';
+    }
+    // A high-confidence pick is never listed, at any exit cost — the whole point is a short list
+    // of things that actually warrant attention, not a re-listing of the report.
+    if (rank !== null) ranked.push({title, pick, conf, hardToReverse, rank, reason});
+  }
+  // Stable within a rank: preserves stackCards' own order (roughly infra-outward), so two
+  // equally-urgent items read in the same order the user will meet them further down the report.
+  return ranked.sort((a, b) => a.rank - b.rank).slice(0, ATTENTION_MAX);
 }
 
 // Labels are the ui-craft brief's exact spec (Phase 4 table) — the badge must show human
