@@ -587,11 +587,15 @@
      event backbone, observability). Reuses the .conf visual vocabulary (small pill, uppercase,
      chip background) rather than inventing a new alarming red banner — this is "worth extra
      review time", not "you made a mistake". Sits in the card head next to the confidence pill. */
+  /* Quieted to match .attention-flag.hard, which made the same call for the same reason: this
+     appears on every hard-to-reverse card, so as an alarm colour it discriminated nothing while
+     being the loudest element on the results page. It's context — worth noticing on a card,
+     never worth shouting. Same concept, one treatment. */
   .exit-cost-badge{
     flex-shrink:0; display:inline-flex; align-items:center; gap:4px;
-    font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em;
+    font-size:9px; font-weight:600; text-transform:uppercase; letter-spacing:0.03em;
     padding:2px 7px 2px 6px; border-radius:5px; white-space:nowrap; margin-top:1px;
-    background:var(--chip); color:var(--warn); border:1px solid var(--border); cursor:help;
+    background:var(--chip); color:var(--muted2); border:1px solid var(--border); cursor:help;
     font-family:var(--font-mono);
   }
   .badge{
@@ -6888,7 +6892,10 @@ const EXIT_COST_CATEGORIES = new Set(['cloud', 'iam', 'database', 'gateway', 'me
 function renderExitCostBadge(title){
   const category = STACK_CARD_CATEGORY[title] || null;
   if (!category || !EXIT_COST_CATEGORIES.has(category)) return '';
-  return `<span class="exit-cost-badge" title="Expensive to change later — worth the extra review time before committing">⚠️ Hard to reverse</span>`;
+  // The ⚠️ here survived the emoji-as-iconography sweep that replaced the rest of this file's
+  // emoji with stroke icons. Dropped rather than swapped for an icon: the label already says
+  // "hard to reverse", so a glyph in front of it was decoration doing no work.
+  return `<span class="exit-cost-badge" title="Expensive to change later — worth the extra review time before committing">Hard to reverse</span>`;
 }
 
 // ============ Tier 2: "Needs your attention" (docs/design/RESULTS_HIERARCHY_SCOPE.md) ============

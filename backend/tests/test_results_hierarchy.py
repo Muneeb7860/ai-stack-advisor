@@ -215,6 +215,27 @@ def test_attention_block_is_collapsed_to_one_line_by_default():
     assert '<details class="attention-block" open' not in text
 
 
+# ------------------------------------------- one treatment for "hard to reverse", not two
+
+def test_card_exit_cost_badge_is_quiet_like_the_attention_flag():
+    """The same concept had two treatments: neutral in the attention list, an amber warning on
+    the cards. It appears on every hard-to-reverse card, so as an alarm colour it discriminated
+    nothing while being the loudest element on the results page."""
+    text = _text()
+    m = re.search(r"\.exit-cost-badge\{([^}]*)\}", text)
+    assert m, ".exit-cost-badge rule not found"
+    assert "var(--warn)" not in m.group(1), "context, not alarm — must match .attention-flag.hard"
+    assert "var(--muted2)" in m.group(1)
+
+
+def test_card_exit_cost_badge_has_no_emoji():
+    """This ⚠️ survived the emoji-as-iconography sweep. Dropped rather than swapped for a stroke
+    icon: the label already says "hard to reverse", so a glyph in front was decoration."""
+    m = re.search(r'return `<span class="exit-cost-badge"[^`]*`', _text())
+    assert m, "exit-cost badge markup not found"
+    assert "⚠" not in m.group(0)
+
+
 # ------------------------------------------------------- shared short-name helper (flow + cards)
 
 @requires_node
