@@ -50,6 +50,16 @@ KEYMAP = {
     "auditLogging": "audit_logging", "privilegedAccess": "privileged_access",
     "testingStrategy": "testing_strategy", "networkBoundary": "network_boundary",
     "multiCloudBridging": "multi_cloud_bridging", "securityGates": "security_gates",
+    # The six vendor categories added since this map was written. Every one shipped claiming
+    # dual-engine parity, and none of them was actually being compared here — a divergence in any
+    # would have gone undetected, which is precisely the failure this file exists to prevent.
+    # Found while adding `sandbox`: a deliberate JS-only change to its default pick still passed.
+    "gitops": "gitops",
+    "realtimeAnalytics": "realtime_analytics",
+    "sandbox": "sandbox",
+    "agentFrameworkVendorPick": "agent_framework_vendor",
+    "inferenceServingVendorPick": "inference_serving_vendor",
+    "llmObservabilityVendorPick": "llm_observability_vendor",
 }
 
 # Rationale prose still differs in this many (requirement, category) pairs out of 450. Ratcheted
