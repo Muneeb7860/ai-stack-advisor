@@ -90,16 +90,28 @@ def test_canonical_graph_builder_has_no_layout_coordinates():
     assert "color:" not in body, "domain core must not embed theme colors"
 
 
-def test_layout_adapter_exists_and_adds_coordinates():
+@pytest.mark.parametrize("layout_fn", [
+    "layoutFlowGraphHorizontal",
+    "layoutFlowGraphVertical",
+])
+def test_layout_adapter_exists_and_adds_coordinates(layout_fn):
+    """layoutFlowGraph became a dispatcher when Flow View gained a single-column layout for
+    narrow screens (the six-tier horizontal one spans ~1300px and is illegible on a phone), so
+    the coordinates are now assigned by the two mode implementations it delegates to. The
+    contract is unchanged — the layout adapter, not the domain core, owns x/y/color — so this
+    now checks BOTH implementations rather than the dispatcher's body, which asserts strictly
+    more than before: neither mode may quietly stop producing coordinates."""
     source = _read_source()
     assert "function layoutFlowGraph(" in source, (
         "layoutFlowGraph(graph) must exist to decorate the canonical graph with "
         "x/y/color for the Flow View canvas."
     )
-    body = _extract_function_body(source, "layoutFlowGraph")
+    assert f"function {layout_fn}(" in source, f"{layout_fn} must exist"
+    body = _extract_function_body(source, layout_fn)
     # Accept both `x: expr` and ES6 shorthand `{ x, y }` property syntax.
-    assert re.search(r"\bx\s*[,:}]", body), "layoutFlowGraph must assign x coordinates"
-    assert re.search(r"\by\s*[,:}]", body), "layoutFlowGraph must assign y coordinates"
+    assert re.search(r"\bx\s*[,:}]", body), f"{layout_fn} must assign x coordinates"
+    assert re.search(r"\by\s*[,:}]", body), f"{layout_fn} must assign y coordinates"
+    assert "color:" in body, f"{layout_fn} must attach the theme color, not the domain core"
 
 
 @pytest.mark.parametrize("adapter_fn", [

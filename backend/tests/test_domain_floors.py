@@ -41,6 +41,11 @@ global.navigator = { clipboard:{} };
 global.localStorage = { getItem:()=>null, setItem(){}, removeItem(){} };
 global.fetch = () => Promise.resolve({ ok:false });
 global.URL = { createObjectURL:()=>'', revokeObjectURL(){} };
+// Needed since Flow became the default view: setView('flow') schedules its fit via
+// requestAnimationFrame, a browser API this stub had no reason to provide while the default was
+// Cards and that branch was never reached. Run synchronously — these tests assert on rendered
+// output immediately after, so deferring would race them.
+global.requestAnimationFrame = (fn) => fn();
 """
 
 
