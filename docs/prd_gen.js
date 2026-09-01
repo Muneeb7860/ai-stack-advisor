@@ -14,7 +14,7 @@ children.push(...coverTitle(
   'Product Requirements Document',
   'Functional & technical specification',
   [
-    ['Document Version', '1.10'],
+    ['Document Version', '1.11'],
     ['Status', 'v1 and v2 shipped, frontend actually wired to the backend — see Section 7.7, Section 9.2, and Release Plan (Section 11). Hexagonal diagram-export architecture, AI Opportunity Layer, technology-catalog unification, Huawei Cloud vendor support, and Hybrid Connectivity added in a later session — see Section 7.2, 7.7, 9.4, and Release Plan.'],
     ['Prepared by', 'Muneeb, with Claude (Cowork)'],
     ['Date', new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })],
@@ -39,6 +39,7 @@ children.push(reqTable(
     ['1.8', 'Later session: added Harness Readiness (Section 7.9, FR-45 through FR-49) — a fourth, structurally distinct entry mode that self-audits a team\'s own agent-development process (not a technology-stack recommendation) against a third-party practitioner rubric, via a guided 5-question radio flow. Client-side only, v1-only by design (no Python-side equivalent). First step of a new "help teams build their own harness" product direction, separate from the existing stack-advisor product this PRD otherwise documents. See BRD Section 8.2 for the user-facing summary and docs/harness-engineering/ for the underlying scope and research.'],
     ['1.10', 'Later session: the results presentation was restructured, which is the largest change to how this product is read since v1. Added Section 7.11 (FR-58 through FR-62): the report leads with the recommendation instead of echoing the user\'s own detected signals back at them, a ranked "needs your attention" list surfaces the picks that are expensive to reverse AND weakly supported, and the 19 sections plus 24 stack cards now default to collapsed rather than all-expanded. Flow View became the default view with Cards as the alternative, after Flow gained a single-column layout for narrow screens (it was previously illegible on a phone). Also: Harness Readiness gained score history and feedback capture (FR-56, FR-57), and four deployment-configuration gaps were closed (NFR-6). See BRD Section 8.2.'],
     ['1.9', 'Later session: two additions. (1) Harness Readiness evidence upload (Section 7.9, FR-50 through FR-52) — an optional per-question file attachment that checks a real file against the user\'s self-reported score and flags mismatches without overriding them; the Shape A/B hybrid scoped in docs/harness-engineering/HARNESS_EVIDENCE_SCOPE.md, staying inside NFR-1 by reading one user-picked file in the browser. (2) LLM Observability as a new recommendation category (Section 7.10, FR-53 through FR-55) — Langfuse/Braintrust, closing a real gap where the product recommended AI stacks but said nothing about tracing or evaluating the LLM calls it recommended. Both client-side only. Note for future maintainers: FR-53\'s not-applicable gating was found wrong in post-merge review (it recommended LLM tracing to stacks with no LLM at all) and is documented here in its corrected form.'],
+    ['1.11', 'Later session: closed the last two items from the interface audit. A command palette and keyboard-first navigation (Section 7.12, FR-63 through FR-65) address what the audit scored as the weakest dimension by a wide margin — only Enter, Space and Escape were handled anywhere, with zero meta/ctrl shortcuts. A density pass (FR-66) retired redundant nested borders. The audit\'s third item, empty states, was investigated and found NOT to be a real gap: that score came from a grep for a class name rather than a check of behaviour, and every empty case is in fact handled. Also applied a design system to landing.html only (FR-67), deliberately not to the dashboard.'],
   ]
 ));
 
@@ -211,6 +212,17 @@ children.push(reqTable(['ID', 'Requirement', 'Status'], [1000, 5600, 1800], [
   ['FR-62', 'On viewports at or below 860px, Flow View lays out as a single tier-ordered column with vertical connectors, fit to width and scrolled rather than shrunk to fit. The six-tier horizontal layout spans roughly 1300px and previously auto-fit to a quarter scale on a phone, rendering every label unreadable. Node labels show a short name rather than the full pick string with its caveats.', 'Shipped — client-side only; prerequisite for FR-61, since defaulting to an unreadable canvas would be worse than not defaulting to it'],
 ]));
 
+children.push(h2('7.12 Keyboard Navigation & Presentation Polish'));
+children.push(p('Closes the remaining interface-audit items. The audit scored keyboard 3/10 — the weakest dimension by a wide margin, with only Enter, Space and Escape handled anywhere in the product and no meta/ctrl shortcuts at all.', { italics: true, color: MUTED, size: 19 }));
+children.push(reqTable(['ID', 'Requirement', 'Status'], [1000, 5600, 1800], [
+  ['FR-63', 'A command palette on Cmd/Ctrl-K: arrow keys navigate with wrap-around, Enter runs, Escape closes. Search matches by subsequence rather than substring, so "expsvg" finds "Export diagram as SVG" — typing what you remember rather than an exact prefix is what makes a palette usable by keyboard.', 'Shipped — client-side only'],
+  ['FR-64', 'Palette commands are built from the live DOM on each open, not a fixed list: sections come from the rendered navigation (so any suppressed for the current scope are absent automatically) and picks from the rendered cards. Commands that require an analysis are absent until one exists, since offering an export on the landing screen offers a command that can only fail.', 'Shipped — client-side only'],
+  ['FR-65', 'A "/" shortcut moves focus to the requirement input from any screen, and is inert while the user is already typing so it cannot swallow a literal slash. Escape closes the palette without also dismissing whatever the user had open behind it.', 'Shipped — client-side only'],
+  ['FR-66', 'Blocks nested inside a card no longer draw their own border; the surface tone difference carries the separation. This required giving the light theme a distinct --surface value first — it had been identical to --panel, so the border was the only thing distinguishing those blocks there and removing it would have made them invisible in light mode.', 'Shipped — client-side only'],
+  ['FR-67', 'The landing page carries its own visual treatment (display face for headlines, a signature gradient on primary calls to action, badge-style section labels, scroll entrance motion) while keeping the product palette, so the page still resembles the product it advertises. Deliberately NOT applied to the application: a landing page needs a signature, whereas the same decoration in the dashboard reads as generic AI-tool output, which an earlier pass removed on purpose.', 'Shipped — landing.html only'],
+]));
+children.push(p('Empty and first-run states were the audit\'s third item and were investigated rather than built: the 5/10 score came from searching for a CSS class name instead of checking behaviour. Every empty case is in fact handled — history sections hide themselves when empty, the custom-technology list carries explanatory copy, the palette reports no matches, and the entry screens are guided rather than blank. No change was made, which is recorded here so the item is not reopened on the strength of the original score.', { italics: true, color: MUTED, size: 19 }));
+
 // ---------- Non-functional ----------
 children.push(h1('8. Non-Functional Requirements'));
 children.push(reqTable(['ID', 'Requirement'], [1000, 7400], [
@@ -261,6 +273,8 @@ children.push(reqTable(['Release', 'Contents', 'Status'], [1600, 6000, 1800], [
   ['v2.8', 'Harness Readiness score history and feedback capture (FR-56, FR-57) — per-component deltas across audits, and the first path by which anything from this feature area reaches us rather than staying in the user\'s browser', 'Shipped'],
   ['v2.9', 'Results presentation restructure (FR-58 through FR-62, Section 7.11) — answer-first header, ranked attention list, collapsed sections and cards, Flow as the default view, and a single-column Flow layout for narrow screens', 'Shipped'],
   ['v2.10', 'Deployment prerequisites (NFR-6) — API base resolution, migrations and port binding in the image, and a startup CORS log. No infrastructure provisioned; see docs/deployment/GCP_DEPLOYMENT_PLAN.md', 'Shipped'],
+  ['v2.11', 'Command palette and keyboard-first navigation (FR-63 through FR-65) — closes the interface audit\'s weakest dimension', 'Shipped'],
+  ['v2.12', 'Density pass (FR-66) and the landing-page visual treatment (FR-67)', 'Shipped'],
 ]));
 
 // ---------- Known limitations ----------
