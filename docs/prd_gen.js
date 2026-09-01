@@ -14,7 +14,7 @@ children.push(...coverTitle(
   'Product Requirements Document',
   'Functional & technical specification',
   [
-    ['Document Version', '1.12'],
+    ['Document Version', '1.13'],
     ['Status', 'v1 and v2 shipped, frontend actually wired to the backend — see Section 7.7, Section 9.2, and Release Plan (Section 11). Hexagonal diagram-export architecture, AI Opportunity Layer, technology-catalog unification, Huawei Cloud vendor support, and Hybrid Connectivity added in a later session — see Section 7.2, 7.7, 9.4, and Release Plan.'],
     ['Prepared by', 'Muneeb, with Claude (Cowork)'],
     ['Date', new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })],
@@ -41,6 +41,7 @@ children.push(reqTable(
     ['1.9', 'Later session: two additions. (1) Harness Readiness evidence upload (Section 7.9, FR-50 through FR-52) — an optional per-question file attachment that checks a real file against the user\'s self-reported score and flags mismatches without overriding them; the Shape A/B hybrid scoped in docs/harness-engineering/HARNESS_EVIDENCE_SCOPE.md, staying inside NFR-1 by reading one user-picked file in the browser. (2) LLM Observability as a new recommendation category (Section 7.10, FR-53 through FR-55) — Langfuse/Braintrust, closing a real gap where the product recommended AI stacks but said nothing about tracing or evaluating the LLM calls it recommended. Both client-side only. Note for future maintainers: FR-53\'s not-applicable gating was found wrong in post-merge review (it recommended LLM tracing to stacks with no LLM at all) and is documented here in its corrected form.'],
     ['1.11', 'Later session: closed the last two items from the interface audit. A command palette and keyboard-first navigation (Section 7.12, FR-63 through FR-65) address what the audit scored as the weakest dimension by a wide margin — only Enter, Space and Escape were handled anywhere, with zero meta/ctrl shortcuts. A density pass (FR-66) retired redundant nested borders. The audit\'s third item, empty states, was investigated and found NOT to be a real gap: that score came from a grep for a class name rather than a check of behaviour, and every empty case is in fact handled. Also applied a design system to landing.html only (FR-67), deliberately not to the dashboard.'],
     ['1.12', 'Later session: three fixes found by using the product rather than reading it. A light-theme colour defect (Section 7.13, FR-68) — the semantic signal colours were hardcoded as the dark theme\'s values in eleven rules, so the guardrails list rendered at 1.59:1 contrast on a white card and the "recommended vendor" border at 1.37:1. The Harness Readiness evidence check confirmed under-claims as correct (FR-69), telling a user their score checked out while holding a file that showed otherwise. And the MCP server, shipped and tested since the rule-engine port, was promoted nowhere in the interface (FR-70).'],
+    ['1.13', 'Later session: two new entry/decision capabilities and one integrity fix. Dependency-manifest ingestion (Section 7.14, FR-71) lets a brownfield user start from a real package.json, requirements.txt, go.mod, Gemfile, pom.xml or docker-compose.yml. A Code Execution Sandbox category (FR-72) covers isolating model-generated code, which no existing category addressed. FR-73 records a wiring defect found by auditing rather than by a bug report: six vendor categories had shipped claiming dual-engine parity while none was actually being compared, and three of them were also missing from the map the challenge widget reads.'],
   ]
 ));
 
@@ -265,6 +266,19 @@ children.push(reqTable(['ID', 'Requirement', 'Status'], [1000, 5600, 1800], [
 ]));
 children.push(p('Evidence uploads are also size-limited and report read failures. A failure log is exactly the kind of evidence that can be large, and the audit is a five-step form, so an unbounded read costs the user every answer already given; a failed read was previously indistinguishable from the checker legitimately having nothing to say.'));
 
+children.push(h2('7.14 Brownfield Entry & Execution Isolation'));
+children.push(p('Two capabilities added after verifying the claims that prompted them against the codebase and, for the second, against published sources rather than accepting a summary. Section 7.15 records what that verification found in our own wiring.'));
+children.push(reqTable(['ID', 'Requirement', 'Status'], [1000, 5600, 1800], [
+  ['FR-71', 'A dependency manifest can be uploaded in place of a written requirement: package.json, requirements.txt, go.mod, Gemfile, pom.xml or docker-compose.yml. Recognised technologies are shown as chips the user confirms before anything is analysed, and the result feeds the same analysis path as every other entry mode. Packages that map to no technology either engine recognises are dropped rather than displayed, since a chip the engine cannot act on tells the user something was understood when it was not.', 'Shipped — client-side only'],
+  ['FR-72', 'A Code Execution Sandbox category recommends isolation for stacks that execute model-generated or otherwise untrusted code. Deliberately distinct from the container and compute categories, which run the organisation\'s own trusted services; here the code being run is the threat. Gated on an explicit code-execution requirement rather than on the presence of an agent, since an agent calling read-only APIs has nothing untrusted to isolate. The comparison records that published cold-start figures are measured sequentially while an agent creates sandboxes in bursts, under which the ranking reverses.', 'Shipped'],
+]));
+
+children.push(h2('7.15 Wiring Integrity Across Categories'));
+children.push(p('A defect found by auditing rather than by a bug report, and recorded because the way it stayed hidden matters more than the fix.'));
+children.push(reqTable(['ID', 'Requirement', 'Status'], [1000, 5600, 1800], [
+  ['FR-73', 'Adding a recommendation category must wire it into every place a category is looked up: both engines, the behavioural comparison between them, the refinement allow-list, and the alternatives offered when a user challenges a pick. Six categories added over successive releases each stated that they maintained parity between the two engines; none was in fact being compared, and a deliberate divergence introduced as a check passed silently. Three of the same six were also absent from the list the challenge widget reads, so challenging those picks offered an empty text box instead of the real alternatives — visible only one interaction below the card, which is why it survived. All are now wired, and the tests derive the required set from the code rather than restating it, so a category cannot be added without it.', 'Shipped'],
+]));
+
 children.push(reqTable(['Release', 'Contents', 'Status'], [1600, 6000, 1800], [
   ['v1.0', 'Core stack (15 categories) + AI/LLM recommendation + RAG + guardrails + MCP servers needed', 'Shipped'],
   ['v1.1', 'Trade-off decisions, cost/throughput, governance sections; persona tagging', 'Shipped'],
@@ -287,6 +301,8 @@ children.push(reqTable(['Release', 'Contents', 'Status'], [1600, 6000, 1800], [
   ['v2.12', 'Density pass (FR-66) and the landing-page visual treatment (FR-67)', 'Shipped'],
   ['v2.13', 'Light-theme colour defect (FR-68) and Harness Readiness evidence integrity (FR-69)', 'Shipped'],
   ['v2.14', 'MCP server surfaced in the interface (FR-70)', 'Shipped'],
+  ['v2.15', 'Dependency-manifest ingestion (FR-71)', 'Shipped'],
+  ['v2.16', 'Code Execution Sandbox category (FR-72) and the cross-category wiring fix (FR-73)', 'Shipped'],
 ]));
 
 // ---------- Known limitations ----------

@@ -3163,16 +3163,24 @@ const FRONTEND_NOTE = 'React and Next.js are not competing siblings — Next.js 
 
 // "Challenge This Pick" widget (docs/challenge-this-pick-spec.md) — reuses these SAME vendor
 // arrays for its "what would you choose instead?" dropdown, rather than maintaining a second,
-// separately-curated list. Only maps the categories that actually HAVE a vendor array —
-// STACK_CARD_CATEGORY (defined further down) has 21 category keys, but only these 11 have a
-// corresponding _VENDORS array; the other 10 (languages, architecture, mesh, dns,
-// hybridconnectivity, auditlogging, privilegedaccess, testingstrategy, networkboundary,
-// multicloudbridging, securitygates) get free-text-only in the widget, not a fabricated list.
+// separately-curated list. Only maps the categories that actually HAVE a vendor array; the rest
+// get free-text-only in the widget rather than a fabricated list.
+//
+// This map fell three behind. It was written when STACK_CARD_CATEGORY had 21 keys and 11 vendor
+// arrays; it now has 25, and gitops/realtimeanalytics/sandbox each shipped WITH a real vendor
+// array and an alternatives toggle on the card, but were never added here. The effect was
+// invisible in the card itself and only showed up one click deeper: challenging the GitOps pick
+// offered an empty text box instead of "ArgoCD / Flux CD", quietly degrading the one feature
+// whose entire purpose is capturing what the user would have chosen instead.
+//
+// test_category_wiring.py now derives this set — every stack-card category that has a matching
+// _VENDORS array must appear here — so the next category cannot be added without it.
 const CATEGORY_VENDORS = {
   cloud: CLOUD_VENDORS, gateway: GATEWAY_VENDORS, iam: IAM_VENDORS, compute: COMPUTE_VENDORS,
   cache: CACHE_VENDORS, messaging: MESSAGING_VENDORS, database: DATABASE_VENDORS,
   containers: ORCHESTRATOR_VENDORS, observability: OBSERVABILITY_VENDORS,
   frontend: FRONTEND_VENDORS, cicd: CICD_VENDORS,
+  gitops: GITOPS_VENDORS, realtimeanalytics: REALTIME_ANALYTICS_VENDORS, sandbox: SANDBOX_VENDORS,
 };
 
 // Found via a manual "neither Java nor Python" QA scenario, per the user's own follow-up: a
