@@ -2376,6 +2376,10 @@ const CONCURRENCY_HIGH_SCALE_THRESHOLD = 10000;
 const TEAM_SMALL_MAX = 12;
 const TEAM_LARGE_MIN = 30;
 
+// The second, higher band — see rule_engine.py's pick_tradeoffs comment for the reasoning behind
+// treating this as a different problem rather than "highScale but more so".
+const CONCURRENCY_MASSIVE_MIN = 1000000;
+
 const TEAM_SIZE_RE = /\b(\d{1,4})[\s-]*\+?[\s-]*(?:person|people|engineers?|developers?|devs?)\b|\bteam of\s*(\d{1,4})\b/g;
 
 function detectTeamSize(text){
@@ -4243,6 +4247,17 @@ function pickTradeoffs(s){
       why = `You stated a delivery window of ${s.timeline.text} (~${days} days). That is long enough that requirements will move before you ship, so favour the choices that stay cheap to reverse over the ones that are fastest to stand up.`;
     }
     t.push({d:`Delivery window — ${s.timeline.text}`, rec, why});
+  }
+
+  // Twin of rule_engine.py's massive-scale tradeoff. Verified before writing this: 50,000 and
+  // 5,000,000 concurrent produced byte-identical output past the highScale boolean threshold.
+  if (s.concurrencyTarget && s.concurrencyTarget.count >= CONCURRENCY_MASSIVE_MIN){
+    const ct = s.concurrencyTarget;
+    t.push({
+      d: `Architecture posture at ${ct.text}`,
+      rec: 'Design for horizontal fan-out and regional isolation from day one',
+      why: `You stated ${ct.text}. Past roughly a million concurrent, a single-region deployment leaning on vertical scaling and read replicas is not a question of whether it breaks, but when. The standard playbook at this scale is horizontal sharding of the primary datastore, a cache tier that is load-bearing rather than optional, and regional isolation so one region's incident does not become a global one. Budget the team and the timeline for that explicitly, rather than discovering it under load.`,
+    });
   }
 
   // 0. On-prem overrides the whole cloud-strategy question

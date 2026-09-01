@@ -328,6 +328,10 @@ def detect_latency_target(text: str):
 # constant so it can be argued with, rather than buried as a literal in the signal expression.
 CONCURRENCY_HIGH_SCALE_THRESHOLD = 10_000
 
+# The second, higher band — see the comment in pick_tradeoffs for the reasoning behind treating
+# this as a different problem rather than "highScale but more so".
+CONCURRENCY_MASSIVE_MIN = 1_000_000
+
 # Team size, stated as a number. Previously only smallTeam looked at numbers, and only for a
 # hand-written span: "2 engineers" through "6 engineers" as literal strings, plus 1-12 for
 # "N people" and "team of N". largeTeam looked at no numbers at all, so "We have 60 engineers"
@@ -2394,6 +2398,33 @@ def pick_tradeoffs(s):
                    f"requirements will move before you ship, so favour the choices that stay cheap to "
                    f"reverse over the ones that are fastest to stand up.")
         t.append({"d": f"Delivery window — {tl['text']}", "rec": rec, "why": why})
+
+    # Phase 2 of the what-if scope: the second consumer of concurrencyTarget. highScale (see
+    # CONCURRENCY_HIGH_SCALE_THRESHOLD, 10,000) already changes 8 picks, but nothing beyond that
+    # boolean reads the actual number — so a stated 50,000 and a stated 5,000,000 concurrent
+    # produced byte-identical output past that one threshold. Verified before writing this.
+    #
+    # CONCURRENCY_MASSIVE_MIN marks a genuinely different band, not a bigger version of highScale.
+    # Below it, a well-run single-region deployment with read replicas and a cache tier holds up
+    # under ordinary engineering practice. Above it, the standard playbook changes shape: horizontal
+    # sharding of the primary datastore, a cache tier that is load-bearing rather than optional, and
+    # regional isolation so one region's incident does not become a global one. That is a different
+    # set of problems to plan for, not the same plan executed on bigger boxes — which is why this is
+    # a new tradeoff entry rather than a third band bolted onto the concurrency section's existing
+    # two-band lead item.
+    ct = s.get("concurrencyTarget")
+    if ct and ct["count"] >= CONCURRENCY_MASSIVE_MIN:
+        t.append({
+            "d": f"Architecture posture at {ct['text']}",
+            "rec": "Design for horizontal fan-out and regional isolation from day one",
+            "why": (f'You stated {ct["text"]}. Past roughly a million concurrent, a single-region '
+                    f'deployment leaning on vertical scaling and read replicas is not a question of '
+                    f'whether it breaks, but when. The standard playbook at this scale is horizontal '
+                    f'sharding of the primary datastore, a cache tier that is load-bearing rather than '
+                    f'optional, and regional isolation so one region\'s incident does not become a '
+                    f'global one. Budget the team and the timeline for that explicitly, rather than '
+                    f'discovering it under load.'),
+        })
 
     # 0/1. On-prem overrides cloud strategy; else single-cloud vs multi-cloud
     if s["onPrem"]:
