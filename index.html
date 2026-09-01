@@ -1059,8 +1059,16 @@
   }
   .ha-evidence-toggle:hover{border-color:var(--accent); color:var(--accent);}
   .ha-evidence-result{font-size:12.5px; line-height:1.5; margin-top:8px; padding:8px 12px; border-radius:var(--radius-sm);}
-  .ha-evidence-result.match{background:color-mix(in srgb, #2f8a5a 12%, transparent); color:#2f8a5a; border:1px solid color-mix(in srgb, #2f8a5a 35%, transparent);}
-  .ha-evidence-result.mismatch{background:color-mix(in srgb, #d9534f 10%, transparent); color:#d9534f; border:1px solid color-mix(in srgb, #d9534f 35%, transparent);}
+  /* Was #2f8a5a / #d9534f — one-off literals that ignored the theme and, measured against their
+     own tinted grounds, failed WCAG in BOTH themes as text (3.78/3.70 for match, 4.20/3.50 for
+     mismatch, against 4.5). These are the audit's own verdict badges, so an unreadable one is a
+     result the user cannot act on. Now on the semantic tokens: --good-text/--bad for the text,
+     --good/--bad for the tint and border. 5.45-6.98:1 across both themes. */
+  .ha-evidence-result.match{background:color-mix(in srgb, var(--good) 12%, transparent); color:var(--good-text); border:1px solid color-mix(in srgb, var(--good) 35%, transparent);}
+  .ha-evidence-result.mismatch{background:color-mix(in srgb, var(--bad) 10%, transparent); color:var(--bad); border:1px solid color-mix(in srgb, var(--bad) 35%, transparent);}
+  /* An under-claim is good news, not a warning — same affirmative treatment as .match, dialled
+     down so it reads as an observation rather than a second kind of pass. */
+  .ha-evidence-result.exceeds{background:color-mix(in srgb, var(--good) 9%, transparent); color:var(--good-text); border:1px solid color-mix(in srgb, var(--good) 28%, transparent);}
   .ha-evidence-result.silent{background:var(--surface); color:var(--muted2); border:1px solid var(--border);}
   .dropzone{
     border:2px dashed var(--border); border-radius:var(--radius-lg); padding:36px 20px;
@@ -6558,10 +6566,22 @@ const HA_SCORE_BANDS = [
 // pattern as scoreHarnessAudit. See docs/harness-engineering/HARNESS_EVIDENCE_SCOPE.md for
 // the full per-component check table and the reasoning behind each threshold.
 
+// Three verdicts, not two. `level <= ceiling` used to collapse "your file shows exactly what you
+// claimed" and "your file shows MORE than you claimed" into one "✓ Evidence checks out" — which
+// is a false statement in the second case, and it has a real consequence rather than just being
+// imprecise copy. The whole output of this audit is "find your lowest-scoring component and take
+// it to a 2 before touching anything else." Someone who self-scores observability 0 out of
+// modesty, then attaches a failures.md with twelve dated entries, gets told their score checks
+// out and then gets sent to go build the failure log they demonstrably already have. The tool
+// had the evidence in hand to know better.
+//
+// Still a ceiling test, and still never overrides: `exceeds` reports what the file shows and
+// leaves the score exactly where the user put it. See HARNESS_EVIDENCE_SCOPE.md.
 function haEvidenceVerdict(ceiling, level, matchReason, mismatchReason) {
   if (ceiling === null) return { verdict: 'silent', reason: '' };
-  if (level <= ceiling) return { verdict: 'match', reason: matchReason };
-  return { verdict: 'mismatch', reason: mismatchReason };
+  if (level > ceiling) return { verdict: 'mismatch', reason: mismatchReason };
+  if (level < ceiling) return { verdict: 'exceeds', reason: matchReason, ceiling: ceiling, level: level };
+  return { verdict: 'match', reason: matchReason };
 }
 
 function checkSystemOfRecordEvidence(level, text, filename) {
@@ -6685,8 +6705,11 @@ function checkObservabilityEvidence(level, text, filename) {
       `${filename} has one dated/headed entry.`,
       `${filename} has only one dated/headed entry — level 3 ("a failure log drives your backlog") needs more than one, a real pattern rather than a single note.`);
   }
+  // Capped in the copy: a real failures log attached here counted 400,000 entries, and
+  // "has 400000 dated/headed entries" reads like a parsing bug rather than a result. The
+  // threshold for this ceiling is "more than one", so the exact count past a handful is noise.
   return haEvidenceVerdict(3, level,
-    `${filename} has ${entries} dated/headed entries.`,
+    `${filename} has ${entries > 20 ? '20+' : entries} dated/headed entries.`,
     `${filename} already shows the strongest evidence this checker looks for.`);
 }
 
@@ -6714,19 +6737,55 @@ function haRenderEvidenceResult(componentId, result) {
   if (result.verdict === 'silent') { el.style.display = 'none'; el.textContent = ''; return; }
   el.style.display = 'block';
   el.className = `ha-evidence-result ${result.verdict}`;
-  el.textContent = result.verdict === 'match' ? `✓ Evidence checks out — ${result.reason}` : `⚠ ${result.reason}`;
+  if (result.verdict === 'match') {
+    el.textContent = `✓ Evidence checks out — ${result.reason}`;
+  } else if (result.verdict === 'exceeds') {
+    // Deliberately phrased as an observation, not a correction. The score stays the user's; this
+    // says what the file shows and stops short of telling them to change it.
+    el.textContent = `✓ ${result.reason} That's stronger than the ${result.level} you picked — this check `
+      + `can support up to ${result.ceiling}.`;
+  } else {
+    el.textContent = `⚠ ${result.reason}`;
+  }
 }
 
 // Keeps each step's last-uploaded evidence so re-checking on a changed radio selection
 // (see the select() handler in haRenderStep) doesn't need the user to re-attach the file.
 let haEvidenceCache = {};
 
+// 8MB. The checkers themselves are fast (an 18MB failures log measured 38ms), so this is about
+// readAsText holding the whole file in memory as a string, not about the regexes. A failures log
+// or a CHANGELOG is exactly the kind of evidence that can be genuinely huge, so this is a real
+// path rather than a defensive hypothetical — and the audit is a five-step form, so freezing the
+// tab here costs the user every answer they had already given.
+const HA_EVIDENCE_MAX_BYTES = 8 * 1024 * 1024;
+
 function haOnEvidenceFile(componentId, file) {
   if (!file) return;
+  if (file.size > HA_EVIDENCE_MAX_BYTES) {
+    delete haEvidenceCache[componentId];
+    haRenderEvidenceResult(componentId, {
+      verdict: 'mismatch',
+      reason: `${file.name} is too large to check here (${Math.round(file.size / 1048576)}MB, `
+        + `limit ${HA_EVIDENCE_MAX_BYTES / 1048576}MB). Nothing was uploaded — this all runs in `
+        + `your browser. Attach a trimmed excerpt, or just answer from what you know.`,
+    });
+    return;
+  }
   const reader = new FileReader();
   reader.onload = (e) => {
     haEvidenceCache[componentId] = { text: e.target.result, filename: file.name };
     haRecheckEvidence(componentId);
+  };
+  // Without this a failed read is completely silent: the user picks a file, nothing appears, and
+  // there is no way to tell that from "this checker had nothing to say about your file", which is
+  // the legitimate silent verdict.
+  reader.onerror = () => {
+    delete haEvidenceCache[componentId];
+    haRenderEvidenceResult(componentId, {
+      verdict: 'mismatch',
+      reason: `${file.name} couldn't be read. Nothing was uploaded — try attaching it again.`,
+    });
   };
   reader.readAsText(file);
 }
