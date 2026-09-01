@@ -1076,6 +1076,15 @@
     font-size:12px; padding:6px 12px; cursor:pointer; margin-top:10px; transition:border-color .15s var(--ease), color .15s var(--ease);
   }
   .ha-evidence-toggle:hover{border-color:var(--accent); color:var(--accent);}
+  /* Document confirm step. Deliberately plain: this is a checklist the reader audits, not a
+     result to admire, and the source excerpt is the part doing the work. */
+  .doc-confirm{display:flex; flex-direction:column; gap:8px; text-align:left; width:100%;}
+  .doc-confirm-head{font-size:12.5px; color:var(--muted); line-height:1.55; margin-bottom:2px;}
+  .doc-signal{background:var(--surface); border-radius:var(--radius-sm); padding:8px 11px;}
+  .doc-signal label{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text); cursor:pointer;}
+  .doc-signal-src{font-size:12px; color:var(--muted2); line-height:1.5; margin-top:4px; padding-left:22px;}
+  .doc-dropped{font-size:12px; color:var(--muted); line-height:1.55; padding:9px 11px; margin-top:4px;
+    background:color-mix(in srgb, var(--warn) 8%, transparent); border-radius:var(--radius-sm);}
   .ha-evidence-result{font-size:12.5px; line-height:1.5; margin-top:8px; padding:8px 12px; border-radius:var(--radius-sm);}
   /* Was #2f8a5a / #d9534f — one-off literals that ignored the theme and, measured against their
      own tinted grounds, failed WCAG in BOTH themes as text (3.78/3.70 for match, 4.20/3.50 for
@@ -1682,7 +1691,7 @@
   <div class="intro-col">
     <header>
       <h1>Upload Architecture Diagram</h1>
-      <div class="sub">Upload an architecture diagram — Draw.io (.drawio/.xml), Mermaid (.mmd), PlantUML (.puml) or SVG — or a dependency manifest: package.json, requirements.txt, go.mod, Gemfile, pom.xml or docker-compose.yml. The engine extracts what it recognises deterministically and you confirm it before anything is analysed.</div>
+      <div class="sub">Upload a <b>requirements document</b> (PRD, BRD or spec — .md, .txt), an <b>architecture diagram</b> (Draw.io, Mermaid, PlantUML, SVG), or a <b>dependency manifest</b> (package.json, requirements.txt, go.mod, Gemfile, pom.xml, docker-compose.yml). Everything is parsed in your browser and shown for you to confirm before anything is analysed. For a document, sections like <i>Non-Goals</i>, <i>Alternatives Rejected</i> and <i>Glossary</i> are excluded from the requirements — you will see exactly what was dropped and what it would have changed.</div>
       <div class="sub" style="margin-top:8px;"><a href="#" onclick="backToMode(); return false;" style="color:var(--accent); text-decoration:none;">← choose a different way to describe this</a></div>
     </header>
 
@@ -1700,7 +1709,7 @@
         <div class="dropzone-icon">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"/></svg>
         </div>
-        <div class="dropzone-title">Drop a diagram or a dependency manifest here, or <span style="color:var(--accent); text-decoration:underline;">browse files</span></div>
+        <div class="dropzone-title">Drop a requirements document, diagram or manifest here, or <span style="color:var(--accent); text-decoration:underline;">browse files</span></div>
         <div class="dropzone-sub">Supports <strong>.drawio XML</strong>, <strong>Mermaid (.mmd)</strong>, <strong>PlantUML (.puml)</strong>, <strong>SVG</strong>, or paste text/XML directly with <strong>Cmd+V / Ctrl+V</strong></div>
       </div>
 
@@ -9709,6 +9718,192 @@ function manifestTermFor(rawId) {
   return null;
 }
 
+// ============ Document ingestion: ports and adapters ============
+// A PRD/BRD/spec is not a short prompt, and feeding one to detectSignals verbatim makes the
+// recommendation WORSE. Measured on a realistic document: appending the sections every real PRD
+// has (Alternatives Rejected, Non-Goals, Glossary) to a correct requirement took 6 fired signals
+// to 13 — all seven extras false — and flipped 24 picks, turning an AWS/serverless/EKS stack into
+// on-premises bare metal. The cause was one sentence: "an on-premise deployment ... is explicitly
+// out of scope". stripNegations handles adjacent negation and nothing else, correctly, because it
+// was built for short prompts.
+//
+// So the feature is not extraction, it is deciding which parts of a document are requirements.
+// Ports and adapters splits those two jobs along the line where they actually differ:
+//
+//   ADAPTER (format-specific, pluggable) : bytes -> blocks [{heading, text}]
+//   DOMAIN  (format-blind, the real work): blocks -> which blocks are requirements
+//
+// The port deliberately returns BLOCKS, not a flat string. A flat string forces classification
+// into every adapter — written once per format, wrong somewhere, and missing entirely from any
+// adapter added later. Structure puts it downstream of all adapters, written once, and already
+// correct for a format nobody has written yet.
+//
+// detectSignals and computeRecommendations are untouched and never learn that documents exist;
+// ingestion joins the same setAnalysis(text, detectSignals(text)) funnel as every other entry
+// mode. See docs/design/DOCUMENT_INGESTION_SCOPE.md.
+
+const DOCUMENT_ADAPTERS = [];
+
+// The extension point. index.html has no module system, so "pluggable" honestly means one registry
+// plus this function — adding an adapter still means appending a script or editing this file. That
+// is the same shape as window.__API_BASE__ and the localStorage custom-technology catalog, and it
+// is why a .pdf adapter can exist without inlining a PDF parser into a file whose README promises
+// no dependencies.
+function registerDocumentAdapter(adapter){
+  if (!adapter || typeof adapter.accepts !== 'function' || typeof adapter.extract !== 'function') {
+    throw new Error('A document adapter needs an id, accepts(filename, head) and extract(content).');
+  }
+  DOCUMENT_ADAPTERS.push(adapter);
+  return adapter;
+}
+
+function documentAdapterFor(filename, content){
+  for (const a of DOCUMENT_ADAPTERS) {
+    try { if (a.accepts(filename || '', String(content || '').slice(0, 4096))) return a; }
+    catch (e) { /* a broken adapter must not take the whole registry down */ }
+  }
+  return null;
+}
+
+// Heading detection lives in the adapter because formats genuinely differ about it: markdown has
+// "#", .docx carries real style metadata, and a plain-text spec has neither. Classification of a
+// heading does NOT live here — that is the domain's job, below.
+//
+// The styles below are a corpus, not a guess. Two earlier prototypes each caught a DIFFERENT
+// subset ("Section 8 — Non-Goals" vs "## Non-Goals" vs "NON-GOALS"), which is exactly why they are
+// enumerated and tested rather than folded into one clever regex.
+const DOC_HEADING_PATTERNS = [
+  /^\s{0,3}#{1,6}\s+(.+?)\s*$/,                       // markdown: ## Non-Goals
+  /^\s*section\s+[\d.]+\s*[—:\-]?\s*(.+?)\s*$/i,      // Section 8 — Non-Goals
+  /^\s*[\d]+(?:\.[\d]+)*\.?\s+([A-Z].{2,60})$/,       // 7.1 Alternatives Considered
+  /^\s*([A-Z][A-Z0-9 &/\-]{3,60})\s*$/,               // NON-GOALS
+  /^\s*(appendix\s+[a-z0-9]+.*?)\s*$/i,               // Appendix B ...
+];
+
+function docDetectHeading(line){
+  for (const re of DOC_HEADING_PATTERNS) {
+    const m = re.exec(line);
+    // A "heading" ending in a full stop is nearly always a sentence; requiring the line to be
+    // short as well keeps ordinary prose out. Found while testing: "PCI DSS: payment card
+    // standard, not applicable to this product." matched the all-caps pattern on its first words.
+    if (m && line.trim().length <= 80) return m[1].trim().replace(/[.:]\s*$/, '');
+  }
+  return null;
+}
+
+function splitDocumentBlocks(text){
+  const blocks = [];
+  let cur = { heading: null, lines: [] };
+  for (const line of String(text || '').split('\n')) {
+    const h = docDetectHeading(line);
+    if (h !== null) {
+      if (cur.heading !== null || cur.lines.join('').trim()) blocks.push(cur);
+      cur = { heading: h, lines: [] };
+    } else {
+      cur.lines.push(line);
+    }
+  }
+  if (cur.heading !== null || cur.lines.join('').trim()) blocks.push(cur);
+  return blocks.map(b => ({ heading: b.heading, text: b.lines.join('\n').trim() }));
+}
+
+// The built-in adapter. Accepts .md/.txt AND acts as the catch-all, because the alternative is
+// parseDiagramInput's raw-line fallback turning a PRD's first 15 lines into chips of prose.
+registerDocumentAdapter({
+  id: 'plaintext',
+  label: 'Text or Markdown document',
+  accepts: (filename) => /\.(md|markdown|txt|text|rst|adoc)$/i.test(filename || '') || !/\.\w{1,6}$/.test(filename || ''),
+  extract: (content) => {
+    const text = String(content || '');
+    return {
+      blocks: splitDocumentBlocks(text),
+      wordCount: (text.match(/\S+/g) || []).length,
+    };
+  },
+});
+
+// ---- Domain: which blocks are requirements ----
+// Format-blind on purpose. This is the part that makes uploaded documents better than pasted
+// prompts rather than worse, and it is written once for every adapter that exists or ever will.
+//
+// Matched against the HEADING only, never the body. A requirements section may legitimately
+// discuss what was rejected ("we need Postgres, not MySQL"); a section TITLED "Alternatives
+// Rejected" is telling you its whole contents are non-binding. Matching bodies would drop real
+// requirements for containing the word "rejected".
+const NON_REQUIREMENT_HEADINGS = [
+  'alternatives considered', 'alternatives rejected', 'rejected alternatives', 'considered and rejected',
+  'non-goal', 'non goal', 'nongoal', 'out of scope', 'not in scope', 'excluded from scope',
+  'glossary', 'definitions', 'terminology',
+  'future work', 'future considerations', 'later phases', 'deferred',
+  'appendix', 'references', 'prior art', 'background reading', 'revision history', 'changelog',
+  'open questions', 'risks considered',
+];
+
+function isRequirementBlock(block){
+  const h = (block && block.heading ? block.heading : '').toLowerCase();
+  if (!h) return true;   // untitled prose is the document's own body — assume it counts
+  return !NON_REQUIREMENT_HEADINGS.some(k => h.includes(k));
+}
+
+function classifyDocumentBlocks(blocks){
+  const requirement = [], excluded = [];
+  (blocks || []).forEach(b => (isRequirementBlock(b) ? requirement : excluded).push(b));
+  return { requirement, excluded };
+}
+
+function documentRequirementText(blocks){
+  return (blocks || [])
+    .map(b => (b.heading ? b.heading + '\n' : '') + (b.text || ''))
+    .join('\n\n').trim();
+}
+
+// Per-block provenance, obtained by re-running detectSignals on each block rather than by exposing
+// or duplicating its keyword tables. detectSignals is pure and costs ~0.05ms, so this is cheap,
+// and it stays correct automatically when a keyword list changes — a duplicated table would not.
+//
+// Block-level is also the right granularity: "this came from Section 7 — Alternatives Rejected" is
+// what lets a reader judge whether it should count, which a bare keyword match would not.
+function documentSignalProvenance(blocks){
+  const out = {};
+  (blocks || []).forEach(b => {
+    const text = ((b.heading ? b.heading + '\n' : '') + (b.text || '')).trim();
+    if (!text) return;
+    const sig = detectSignals(text);
+    Object.keys(sig).forEach(k => {
+      if (sig[k] !== true) return;
+      (out[k] = out[k] || []).push({ heading: b.heading, excerpt: text.slice(0, 160) });
+    });
+  });
+  return out;
+}
+
+// The whole pipeline, from one file to something analysable. Returns what was dropped and why, so
+// the confirm step can show it rather than silently discarding a third of the document.
+function ingestDocument(content, filename){
+  const adapter = documentAdapterFor(filename, content);
+  if (!adapter) return null;
+  const { blocks, wordCount } = adapter.extract(content);
+  const { requirement, excluded } = classifyDocumentBlocks(blocks);
+  const text = documentRequirementText(requirement);
+  const keptProvenance = documentSignalProvenance(requirement);
+  const keptSignals = new Set(Object.keys(keptProvenance));
+  return {
+    adapterId: adapter.id,
+    wordCount,
+    text,
+    blocks, requirementBlocks: requirement, excludedBlocks: excluded,
+    // Signals the DROPPED sections would have contributed AND that the kept text does not
+    // already establish. The set difference matters: a first version listed every signal the
+    // excluded blocks produced, which included `compliance` — fired by the glossary, but also by
+    // "HIPAA compliance required" in the actual requirement. Reporting that as suppressed claims
+    // an effect the classification did not have, which is the same over-claim this whole feature
+    // exists to avoid. Only genuinely-removed signals are listed.
+    suppressedSignals: Object.keys(documentSignalProvenance(excluded))
+      .filter(k => !keptSignals.has(k)),
+    provenance: keptProvenance,
+  };
+}
+
 function parseManifest(content, filename) {
   const kind = manifestKindFor(filename);
   if (!kind) return { kind: null, entities: [] };
@@ -9778,15 +9973,23 @@ function parseDiagramInput(content, filename = 'diagram') {
     return { type: 'mermaid', entities: parseMermaidText(content) };
   } else if (lower.endsWith('.svg') || trimmed.startsWith('<svg')) {
     return { type: 'svg', entities: parseSvgText(content) };
-  } else {
-    // Fallback: Mermaid or line-by-line parser
-    let res = parseMermaidText(content);
-    if (!res.length) {
-      const lines = content.split('\n').map(l => l.trim()).filter(l => l.length > 2);
-      res = lines.slice(0, 15).map(l => ({ text: l, source: 'raw-text' }));
-    }
-    return { type: 'text', entities: res };
   }
+  // Mermaid without a recognisable extension or opening keyword still parses as a diagram, so it
+  // is tried before falling through to prose.
+  const mermaidish = parseMermaidText(content);
+  if (mermaidish.length) return { type: 'mermaid', entities: mermaidish };
+
+  // Everything else is prose, and prose is a document. This REPLACES the old raw-line fallback,
+  // which took the first 15 lines of whatever it was given and turned each into a chip — so a PRD
+  // dropped here became fifteen chips of sentences. Routing order is deliberate and is the reason
+  // this sits last: manifests match on exact filenames, diagrams on extension or opening syntax,
+  // and only what neither claims is treated as a requirements document.
+  const doc = ingestDocument(content, filename);
+  if (doc && doc.text) return { type: 'document', document: doc, entities: [] };
+
+  // No adapter and not a diagram: keep the old behaviour rather than returning nothing.
+  const lines = content.split('\n').map(l => l.trim()).filter(l => l.length > 2);
+  return { type: 'text', entities: lines.slice(0, 15).map(l => ({ text: l, source: 'raw-text' })) };
 }
 
 function handleDiagramFile(file) {
@@ -9795,7 +9998,7 @@ function handleDiagramFile(file) {
     try {
       const content = e.target.result;
       const parsed = parseDiagramInput(content, file.name);
-      displayDiagramPreview(file.name, parsed.type, parsed.entities);
+      displayDiagramPreview(file.name, parsed.type, parsed.entities, parsed.document);
     } catch(err) {
       console.error('Diagram parse error:', err);
       alert('Could not parse diagram: ' + err.message);
@@ -9809,18 +10012,81 @@ function handleDiagramFileSelect(event) {
   if (file) handleDiagramFile(file);
 }
 
-function displayDiagramPreview(fileName, type, entities) {
+// Holds the ingest result between preview and analyse, so the confirm step's edits (a signal
+// turned off) survive without re-parsing the file.
+let uploadedDocument = null;
+
+// Renders the confirm step for an ingested document: every inferred signal, the section it came
+// from, and a control to drop it. Also states what classification removed and what those sections
+// would have contributed — "we ignored these, and this is what they would have changed" is a claim
+// the reader can check, where "3 sections ignored" is not.
+function renderDocumentConfirmHtml(doc){
+  const esc = (x) => String(x == null ? '' : x)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const sigs = Object.keys(doc.provenance || {}).sort();
+  const rows = sigs.map(k => {
+    const src = (doc.provenance[k] || [])[0] || {};
+    const where = src.heading ? `from “${esc(src.heading)}”` : 'from the document body';
+    return `<div class="doc-signal" data-signal="${esc(k)}">
+        <label><input type="checkbox" checked onchange="onDocumentSignalToggle('${esc(k)}', this.checked)"> <b>${esc(k)}</b></label>
+        <div class="doc-signal-src">${where} — “${esc((src.excerpt || '').slice(0, 110))}…”</div>
+      </div>`;
+  }).join('');
+
+  const dropped = (doc.excludedBlocks || []).map(b => esc(b.heading)).filter(Boolean);
+  const droppedHtml = dropped.length ? `
+    <div class="doc-dropped">
+      <b>Not read as requirements:</b> ${dropped.join(' · ')}.
+      ${doc.suppressedSignals && doc.suppressedSignals.length
+        ? `Reading them would have added ${doc.suppressedSignals.map(esc).join(', ')} — which is why they are excluded.`
+        : 'They contributed nothing the rest of the document did not already state.'}
+    </div>` : '';
+
+  return `<div class="doc-confirm">
+      <div class="doc-confirm-head">Uncheck anything the document did not actually ask for. Everything below was inferred, and the wording that produced it is shown so you can judge it.</div>
+      ${rows || '<div class="doc-signal-src">No signals were detected in this document.</div>'}
+      ${droppedHtml}
+    </div>`;
+}
+
+// Turning a signal off is expressed as an exclusion of that inference, not by editing the text —
+// the document stays the source of truth and the correction stays visible and reversible.
+let documentSignalOptOut = {};
+function onDocumentSignalToggle(key, checked){
+  if (checked) delete documentSignalOptOut[key];
+  else documentSignalOptOut[key] = true;
+}
+
+function displayDiagramPreview(fileName, type, entities, doc) {
   uploadedDiagramEntities = entities;
-  uploadedSourceKind = type === 'manifest' ? 'manifest' : 'diagram';
+  uploadedDocument = (type === 'document') ? (doc || null) : null;
+  documentSignalOptOut = {};   // a new file must not inherit the last one's corrections
+  uploadedSourceKind = type === 'manifest' ? 'manifest' : (type === 'document' ? 'document' : 'diagram');
   document.getElementById('diagramFileName').textContent = fileName;
   // A manifest yields technologies, not diagram components, and saying "components detected" for
   // a package.json would misdescribe what the user is being asked to confirm.
-  document.getElementById('diagramSourceBadge').textContent = type === 'manifest'
-    ? `Dependency manifest · ${entities.length} recognised ${entities.length === 1 ? 'technology' : 'technologies'}`
-    : `Format: ${type.toUpperCase()} · ${entities.length} components detected`;
+  document.getElementById('diagramSourceBadge').textContent =
+    type === 'document'
+      ? `Requirements document · ${(doc && doc.wordCount) || 0} words · ${(doc && doc.requirementBlocks.length) || 0} of ${(doc && doc.blocks.length) || 0} sections read as requirements`
+      : type === 'manifest'
+        ? `Dependency manifest · ${entities.length} recognised ${entities.length === 1 ? 'technology' : 'technologies'}`
+        : `Format: ${type.toUpperCase()} · ${entities.length} components detected`;
   
   const grid = document.getElementById('diagramEntitiesGrid');
   grid.innerHTML = '';
+
+  // A document is confirmed by its SIGNALS, not by a chip per component. What a reader needs to
+  // correct is an inference and the sentence behind it — "onPrem, from: Section 7 — Alternatives
+  // Rejected" is visibly wrong at a glance, where a bare technology chip would not be.
+  //
+  // This is the safety net for the two cases classification provably cannot reach: a rejection
+  // stated inside a requirement paragraph, and a document with no section structure. Neither is
+  // detectable from document shape, so the answer is to show the work rather than to try harder.
+  if (uploadedDocument) {
+    grid.innerHTML = renderDocumentConfirmHtml(uploadedDocument);
+    document.getElementById('diagramPreviewCard').style.display = 'block';
+    return;
+  }
 
   entities.forEach((ent, idx) => {
     const chip = document.createElement('div');
@@ -9882,6 +10148,23 @@ function loadSampleDiagram(type) {
 }
 
 function analyzeDiagramEntities() {
+  // A document takes the other route entirely: its requirement text IS the analysis input, so
+  // there are no chips to collect. Signals the reader unchecked are appended as explicit
+  // exclusions rather than by editing their document — the file stays the source of truth, and
+  // the correction is visible in the requirement text instead of silently applied.
+  if (uploadedDocument) {
+    const optedOut = Object.keys(documentSignalOptOut);
+    const corrections = optedOut.length
+      ? '\n\nCorrections confirmed by the reader: ' + optedOut.join(', ')
+        + ' were inferred from this document but are not requirements.'
+      : '';
+    const text = uploadedDocument.text + corrections;
+    document.getElementById('input').value = text;
+    setAnalysis(text, detectSignals(text));
+    document.getElementById('resultsShell').scrollIntoView({ behavior: 'smooth' });
+    return;
+  }
+
   const selectedChips = document.querySelectorAll('#diagramEntitiesGrid .pick-chip.selected');
   const activeEntities = Array.from(selectedChips).map(c => c.textContent.trim());
   if (!activeEntities.length) {
@@ -9943,7 +10226,7 @@ window.addEventListener('DOMContentLoaded', () => {
     if (pastedText && pastedText.trim().length > 10) {
       const parsed = parseDiagramInput(pastedText, 'pasted-diagram.txt');
       if (parsed.entities.length) {
-        displayDiagramPreview('Pasted Diagram Payload', parsed.type, parsed.entities);
+        displayDiagramPreview('Pasted text', parsed.type, parsed.entities, parsed.document);
       }
     }
   });
