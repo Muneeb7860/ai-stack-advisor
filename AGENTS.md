@@ -10,7 +10,11 @@ were violated**. A rule with no answer to the second is not enforceable and does
 ## The invariants
 
 **Single file, no build step, no dependencies, works offline.** `index.html` is the whole
-frontend. No React, no `.tsx`, no bundler, no npm package for the frontend, no CDN script.
+frontend. No React, no `.tsx`, no bundler, no npm package for the frontend, no CDN script. This is
+the product's own promise, not a preference: the README says "no build step, no dependencies, no
+server, works offline", and NFR-1/NFR-5 require the core analysis to run with zero network calls.
+A single dependency breaks all of it — the file stops opening from `file://`, and the offline
+claim on the landing page becomes false.
 *Violation looks like*: a `package.json` appearing at the repo root, or a `<script src="http…">`.
 
 **Two engines, one behaviour.** `index.html` and `backend/app/rule_engine.py` are independent
@@ -53,7 +57,10 @@ catches the next one too.
 
 ## Testing
 
-**Run it, don't cite it.** `cd backend && python3 -m pytest`. Report the number that run produced.
+**Run it, don't cite it.** `cd backend && python3 -m pytest`. Report the number *that run*
+produced, never one copied from a document. A pass count in a file is a claim about the past that
+looks identical to a claim about the present, and this repo has had a stale one used to assert a
+green baseline that was not real.
 
 **Mutation-test every new assertion.** Revert the thing the test is meant to catch, watch the test
 fail, restore. A test that has never failed has not been shown to test anything.
@@ -68,9 +75,11 @@ meaningless if the suite was already failing, and that reading looks like good n
 **Strip comments before asserting on source text.** Several tests here have matched their own
 explanatory prose — including comments that exist specifically to say why a value was *not* used.
 
-**Landing-page numbers are asserted, not decorative.** `landing.html` claims a test count and
-technology count; `test_landing_claims_are_current.py` derives both from the code. Update the page
-when the suite grows past the band.
+**Landing-page numbers are asserted, not decorative.** `landing.html` says of itself that every
+number on it is a real, currently-shipping count — so a stale one there is worse than anywhere
+else on the site. Two had drifted before the guard existed (933 tests against 1,005; 53 pick
+functions against 58). `test_landing_claims_are_current.py` now derives both from the code; update
+the page when the suite grows past the band.
 
 ---
 
