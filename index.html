@@ -6912,7 +6912,23 @@ document.querySelectorAll('#screenWizard .radio-list').forEach(list => {
 });
 
 // ---------------- Backend wiring: health, API key, analysis creation (decisions #9-11) ----------------
-const API_BASE = 'http://localhost:8000'; // local dev default — see backend/README.md Quickstart. Update for a real deployment.
+// Resolved at load rather than hardcoded, so a hosted copy doesn't need a source edit per deploy
+// (this product ships as a single file with no build step — there's no bundler to substitute a
+// value). A deployment sets ONE of:
+//   <meta name="api-base" content="https://api.example.com">   ← preferred for static hosting
+//   window.__API_BASE__ = 'https://api.example.com'            ← if injected by a host/edge worker
+// Falls back to localhost so opening index.html directly still talks to a local backend, and so
+// the no-backend path (v1 works fully offline, NFR-5) is unchanged either way.
+const API_BASE = (function(){
+  try {
+    if (typeof window !== 'undefined' && window.__API_BASE__) return String(window.__API_BASE__);
+    const meta = typeof document !== 'undefined' && document.querySelector
+      && document.querySelector('meta[name="api-base"]');
+    const fromMeta = meta && meta.getAttribute && meta.getAttribute('content');
+    if (fromMeta) return String(fromMeta);
+  } catch (e) { /* fall through to the local default */ }
+  return 'http://localhost:8000';
+})();
 let backendAvailable = null; // null = not checked yet, true/false after the one-time /health probe
 
 // Real cost tracking (idea pulled from reviewing SmythOS Studio's "Cost Trace" panel — see

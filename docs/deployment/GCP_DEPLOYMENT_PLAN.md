@@ -45,7 +45,12 @@ Cloud Run bills per request rather than per hour.
 
 ## What has to change in the repo before any of this works
 
-These are real gaps in the current code, not boilerplate:
+**Status: done** (2026-09-01) — all of these were fixed locally, before any provisioning, since
+none of them needed GCP to find or to fix. A fourth was found while doing so: the Dockerfile
+hardcoded port 8000, but Cloud Run injects `$PORT` and routes to it, so a fixed port means the
+container is up and nothing reaches it. Kept below as the record of what was wrong and why.
+
+These were real gaps in the code, not boilerplate:
 
 1. **`API_BASE` is hardcoded to `http://localhost:8000`** (`index.html`). This is the single
    most important change and the easiest to forget. It needs to become the deployed Cloud Run
@@ -155,8 +160,12 @@ catalog) with Cloud Run still hosting the API. Same code, `DATABASE_URL` is the 
 
 ## Sequence when this is greenlit
 
-1. Fix `API_BASE`, migrations-on-deploy, and `CORS_ORIGINS` **in the repo first** — all three are
-   testable locally and none require GCP.
+1. ~~Fix `API_BASE`, migrations-on-deploy, and `CORS_ORIGINS` in the repo first.~~ **Done** —
+   plus the `$PORT` gap found alongside them. `API_BASE` now resolves from a
+   `<meta name="api-base">` tag or a `window.__API_BASE__` global, falling back to localhost;
+   the image runs migrations (opt out with `RUN_MIGRATIONS=0` for a separate job) and binds
+   `$PORT`; and the effective CORS allowlist is logged at startup so the most confusing failure
+   mode is visible in logs rather than only as an opaque browser error.
 2. Provision Cloud SQL; set `DATABASE_URL` via Secret Manager.
 3. Build and deploy the image to Cloud Run; run `alembic upgrade head` as a one-off job.
 4. Verify `/health`, then a real feedback POST end-to-end from the deployed page.
