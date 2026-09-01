@@ -112,6 +112,36 @@ it — "on-prem — *from: 'explicitly out of scope'*" is visibly wrong to a hum
 removal. The manifest flow's confirm-the-chips pattern applies directly; the difference is that
 here it is load-bearing rather than courteous.
 
+## Review findings (added after re-reading this against the code)
+
+Three things this scope originally missed or got slightly wrong.
+
+**Routing precedence.** `parseDiagramInput` already claims `.md` and `.txt`: anything it does not
+recognise falls through to a raw-line fallback that turns the first 15 lines into chips. A PRD
+dropped today becomes fifteen chips of prose. So document adapters must be routed **after** the
+manifest check (exact filenames) and the diagram sniffs (extension/content), and must **replace**
+the raw-line fallback rather than sit beside it. That fallback is the current behaviour for exactly
+the files this feature is for.
+
+**What gets confirmed is signals, not components.** The manifest and diagram flows confirm
+*components* — a chip per detected technology. A document produces one requirement text plus a set
+of inferred signals, and the thing a user needs to correct is a **signal** ("on-prem — from:
+'explicitly out of scope'"), not a component. The confirm *pattern* carries over; the content does
+not. Saying "the manifest chips pattern applies directly" was too glib.
+
+**Provenance is obtainable without exposing the keyword tables.** `detectSignals` is pure and costs
+0.054 ms, so running it per block and attributing each fired signal to the block(s) that produce it
+gives block-level provenance for free — no need to expose or duplicate the internal keyword lists.
+Block-level ("this came from *Section 7 — Alternatives Rejected*") is also the right granularity:
+it is what the user needs to judge whether the section should count at all.
+
+**Convergence with the what-if levers.** Confirming a signal means turning one off, and
+`signalOverrides` today carries only `{excluded, known}` — it cannot express "ignore this boolean".
+That is the *same* capability `WHATIF_LEVERS_SCOPE.md` Phase 1 needs. Build boolean signal
+overrides through `applySignalOverrides` once and both features get it. Whichever is built first
+should build it as shared machinery rather than a local hack, and the other then costs materially
+less than its own scope doc estimates.
+
 ## Privacy, stated rather than assumed
 
 The pitch for this feature is that confidential documents never leave the machine. For the analysis
