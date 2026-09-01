@@ -40,6 +40,11 @@
     "A code interpreter feature for our SaaS, sandboxed execution of arbitrary code, high concurrency.",
     "A local CLI tool that executes untrusted code snippets on the operator's machine.",
     "A browser extension that runs untrusted user scripts in the page.",
-    "A static marketing site plus a code interpreter that runs untrusted code."
+    "A static marketing site plus a code interpreter that runs untrusted code.",
+    "A B2B SaaS platform. We have 60 engineers across multiple squads.",
+    "An internal admin tool built by a solo developer.",
+    "A retail API. Team of 4. We must launch in 6 weeks.",
+    "An enterprise reporting system. 200-engineer org, deadline is 4 months.",
+    "A logistics platform with 20 engineers and no fixed deadline."
   ]
 }
