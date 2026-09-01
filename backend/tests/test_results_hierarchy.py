@@ -162,6 +162,84 @@ def test_rank_class_is_emitted_on_each_row():
     assert 'class="attention-row rank-${it.rank}"' in _text()
 
 
+# ------------------------------------------- collapsed cards ("simple until you expand")
+# Second round, after looking at the first: even with 18 sections collapsed, the page still read
+# as heavy — because the 24 stack cards were each a full card, and the attention block added
+# ~440px of its own. Collapsing both to one line is the user's "+ to expand" idea applied where
+# the density actually is.
+
+def test_stack_cards_are_collapsible_and_collapsed_by_default():
+    text = _text()
+    assert '<details class="stack-card card-conf-${conf||\'low\'}">' in text
+    assert "<summary class=\"sc-summary\">" in text
+    # no `open` attribute on the card itself
+    assert '<details class="stack-card card-conf-${conf||\'low\'}" open' not in text
+
+
+def test_collapsed_card_shows_the_short_name_and_the_full_pick_moves_into_the_body():
+    """The full pick string carries alternatives and caveats ("Cloud-native gateway (AWS API
+    Gateway / GCP API Gateway) + Cloudflare in front for DNS & DDoS protection") — four lines in
+    a grid column, which defeats the point of collapsing. The summary gets the short name."""
+    text = _text()
+    assert 'const shortPick = essentialName(pick);' in text
+    assert '<div class="pick">${shortPick}</div>' in text
+    assert 'class="sc-full-pick"' in text
+
+
+def test_full_pick_is_not_repeated_when_it_adds_nothing():
+    """If the short form IS the whole pick, showing it again as the first line of the expanded
+    body just repeats what the user read a moment ago."""
+    assert "shortPick !== String(pick).trim() ?" in _text()
+
+
+def test_card_title_gets_its_own_row_so_it_does_not_wrap_to_four_lines():
+    """Measured before/after in a real render: sharing a flex row with the badges squeezed
+    "IDENTITY & ACCESS (IAM)" onto four lines and made collapsed cards 123px tall, and left the
+    badge row overlapping the +/- marker by 3px. Full-width title fixed both."""
+    text = _text()
+    assert ".stack-card .head h3{flex:1 1 100%;}" in text
+    assert ".stack-card .head{flex-wrap:wrap;}" in text
+
+
+def test_cards_have_an_expand_affordance():
+    """A click target with no visible affordance is a click target nobody uses."""
+    text = _text()
+    assert re.search(r"\.stack-card > summary::after\{[^}]*content:'\+'", text)
+    assert ".stack-card[open] > summary::after{content:'–';}" in text
+
+
+def test_attention_block_is_collapsed_to_one_line_by_default():
+    text = _text()
+    assert '<details class="attention-block">' in text
+    assert 'class="attention-summary"' in text
+    assert '<details class="attention-block" open' not in text
+
+
+# ------------------------------------------------------- shared short-name helper (flow + cards)
+
+@requires_node
+def test_essential_name_strips_caveats_and_alternatives():
+    """One helper for the three places that need a name rather than a full pick string — the
+    hero spine, the attention rows, and flow nodes — instead of the same split repeated."""
+    out = _js("""
+      console.log(JSON.stringify([
+        essentialName('Cloud-native gateway (AWS API Gateway / GCP API Gateway) + Cloudflare in front'),
+        essentialName('OneLogin (One Identity) — or cloud-native (AWS Cognito / Firebase Auth)'),
+        essentialName('Modular monolith (hexagonal internal structure), split into microservices later'),
+        essentialName('AWS'),
+        essentialName(null),
+        essentialName(undefined)
+      ]));
+    """)
+    assert out == ["Cloud-native gateway", "OneLogin", "Modular monolith", "AWS", "", ""]
+
+
+def test_flow_nodes_use_the_short_name_not_the_full_pick():
+    """Flow nodes averaged 76 characters (some 119) because each carried the whole pick string —
+    a dense diagram rather than the n8n-shaped canvas it already almost was."""
+    assert "truncateFlowText(essentialName(n.sub),30)" in _text()
+
+
 # --------------------------------------------------------------- Tier 3: collapsed by default
 
 def test_sections_are_no_longer_all_hardcoded_open():

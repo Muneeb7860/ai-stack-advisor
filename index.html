@@ -451,7 +451,16 @@
     border-radius:var(--radius-lg); background:var(--panel); padding:16px 18px; margin-bottom:18px;
   }
   .attention-head{font-size:var(--fs-xs); text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); font-weight:600;}
-  .attention-sub{font-size:12.5px; color:var(--muted); margin:5px 0 12px; line-height:1.5; max-width:70ch;}
+  /* Collapsed to a single line by default — the block was ~440px of text sitting between the
+     answer and the report, which is a lot to ask of someone who hasn't decided they care yet.
+     The count is the hook; the ranked rows are the detail behind it. */
+  .attention-block > summary{cursor:pointer; list-style:none; display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; padding-right:18px; position:relative;}
+  .attention-block > summary::-webkit-details-marker{display:none;}
+  .attention-block > summary::after{content:'+'; position:absolute; right:0; top:-1px; font-family:var(--font-mono); color:var(--muted2);}
+  .attention-block[open] > summary::after{content:'–';}
+  .attention-block > summary:hover::after{color:var(--accent);}
+  .attention-count{font-size:13px; color:var(--text); font-weight:500;}
+  .attention-sub{font-size:12.5px; color:var(--muted); margin:8px 0 12px; line-height:1.5; max-width:70ch;}
   .attention-row{
     display:flex; gap:12px; align-items:flex-start; padding:11px 0; text-decoration:none; color:inherit;
     border-top:1px solid var(--border);
@@ -514,6 +523,29 @@
   .stack-card.card-conf-medium{border-left-color:var(--accent2); opacity:0.94;}
   .stack-card.card-conf-low{border-left-style:dashed; border-left-color:var(--conf-low-border); opacity:0.82;}
   .stack-card .head{display:flex; justify-content:space-between; align-items:flex-start; gap:8px;}
+  /* Collapsed-by-default card. The summary carries the whole answer (category + pick); a "+"
+     affordance on the right makes the card visibly openable rather than relying on the user
+     trying a click. Native marker removed — it sits left of the title and fights the layout. */
+  .stack-card > summary{cursor:pointer; list-style:none; display:block; position:relative; padding-right:16px;}
+  .stack-card > summary::-webkit-details-marker{display:none;}
+  /* Measured, not guessed: sharing one flex row with the badges squeezed the title into as many
+     as FOUR lines in a narrow grid column ("IDENTITY & ACCESS (IAM)"), which made collapsed
+     cards 123px tall despite carrying a single line of answer — and left the badge row
+     overlapping the marker by 3px. Giving the title the full row fixes both: titles wrap at most
+     twice, badges sit on their own line, and the marker only ever has the title beside it (which
+     the summary's own padding-right already clears). */
+  .stack-card .head{flex-wrap:wrap;}
+  .stack-card .head h3{flex:1 1 100%;}
+  .stack-card .sc-badges{display:flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:flex-start; width:100%; margin-top:6px;}
+  .stack-card .sc-full-pick{font-size:12.5px; color:var(--muted2); line-height:1.5; margin-bottom:8px;}
+  .stack-card > summary::after{
+    content:'+'; position:absolute; right:0; top:0; font-family:var(--font-mono);
+    font-size:14px; line-height:1.2; color:var(--muted2); transition:color .15s var(--ease);
+  }
+  .stack-card[open] > summary::after{content:'–';}
+  .stack-card > summary:hover::after{color:var(--accent);}
+  .stack-card[open] > summary{margin-bottom:8px;}
+  .stack-card > summary .pick{margin-bottom:0;}
   .stack-card h3{margin:0 0 3px; font-size:var(--fs-xs); color:var(--muted); text-transform:uppercase; letter-spacing:0.03em; font-weight:600;}
   .stack-card .pick{font-size:var(--fs-md); font-weight:700; margin:3px 0 6px; color:var(--text); letter-spacing:-0.01em; font-family:var(--font-mono);}
   .stack-card .why{font-size:var(--fs-sm); color:var(--muted); line-height:1.48;}
@@ -4600,7 +4632,7 @@ function renderRecommendations(s, rec){
   const heroSpine = [
     ['Cloud', cloud.v], ['Database', db.v], ['Compute', compute.v],
   ].filter(([, v]) => v).map(([label, v]) =>
-    `<div class="rh-spine-item"><div class="rh-spine-label">${label}</div><div class="rh-spine-value">${String(v).split(/[(—·]/)[0].trim()}</div></div>`
+    `<div class="rh-spine-item"><div class="rh-spine-label">${label}</div><div class="rh-spine-value">${essentialName(v)}</div></div>`
   ).join('');
 
   const signalsHtml = `<div class="results-hero">
@@ -4617,20 +4649,20 @@ function renderRecommendations(s, rec){
         ${renderTokenBudgetHtml(rec, s)}
       </details>
     </div>
-    ${attentionItems.length ? `<div class="attention-block">
-      <div class="attention-head">Needs your attention</div>
-      <div class="attention-sub">${attentionItems.length} of ${stackCards.length} picks worth a second look before you commit — ranked by how expensive they are to reverse against how much signal supported them.</div>
+    ${attentionItems.length ? `<details class="attention-block">
+      <summary class="attention-summary"><span class="attention-head">Needs your attention</span> <span class="attention-count">${attentionItems.length} of ${stackCards.length} picks worth a second look</span></summary>
+      <div class="attention-sub">Ranked by how expensive they are to reverse against how much signal supported them.</div>
       ${attentionItems.map(it => `
         <a class="attention-row rank-${it.rank}" href="#stack">
           <span class="attention-rank">${it.rank === 1 ? '!' : '·'}</span>
           <span class="attention-body">
-            <span class="attention-title">${it.title}<span class="attention-pick"> — ${String(it.pick).split(/[(—·]/)[0].trim()}</span></span>
+            <span class="attention-title">${it.title}<span class="attention-pick"> — ${essentialName(it.pick)}</span></span>
             <span class="attention-reason">${it.reason}</span>
           </span>
           <span class="attention-flags">${it.hardToReverse ? '<span class="attention-flag hard">Hard to reverse</span>' : ''}<span class="attention-flag conf-${it.conf}">${it.conf} confidence</span></span>
         </a>
       `).join('')}
-    </div>` : ''}`;
+    </details>` : ''}`;
 
   const sections = [];
   const visibleSections = computeVisibleSections(s);
@@ -4696,7 +4728,18 @@ function renderRecommendations(s, rec){
   sec('stack', 'Stack', 'Core Technical Stack', `<div class="grid">${stackCards.map(([title, pick, why, conf, persona, altToggle, basis])=> {
     const nodeId = STACK_CARD_NODE_MAP[title];
     const oppDrawer = nodeId ? renderCardAiOppDrawer(nodeId) : '';
-    return `<div class="stack-card card-conf-${conf||'low'}"><div class="head"><h3>${title}</h3><div style="display:flex; align-items:flex-start; gap:6px; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end;">${renderExitCostBadge(title)}${renderBasisBadge(basis)}</div></div><div class="pick">${pick}</div><div class="why">${why}</div>${renderAskPrompt(STACK_CARD_CATEGORY[title], basis)}${oppDrawer}<div class="persona">${persona}</div>${altToggle||''}</div>`;
+    // Collapsed to one line by default: category + pick is the answer; the reasoning, basis,
+    // alternatives and refine UI are the detail behind it. Deliberately a <details> wrapping the
+    // EXISTING .head/.pick markup rather than a rewrite, so every existing rule for those
+    // (including the confidence border channel and the :has(.alt-toggle[open]) grid span) keeps
+    // working, and attachRefineToCard's insertAdjacentHTML('beforeend') lands inside the card —
+    // correctly hidden until expanded.
+    // The summary shows the short name; the full pick string (with its alternatives and caveats)
+    // moves into the body, and is only repeated there when it actually says more than the short
+    // form — otherwise the first thing you'd see on expanding is a line you just read.
+    const shortPick = essentialName(pick);
+    const fullPickRow = shortPick !== String(pick).trim() ? `<div class="sc-full-pick">${pick}</div>` : '';
+    return `<details class="stack-card card-conf-${conf||'low'}"><summary class="sc-summary"><div class="head"><h3>${title}</h3><div class="sc-badges">${renderExitCostBadge(title)}${renderBasisBadge(basis)}</div></div><div class="pick">${shortPick}</div></summary>${fullPickRow}<div class="why">${why}</div>${renderAskPrompt(STACK_CARD_CATEGORY[title], basis)}${oppDrawer}<div class="persona">${persona}</div>${altToggle||''}</details>`;
   }).join('')}</div>`);
 
   sec('iamcompare', 'IAM Options', 'Identity Provider Options <span style="color:var(--muted); text-transform:none; letter-spacing:0; font-weight:400;">— Okta vs. Entra ID vs. Ping/ForgeRock vs. OneLogin vs. JumpCloud, plus PAM/IGA</span>',
@@ -5415,6 +5458,15 @@ function truncateFlowText(str, max){
   return str.slice(0, max-1).trim()+'…';
 }
 
+// The essential name inside a pick string. Pick values carry their own caveats and alternatives
+// ("Cloud-native gateway (AWS API Gateway / GCP API Gateway) + Cloudflare in front for DNS &
+// DDoS protection"), which is right in a card body and wrong anywhere the job is to name the
+// thing at a glance. One helper for the three places that need it — the hero spine, the
+// attention rows, and flow nodes — rather than the same split repeated three times.
+function essentialName(v){
+  return String(v == null ? '' : v).split(/[(—·+,]/)[0].trim();
+}
+
 let flowAiLeverageActive = true;
 function toggleFlowAiLeverage(){
   flowAiLeverageActive = !flowAiLeverageActive;
@@ -5442,7 +5494,7 @@ function renderFlow(graph){
       ${confDot}
       <div class="fn-cat">${FLOW_CATS[n.cat].label}</div>
       <div class="fn-title">${n.title}</div>
-      ${n.sub?`<div class="fn-sub">${truncateFlowText(n.sub,80)}</div>`:''}
+      ${n.sub?`<div class="fn-sub">${truncateFlowText(essentialName(n.sub),30)}</div>`:''}
       ${oppBadge}
     </div>`;
   }).join('');
