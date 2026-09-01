@@ -1,7 +1,12 @@
 # What-if levers — scope
 
-**Status:** scoped, not started. Written after investigating the engine rather than from the
-proposal that prompted it.
+**Status:** Phase 1 SHIPPED (PR #77) — four levers with named stops, the shared boolean-override
+mechanism, and the changed-recommendation summary. Phases 2 and 3 remain: wiring
+`concurrencyTarget` into the picks that should read the number itself (it now trips `highScale`
+but nothing reads the figure), and a budget lever, which is still blocked on the product
+decision described below.
+
+Written after investigating the engine rather than from the proposal that prompted it.
 
 ## The proposal, and what the engine can actually support
 

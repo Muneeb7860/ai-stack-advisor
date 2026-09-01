@@ -1,7 +1,13 @@
 # Document ingestion (PRD / BRD / spec) — scope
 
-**Status:** scoped, not started. Every number below was measured against the current engine, not
-estimated.
+**Status:** Phases 1-4 SHIPPED (PR #73) — the port and registry, the plaintext and `.docx`
+adapters, section classification, confirm-with-provenance, routing precedence, and the
+Refine/Ask privacy guard. Phase 5 (`.pdf`) remains deliberately unshipped as a documented
+extension point. One item still open: `DecompressionStream('deflate-raw')` is confirmed in the
+Node runtime the tests use but has NOT been verified in the project's real target browsers,
+which the `.docx` adapter depends on.
+
+Every number below was measured against the current engine, not estimated.
 
 ## Why the obvious implementation ships a regression
 
