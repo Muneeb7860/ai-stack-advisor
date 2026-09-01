@@ -89,7 +89,7 @@
   :root[data-theme="light"]{
     --bg:#f9fafb; --panel:#ffffff; --panel2:#f3f4f6; --border:#e5e7eb;
     --text:#111827; --muted:#6b7280; --muted2:#374151; --accent:#0b7473; --accent2:#0b7473;
-    --good:#16a34a; --warn:#f59e0b; --bad:#b91c1c; --chip:#eef0f4; --surface:#ffffff;
+    --good:#16a34a; --warn:#f59e0b; --bad:#b91c1c; --chip:#eef0f4; --surface:#f6f7f9;
     --conf-high-border:color-mix(in srgb, var(--accent) 40%, transparent); --conf-high-bg:color-mix(in srgb, var(--accent) 5%, transparent);
     --conf-med-border:var(--border); --conf-low-border:#c7cbd4;
     --dot-rgb:10,12,17; --dot-alpha:0.05;
@@ -610,7 +610,7 @@
   }
   .llm-row .name{font-weight:600; font-size:13px; letter-spacing:-0.006em;}
   .llm-row .tag{color:var(--muted); font-size:11px;}
-  .rag-pick{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:12px;}
+  .rag-pick{background:var(--surface); border-radius:var(--radius); padding:12px;} /* border removed: --surface vs --panel now carries this separation in BOTH themes (light's --surface was #ffffff, identical to --panel, so the border was the ONLY thing distinguishing these blocks there — removing it without fixing the token would have made them invisible in light mode). */
   .rag-pick .name{font-size:14px; font-weight:700; color:var(--good); margin-bottom:3px; letter-spacing:-0.01em;}
   .guardrail-list{display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;}
   .g-chip{background:rgba(224,162,60,0.1); border:1px solid rgba(224,162,60,0.3); color:#e8c07e; border-radius:6px; padding:5px 9px; font-size:11.5px;}
@@ -635,12 +635,12 @@
   .doc-chip{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 11px; font-size:12px; flex:1; min-width:145px;}
   .doc-chip b{display:block; font-size:11px; color:var(--accent); margin-bottom:2px;}
   .persona{font-size:9px; color:var(--muted); text-transform:uppercase; letter-spacing:0.03em; margin-top:2px; font-weight:600;}
-  .opt-item{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:11px 13px; margin-bottom:7px;}
+  .opt-item{background:var(--surface); border-radius:var(--radius); padding:11px 13px; margin-bottom:7px;}
   .opt-item:last-child{margin-bottom:0;}
   .opt-item .t{font-weight:600; font-size:12.5px; margin-bottom:3px; color:var(--text); letter-spacing:-0.006em;}
   .opt-item .w{font-size:11.5px; color:var(--muted); line-height:1.48;}
   .cost-grid{display:flex; flex-direction:column; gap:8px;}
-  .cost-row{display:grid; grid-template-columns:120px 180px 1fr; gap:12px; align-items:start; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:11px 13px;}
+  .cost-row{display:grid; grid-template-columns:120px 180px 1fr; gap:12px; align-items:start; background:var(--surface); border-radius:var(--radius); padding:11px 13px;}
   .cost-label{font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; color:var(--muted); padding-top:1px;}
   .cost-value{font-size:14px; font-weight:700; color:var(--text); letter-spacing:-0.01em; font-family:var(--font-mono);}
   .cost-detail{font-size:12px; color:var(--muted); line-height:1.5;}
@@ -650,7 +650,7 @@
   .tier-table td{padding:8px; border-bottom:1px solid var(--border); color:var(--text);}
   .tier-table tr:last-child td{border-bottom:none;}
   .gov-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(232px,1fr)); gap:10px;}
-  .gov-block{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:13px;}
+  .gov-block{background:var(--surface); border-radius:var(--radius); padding:13px;}
   .gov-block h4{margin:0 0 8px; font-size:12px; text-transform:uppercase; letter-spacing:0.04em; color:var(--muted); font-weight:600;}
   .gov-block ul{margin:0; padding-left:16px; font-size:12px; color:var(--text); line-height:1.6;}
   .assumption{font-size:12px; color:var(--muted); margin-top:9px; padding-top:9px; border-top:1px dashed var(--border); line-height:1.5;}
@@ -4711,8 +4711,14 @@ function renderRecommendations(s, rec){
   // evidence FOR the answer, not the answer, so they move below into a disclosure — still one
   // interaction away, and still duplicated per-card by the existing "why this pick" inspection.
   const attentionItems = computeAttentionItems(stackCards);
+  // Architecture leads the spine because it's the decision the other three hang off — you pick a
+  // shape before you pick what runs it. Deliberately NOT joined by an estimated monthly total:
+  // this engine produces separate compute/database/LLM bands on purpose, and some read "Not
+  // applicable — capex, not opex". Summing those strings into one headline figure would invent a
+  // precision the product deliberately refuses to claim, so cost stays in its own section where
+  // its per-category caveats travel with it.
   const heroSpine = [
-    ['Cloud', cloud.v], ['Database', db.v], ['Compute', compute.v],
+    ['Architecture', arch.v], ['Cloud', cloud.v], ['Database', db.v], ['Compute', compute.v],
   ].filter(([, v]) => v).map(([label, v]) =>
     `<div class="rh-spine-item"><div class="rh-spine-label">${label}</div><div class="rh-spine-value">${essentialName(v)}</div></div>`
   ).join('');
