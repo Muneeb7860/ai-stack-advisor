@@ -812,6 +812,11 @@
     box-shadow:0 2px 10px rgba(0,0,0,0.35); transition:border-color .12s var(--ease), box-shadow .12s var(--ease), transform .12s var(--ease);
   }
   .flow-node:hover{border-color:var(--cat-color, var(--accent)); box-shadow:0 0 0 1px var(--cat-color, var(--accent)), 0 6px 20px rgba(0,0,0,0.5); transform:translateY(-1px);}
+  /* Narrow-screen single-column layout — wider nodes because there's now one per row, and the
+     port nubs move to the top/bottom edges to match the vertical connectors. */
+  #flowCanvas.flow-vertical .flow-node{width:260px;}
+  #flowCanvas.flow-vertical .flow-node::before{top:auto; bottom:-4px; left:50%; transform:translateX(-50%);}
+  #flowCanvas.flow-vertical .flow-node::after{top:-4px; bottom:auto; left:50%; right:auto; transform:translateX(-50%);}
   /* Category "badge" replaces the old flat left border-bar — a small rounded-square swatch,
      closer to n8n's per-node-type icon tile than a plain accent stripe. */
   .flow-node .fn-cat{
@@ -883,6 +888,21 @@
        of the nav band even in that worst-case alignment, confirmed by re-measuring both
        elements' getBoundingClientRect() at that exact scroll position after the fix. */
     .flow-toolbar{bottom:68px;}
+    /* The colour legend is redundant in the narrow-screen vertical layout and actively harmful:
+       it's absolutely positioned over the top-left of the canvas, which is exactly where the
+       single column now sits, so it covered the first few nodes. Redundant because each node in
+       that layout already prints its own tier as text ("COMPUTE", "DATA") — the legend maps
+       colour to tier, which is only needed when the tier isn't already written on the node.
+       Additive display rule only: every base declaration on the overlay is left untouched,
+       including the blur that test_deliberately_excluded_overlays_still_have_* asserts. */
+    #flowLegend{display:none;}
+    /* Same reasoning as the legend, plus a fix: the toolbar is absolutely positioned inside
+       #flowWrap, and in the vertical layout the column spans nearly the full viewport width, so
+       there is no free corner left for it to sit in — it rendered on top of a node. It is also
+       largely redundant there: the column is already fit-to-width and scrolls vertically, so
+       zoom/pan/fit controls address a problem that layout does not have. Additive display rule
+       only; the base declarations (including the blur) are untouched. */
+    .flow-toolbar{display:none;}
   }
 
   /* Phase 2 (Enterprise-shell plan) — a considered re-skin of this ONE shared template, not each
@@ -5432,7 +5452,45 @@ const FLOW_LAYOUT = {
   llm:[1080,30], rag:[1080,155], vectordb:[1080,280], mcp:[1080,405], guardrails:[1080,530],
   observability:[1340,180], cicd:[1340,305],
 };
+// Narrow screens get a single-column layout instead of the six-tier horizontal one. Measured
+// before writing this: the horizontal layout spans ~1300px of canvas, so at 375px it auto-fits
+// into roughly a 230px blob with every node label illegible — not a styling problem, a layout
+// that cannot fit. Nodes are ordered by tier so the pipeline still reads top-to-bottom (client →
+// edge → compute → data → ai → ops), which is the same information the horizontal tiers carry.
+// A layout MODE rather than conditionals sprinkled through the renderer: edges, canvas size and
+// the minimap all derive from node x/y, so they follow this automatically.
+const FLOW_VERTICAL_BREAKPOINT = 860;
+const FLOW_TIER_ORDER = ['client', 'edge', 'compute', 'data', 'ai', 'ops'];
+const FLOW_NODE_W_VERTICAL = 260;
+
+function flowShouldUseVerticalLayout(){
+  return typeof window !== 'undefined' && window.innerWidth
+    && window.innerWidth <= FLOW_VERTICAL_BREAKPOINT;
+}
+
+function layoutFlowGraphVertical(graph){
+  // Stable sort by tier, then by the horizontal layout's own y — so nodes that sat above each
+  // other in a tier keep that relative order rather than being reshuffled arbitrarily.
+  const withPos = graph.nodes.map(n => {
+    const [x, y] = FLOW_LAYOUT[n.id] || [0, 0];
+    return {n, x, y};
+  });
+  withPos.sort((a, b) => {
+    const ta = FLOW_TIER_ORDER.indexOf(a.n.cat), tb = FLOW_TIER_ORDER.indexOf(b.n.cat);
+    return ta !== tb ? ta - tb : a.y - b.y;
+  });
+  return {
+    nodes: withPos.map(({n}, i) => ({...n, x: 0, y: i * 110, color: FLOW_CATS[n.cat].color})),
+    edges: graph.edges,
+  };
+}
+
 function layoutFlowGraph(graph){
+  if (flowShouldUseVerticalLayout()) return layoutFlowGraphVertical(graph);
+  return layoutFlowGraphHorizontal(graph);
+}
+
+function layoutFlowGraphHorizontal(graph){
   // rag/vectordb/mcp/guardrails stack vertically only over whichever of them are
   // actually present, matching the original buildFlowGraph's aiY accumulation.
   const aiOrder = ['llm','rag','vectordb','mcp','guardrails'];
@@ -5453,6 +5511,24 @@ function layoutFlowGraph(graph){
     edges: graph.edges,
   };
 }
+// The flow layout is now viewport-dependent, which it never was before — so crossing the
+// breakpoint (rotating a phone, dragging a window wider) would otherwise strand the graph in
+// the wrong layout until the next analysis. Re-lays out only when the mode actually flips, not
+// on every resize tick. Safe to re-run against the already-laid-out graph: both layout functions
+// derive positions from FLOW_LAYOUT and the node's tier, ignoring whatever x/y it currently has.
+let flowResizeTimer = null;
+if (typeof window !== 'undefined' && window.addEventListener) {
+  window.addEventListener('resize', () => {
+    if (!flowState.graph) return;
+    clearTimeout(flowResizeTimer);
+    flowResizeTimer = setTimeout(() => {
+      if (flowShouldUseVerticalLayout() === !!flowState.vertical) return;
+      renderFlow(layoutFlowGraph(flowState.graph));
+      if (currentView === 'flow') flowFit();
+    }, 150);
+  });
+}
+
 function buildFlowGraph(ctx, signals = {}){
   return layoutFlowGraph(buildCanonicalArchitectureGraph(ctx, signals));
 }
@@ -5471,6 +5547,18 @@ function essentialName(v){
   return String(v == null ? '' : v).split(/[(—·+,]/)[0].trim();
 }
 
+// A few flow nodes carry "Label — pick" as their title rather than splitting across title/sub
+// (IAM, LLM, RAG), so the whole pick string with its caveats ended up as the heading — 114
+// characters for IAM, four wrapped lines on a phone. Shortens the pick half while keeping the
+// label, rather than running essentialName over the whole thing, which would drop the pick
+// entirely for exactly the nodes that have nowhere else to show it.
+function flowNodeTitle(title){
+  const s = String(title == null ? '' : title);
+  const i = s.indexOf(' — ');
+  if (i === -1) return truncateFlowText(s, 40);
+  return s.slice(0, i) + ' — ' + truncateFlowText(essentialName(s.slice(i + 3)), 24);
+}
+
 let flowAiLeverageActive = true;
 function toggleFlowAiLeverage(){
   flowAiLeverageActive = !flowAiLeverageActive;
@@ -5479,7 +5567,12 @@ function toggleFlowAiLeverage(){
 
 function renderFlow(graph){
   flowState.graph = graph;
-  flowState.zoom = 1; flowState.panX = 40; flowState.panY = 40;
+  flowState.vertical = flowShouldUseVerticalLayout();
+  flowState.zoom = 1;
+  // A single column needs almost no left inset, and starting it 40px down wastes a chunk of an
+  // already-short phone viewport.
+  flowState.panX = flowState.vertical ? 10 : 40;
+  flowState.panY = flowState.vertical ? 12 : 40;
 
   const nodeHtml = graph.nodes.map(n=>{
     const confColor = n.conf==='high' ? '#34c98a' : n.conf==='medium' ? '#e0a23c' : n.conf==='low' ? '#828a99' : null;
@@ -5497,16 +5590,17 @@ function renderFlow(graph){
     return `<div class="flow-node${(n.opportunities && n.opportunities.length && flowAiLeverageActive)?' ai-leverage-active':''}" id="fn-${n.id}" data-id="${n.id}" style="left:${n.x}px; top:${n.y}px; --cat-color:${n.color};" tabindex="0" role="button" aria-label="${n.title} — view details">
       ${confDot}
       <div class="fn-cat">${FLOW_CATS[n.cat].label}</div>
-      <div class="fn-title">${n.title}</div>
+      <div class="fn-title">${flowNodeTitle(n.title)}</div>
       ${n.sub?`<div class="fn-sub">${truncateFlowText(essentialName(n.sub),30)}</div>`:''}
       ${oppBadge}
     </div>`;
   }).join('');
   document.getElementById('flowNodes').innerHTML = nodeHtml;
 
-  const maxX = Math.max(...graph.nodes.map(n=>n.x)) + 260;
+  const maxX = Math.max(...graph.nodes.map(n=>n.x)) + (flowState.vertical ? FLOW_NODE_W_VERTICAL + 10 : 260);
   const maxY = Math.max(...graph.nodes.map(n=>n.y)) + 140;
   const canvas = document.getElementById('flowCanvas');
+  canvas.classList.toggle('flow-vertical', !!flowState.vertical);
   canvas.style.width = maxX+'px';
   canvas.style.height = maxY+'px';
   canvas.style.backgroundImage = 'radial-gradient(circle, #232838 1px, transparent 1px)';
@@ -5519,9 +5613,16 @@ function renderFlow(graph){
   renderFlowLegend();
 }
 
+// In the vertical (narrow-screen) layout the ports move to the bottom/top edge rather than
+// right/left — connecting a stacked column through side ports would send every edge on a loop
+// out to the side and back.
 function flowNodeAnchor(id, side){
   const n = flowState.graph.nodes.find(x=>x.id===id);
   const h = 60;
+  if (flowState.vertical) {
+    const cx = n.x + FLOW_NODE_W_VERTICAL/2;
+    return side==='out' ? {x:cx, y:n.y+h} : {x:cx, y:n.y};
+  }
   return side==='out' ? {x:n.x+208, y:n.y+h/2} : {x:n.x, y:n.y+h/2};
 }
 
@@ -5538,8 +5639,13 @@ function drawFlowEdges(){
     const srcNode = flowState.graph.nodes.find(n=>n.id===e.from);
     const color = (srcNode && srcNode.color) || '#5b6b7c';
     const s = flowNodeAnchor(e.from,'out'), t = flowNodeAnchor(e.to,'in');
-    const dx = Math.max(50, Math.abs(t.x-s.x)/2);
-    const d = `M${s.x},${s.y} C${s.x+dx},${s.y} ${t.x-dx},${t.y} ${t.x},${t.y}`;
+    // Control points follow the layout's axis — a horizontal offset in the vertical layout would
+    // bow every edge sideways out of the column instead of flowing down it.
+    const d = flowState.vertical
+      ? (() => { const dy = Math.max(30, Math.abs(t.y-s.y)/2);
+                 return `M${s.x},${s.y} C${s.x},${s.y+dy} ${t.x},${t.y-dy} ${t.x},${t.y}`; })()
+      : (() => { const dx = Math.max(50, Math.abs(t.x-s.x)/2);
+                 return `M${s.x},${s.y} C${s.x+dx},${s.y} ${t.x-dx},${t.y} ${t.x},${t.y}`; })();
     return `
       <path d="${d}" stroke="${color}" stroke-opacity="0.4" stroke-width="1.6" fill="none"/>
       <circle cx="${s.x}" cy="${s.y}" r="2.6" fill="${color}"/>
@@ -5638,16 +5744,29 @@ function flowZoom(factor){
 function updateFlowTransform(){
   document.getElementById('flowCanvas').style.transform = `translate(${flowState.panX}px, ${flowState.panY}px) scale(${flowState.zoom})`;
 }
+// The rendered node width, which differs by layout — flowFit and the minimap both need it to
+// compute the graph's real extent, and both previously hardcoded the horizontal value.
+function flowNodeWidth(){ return flowState.vertical ? FLOW_NODE_W_VERTICAL : 208; }
+
 function flowFit(){
   if(!flowState.graph) return;
   const vp = document.getElementById('flowViewport');
   const xs = flowState.graph.nodes.map(n=>n.x), ys = flowState.graph.nodes.map(n=>n.y);
-  const minX=Math.min(...xs), maxX=Math.max(...xs)+208, minY=Math.min(...ys), maxY=Math.max(...ys)+70;
+  const minX=Math.min(...xs), maxX=Math.max(...xs)+flowNodeWidth(), minY=Math.min(...ys), maxY=Math.max(...ys)+70;
   const w = maxX-minX, h = maxY-minY;
-  const zx = (vp.clientWidth-60)/w, zy = (vp.clientHeight-60)/h;
-  flowState.zoom = Math.max(0.25, Math.min(1, Math.min(zx,zy)));
-  flowState.panX = (vp.clientWidth - w*flowState.zoom)/2 - minX*flowState.zoom;
-  flowState.panY = (vp.clientHeight - h*flowState.zoom)/2 - minY*flowState.zoom;
+  if (flowState.vertical) {
+    // Fit WIDTH only and anchor to the top. Fitting both axes on a tall single column meant
+    // dividing a ~2200px-high graph into a ~560px viewport — a 0.25 scale that rendered every
+    // label unreadable. A column is meant to be scrolled, not shrunk to fit.
+    flowState.zoom = Math.max(0.25, Math.min(1, (vp.clientWidth-20)/w));
+    flowState.panX = (vp.clientWidth - w*flowState.zoom)/2 - minX*flowState.zoom;
+    flowState.panY = 12;
+  } else {
+    const zx = (vp.clientWidth-60)/w, zy = (vp.clientHeight-60)/h;
+    flowState.zoom = Math.max(0.25, Math.min(1, Math.min(zx,zy)));
+    flowState.panX = (vp.clientWidth - w*flowState.zoom)/2 - minX*flowState.zoom;
+    flowState.panY = (vp.clientHeight - h*flowState.zoom)/2 - minY*flowState.zoom;
+  }
   updateFlowTransform();
   renderFlowMinimap();
 }
@@ -5657,7 +5776,7 @@ function renderFlowMinimap(){
   const mm = document.getElementById('flowMinimap');
   const mmW=170, mmH=110;
   const xs = flowState.graph.nodes.map(n=>n.x), ys = flowState.graph.nodes.map(n=>n.y);
-  const minX=Math.min(...xs), maxX=Math.max(...xs)+208, minY=Math.min(...ys), maxY=Math.max(...ys)+70;
+  const minX=Math.min(...xs), maxX=Math.max(...xs)+flowNodeWidth(), minY=Math.min(...ys), maxY=Math.max(...ys)+70;
   const w = maxX-minX, h = maxY-minY;
   const scale = Math.min(mmW/w, mmH/h)*0.9;
   const offX = (mmW - w*scale)/2 - minX*scale;
