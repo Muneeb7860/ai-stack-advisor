@@ -5208,6 +5208,17 @@ const OVERRIDE_EFFECT_CARDS = {
   // recommendation changes" when several categories actually changed underneath them.
   auditLogging:'Audit Logging', privilegedAccess:'Privileged Access', testingStrategy:'Testing Strategy',
   networkBoundary:'Network Boundary', multiCloudBridging:'Multi-Cloud Bridging', securityGates:'Security Gates (CI/CD)',
+  // The six vendor categories added after this map was written. Their absence was not cosmetic:
+  // diffRecommendations() only reports cards listed here, so toggling an inference that moved one
+  // of them showed the user a change list with that change missing — and, when it moved ONLY one
+  // of them, printed "No recommendation changes — this inference is not currently driving any
+  // pick", which was simply false in a dialog the user was reading to decide whether to proceed.
+  // Verified: an enterprise/PII signal moves the sandbox pick E2B -> Vercel Sandbox, and the diff
+  // reported 13 changes with that one absent. Third instance of this same map-fell-behind class,
+  // after test_engine_differential.py's KEYMAP and CATEGORY_VENDORS.
+  gitops:'GitOps / Continuous Deployment', realtimeAnalytics:'Real-Time Analytics',
+  sandbox:'Code Execution Sandbox', agentFrameworkVendorPick:'Agent Framework',
+  inferenceServingVendorPick:'Inference Serving Engine', llmObservabilityVendorPick:'LLM Observability',
 };
 
 function diffRecommendations(before, after){
