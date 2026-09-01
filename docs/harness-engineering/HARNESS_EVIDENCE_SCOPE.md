@@ -31,11 +31,22 @@ file, run a client-side heuristic check against its text and compare the result 
 level they picked:
 
 - **Match** — a small confirming badge next to their selection ("Evidence checks out").
+- **Exceeds** — the file supports a *higher* level than the one picked. Reported, not corrected:
+  it states what the file shows and leaves the score alone.
 - **Mismatch** — a non-blocking warning ("You picked 3, but this file doesn't show a
   passing-test gate — reconsider?") with the reason. The user's own selection still wins;
   this never silently overrides their answer or blocks Continue.
 - **Inconclusive** (file doesn't match any known pattern for this component) — no badge,
   no warning. Silence beats a false signal here.
+
+> **Why "exceeds" is a separate verdict.** The first implementation treated `level <= ceiling` as
+> a match, so claiming *less* than your file shows rendered "✓ Evidence checks out" — confirming a
+> score the attached file actively contradicts. That isn't only imprecise wording. This audit's
+> entire output is "find your lowest-scoring component and take it to a 2 before touching anything
+> else", so a component scored 0 whose evidence shows 3 becomes the *recommended place to start* —
+> the one thing the user demonstrably already has, while the tool holds the file proving it. Found
+> by running a real audit with this repo's own files; every checker test until then had used
+> `level == ceiling` or `level > ceiling`, so the under-claim path had no coverage at all.
 
 Nothing is required. A user who skips every upload gets exactly today's flow, unchanged.
 
