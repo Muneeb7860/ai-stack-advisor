@@ -1377,6 +1377,13 @@
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z"/></svg>
         This Analysis
       </button>
+      <!-- Deliberately NOT inside #sidebarExportShare below, which stays hidden until an analysis
+           exists: connecting your editor is useful before you have run anything here, and
+           arguably most useful then, since the point of it is to stop needing this page. -->
+      <button type="button" class="app-sidebar-item" onclick="openMcpModal()" title="Use this from Claude Code, Cursor or any MCP client" aria-label="Use this from your editor">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m6.75 7.5-4.5 4.5 4.5 4.5m10.5-9 4.5 4.5-4.5 4.5M14.25 3.75l-4.5 16.5"/></svg>
+        Use in your editor
+      </button>
       <!-- Relocated verbatim from #resultsHeader (was inline there) — decision #12 (Share
            hidden on a read-only shared view) now gates this whole block via #sidebarExportShare
            instead of #resultsHeader, since resultsHeader itself no longer contains it. See the
@@ -1824,6 +1831,46 @@
 </div>
 
 <!-- Custom Technology & Knowledge Base Modal -->
+<!-- Connect-from-your-editor modal. The MCP server has existed and been tested since the
+     rule-engine port (backend/app/mcp/server.py, docs/adr/0001-mcp-rule-engine-port.md) but was
+     promoted absolutely nowhere in either page, so the only people who knew it existed were the
+     people who had read the backend source. Same rule engine, no second implementation.
+
+     The config below is the one that actually works, and every field is load-bearing:
+       * module is `app.mcp.server`, NOT `backend.app.mcp_server` — the package root is backend/
+       * `cwd` therefore has to be backend/, or the module doesn't resolve at all
+       * `env.DATABASE_URL` is REQUIRED, not optional: the server's own _validate_startup_config()
+         exits(1) without a reachable DB, because MCP's stdio_client doesn't inherit the parent
+         shell's environment (only a small PATH/HOME allowlist), so an omitted DATABASE_URL
+         silently falls back to the module default instead of failing where you'd notice.
+     A config missing any of the three produces a server that either won't start or answers
+     tools/list while being unable to do anything — see that function's own comment. -->
+<div id="mcpModal" class="custom-modal-backdrop" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:9999; align-items:center; justify-content:center;" onclick="if(event.target===this) closeMcpModal();">
+  <div class="custom-modal-box" style="background:var(--panel); border:1px solid var(--border); border-radius:12px; width:90%; max-width:620px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 20px 40px rgba(0,0,0,0.5);">
+    <div style="padding:16px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <h3 style="margin:0; font-size:16px; color:var(--text);">Use this from your editor</h3>
+        <p style="margin:2px 0 0; font-size:12px; color:var(--muted);">Claude Code, Claude Desktop, Cursor and any other MCP client can call the same rule engine this page uses.</p>
+      </div>
+      <button type="button" onclick="closeMcpModal()" aria-label="Close" style="background:none; border:none; color:var(--muted); font-size:18px; cursor:pointer;">✕</button>
+    </div>
+    <div style="padding:20px; overflow-y:auto; flex:1;">
+      <p style="margin:0 0 14px; font-size:12.5px; color:var(--muted); line-height:1.6;">
+        Exposes one tool, <code style="font-family:var(--font-mono); color:var(--text);">recommend_stack(requirement_text)</code>, returning the full architecture in a single call — the same deterministic output as this page, not a model guessing. Ask your agent to scaffold a system and it grounds the stack in these rules instead of inventing one.
+      </p>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <div style="font-size:11px; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:0.05em;">Add to your MCP config</div>
+        <button type="button" class="ex-btn" onclick="copyMcpConfig()" id="mcpCopyBtn">Copy</button>
+      </div>
+      <pre id="mcpConfigBlock" style="margin:0 0 14px; padding:12px 14px; background:var(--surface); border-radius:var(--radius-sm); overflow-x:auto; font-family:var(--font-mono); font-size:11.5px; line-height:1.6; color:var(--text);"></pre>
+      <div style="font-size:12px; color:var(--muted); line-height:1.6;">
+        <p style="margin:0 0 8px;"><b style="color:var(--text);">Set all three fields.</b> The module path is <code style="font-family:var(--font-mono);">app.mcp.server</code> and the package root is <code style="font-family:var(--font-mono);">backend/</code>, so <code style="font-family:var(--font-mono);">cwd</code> matters. <code style="font-family:var(--font-mono);">DATABASE_URL</code> is not optional — MCP launches the server without your shell environment, and it exits with a clear error rather than starting up unable to answer.</p>
+        <p style="margin:0;">Runs locally over stdio. Nothing in this page changes, and nothing here is sent anywhere — see the privacy note in the footer.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="customTechModal" class="custom-modal-backdrop" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); z-index:9999; align-items:center; justify-content:center;" onclick="if(event.target===this) closeCustomTechModal();">
   <div class="custom-modal-box" style="background:var(--panel); border:1px solid var(--border); border-radius:12px; width:90%; max-width:650px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 20px 40px rgba(0,0,0,0.5);">
     <div style="padding:16px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
@@ -8136,6 +8183,46 @@ function closeCustomTechModal(){
   if (m) m.style.display = 'none';
 }
 
+// Built as one string so the copy button and the rendered block cannot drift apart — the whole
+// point of this modal is that what you copy is what actually works, and two sources for the same
+// config is how that stops being true. See the modal markup for why each field is required.
+const MCP_CONFIG_SNIPPET = JSON.stringify({
+  mcpServers: {
+    'ai-stack-advisor': {
+      command: 'python',
+      args: ['-m', 'app.mcp.server'],
+      cwd: '/path/to/ai-stack-advisor/backend',
+      env: { DATABASE_URL: 'postgresql://user:pass@localhost:5432/ai_stack_advisor' },
+    },
+  },
+}, null, 2);
+
+function openMcpModal(){
+  const m = document.getElementById('mcpModal');
+  if (!m) return;
+  const block = document.getElementById('mcpConfigBlock');
+  // textContent, not innerHTML: this string contains no markup and must never be parsed as any.
+  if (block) block.textContent = MCP_CONFIG_SNIPPET;
+  m.style.display = 'flex';
+}
+
+function closeMcpModal(){
+  const m = document.getElementById('mcpModal');
+  if (m) m.style.display = 'none';
+}
+
+function copyMcpConfig(){
+  const btn = document.getElementById('mcpCopyBtn');
+  const done = (label) => { if (btn) { btn.textContent = label; setTimeout(() => { btn.textContent = 'Copy'; }, 1600); } };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(MCP_CONFIG_SNIPPET).then(() => done('Copied'), () => done('Copy failed'));
+  } else {
+    // file:// in some browsers has no clipboard API at all, and this page is designed to be
+    // opened exactly that way (NFR-5). Failing silently would leave the button looking broken.
+    done('Select and copy');
+  }
+}
+
 function renderCustomTechList(){
   const techs = getCustomKbTechs();
   const empty = document.getElementById('customTechListEmpty');
@@ -8761,6 +8848,9 @@ function cmdkBuildItems(){
     if (typeof onExportDrawioClick === 'function') items.push({group:'Actions', label:'Export diagram for draw.io', run:() => onExportDrawioClick()});
     if (typeof onExportMermaidClick === 'function') items.push({group:'Actions', label:'Export diagram as Mermaid', run:() => onExportMermaidClick()});
   }
+  // Not gated on analysisOnScreen: connecting your editor is useful before you have run anything
+  // here — arguably most useful then, since the point is to stop coming to this page at all.
+  items.push({group:'Actions', label:'Connect from your editor (MCP)', hint:'claude code, cursor', run:() => openMcpModal()});
   items.push({group:'Actions', label:'Toggle light / dark theme', run:() => toggleTheme()});
 
   // Sections: read from the in-page nav, which renderRecommendations already rebuilds per
@@ -8916,6 +9006,7 @@ window.addEventListener('keydown', (e) => {
     // calling all three unconditionally is safe regardless of which one (if any) is open.
     closeGlidePanel();
     closeCustomTechModal();
+    closeMcpModal(); // same rule — a new modal joins the teardown or it is the one that ignores Escape
     closeContextPanel(); // Phase 3's refine/ask drawer — same "every drawer honors Escape" rule
     const pop = document.getElementById('flowPopover');
     if (pop) pop.style.display = 'none';
