@@ -7772,7 +7772,35 @@ async function onChallengeSubmit(cardKey){
   if (select) select.value = select.options[0]?.value || '';
 }
 
+// Tracks whether the current analysis came from an uploaded document, and whether the reader has
+// been told that Refine/Ask send its text to an LLM.
+//
+// This feature is pitched on the analysis running entirely in the browser, and for the analysis
+// that is true. Refine and Ask are not part of it: they POST the requirement text to /api/refine
+// and /api/ask, which call a model. Someone who uploads a confidential PRD precisely BECAUSE
+// nothing leaves their machine, and then clicks Refine, would have that assumption broken by a
+// button — silently, and after the fact.
+//
+// Consent is asked once per uploaded document rather than per click. Asking every time trains
+// people to dismiss it; asking never is the problem. Typed and pasted requirements are unchanged:
+// the user wrote them here and the confidentiality claim was never made about them.
+let analysisFromDocument = false;
+let documentLlmConsent = false;
+
+function confirmDocumentLeavesTheBrowser(what){
+  if (!analysisFromDocument || documentLlmConsent) return true;
+  const ok = confirm(
+    'This analysis came from a document you uploaded.\n\n' +
+    'The analysis itself ran entirely in your browser — nothing was sent anywhere. ' + what +
+    ' is different: it sends your requirement text to a language model to answer.\n\n' +
+    'Send this document’s text?'
+  );
+  if (ok) documentLlmConsent = true;
+  return ok;
+}
+
 async function onRefineClick(cardKey, btnEl){
+  if (!confirmDocumentLeavesTheBrowser('Refine')) return;
   const zone = document.querySelector(`.refine-zone[data-card-key="${cardKey}"]`);
   const category = zone.dataset.category;
   const resultEl = document.getElementById(`refineResult-${cardKey}`);
@@ -7911,6 +7939,7 @@ async function onAskClick(cardKey){
   const input = document.getElementById(`askInput-${cardKey}`);
   const question = input.value.trim();
   if (!question) return;
+  if (!confirmDocumentLeavesTheBrowser('Ask AI')) return;
   if (!getApiKey()){ renderRefineKeyPrompt(cardKey, 'ask'); return; }
 
   const thread = document.getElementById(`askThread-${cardKey}`);
@@ -9822,6 +9851,114 @@ registerDocumentAdapter({
   },
 });
 
+// ---- .docx adapter ----
+// A .docx is a ZIP holding word/document.xml. Two things this needs that the plaintext adapter
+// does not, so the port grows two optional properties rather than being reshaped:
+//
+//   binary: true  -> the loader reads an ArrayBuffer instead of text
+//   extract()     -> may return a Promise (DecompressionStream is async)
+//
+// Both are opt-in and the plaintext adapter is untouched, which is the point of having a port at
+// all: a format with different needs is accommodated without the other adapters learning anything.
+//
+// The real payoff shows up in headings. Every other format makes us guess from shape — two earlier
+// regex prototypes each caught a different subset of styles. A .docx states it outright in
+// <w:pStyle w:val="Heading1"/>, so this adapter reads the document's own structure instead of
+// inferring it, and is correspondingly more reliable than the plaintext one.
+
+// Minimal ZIP central-directory reader. Only what is needed to locate one entry: this is not a
+// general ZIP library and should not grow into one.
+function zipFindEntry(bytes, wantName){
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  // End of Central Directory: scan back from the end for PK\x05\x06. The comment field is
+  // variable-length, so there is no fixed offset to jump to.
+  let eocd = -1;
+  for (let i = bytes.length - 22; i >= 0 && i >= bytes.length - 65557; i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) return null;
+  let off = dv.getUint32(eocd + 16, true);
+  const count = dv.getUint16(eocd + 10, true);
+  for (let n = 0; n < count; n++) {
+    if (dv.getUint32(off, true) !== 0x02014b50) return null;
+    const method = dv.getUint16(off + 10, true);
+    const compSize = dv.getUint32(off + 20, true);
+    const nameLen = dv.getUint16(off + 28, true);
+    const extraLen = dv.getUint16(off + 30, true);
+    const commentLen = dv.getUint16(off + 32, true);
+    const localOff = dv.getUint32(off + 42, true);
+    const name = new TextDecoder().decode(bytes.subarray(off + 46, off + 46 + nameLen));
+    if (name === wantName) {
+      // The local header repeats name/extra lengths and they can differ from the central copy —
+      // using the central directory's values here is a classic way to read from the wrong offset.
+      const lNameLen = dv.getUint16(localOff + 26, true);
+      const lExtraLen = dv.getUint16(localOff + 28, true);
+      const dataStart = localOff + 30 + lNameLen + lExtraLen;
+      return { method, bytes: bytes.subarray(dataStart, dataStart + compSize) };
+    }
+    off += 46 + nameLen + extraLen + commentLen;
+  }
+  return null;
+}
+
+async function zipInflate(entry){
+  if (entry.method === 0) return entry.bytes;              // stored, no compression
+  if (entry.method !== 8) throw new Error('Unsupported compression in this .docx (method ' + entry.method + ').');
+  if (typeof DecompressionStream === 'undefined') {
+    // Stated rather than swallowed: without this the user gets a silent failure on a file the
+    // interface told them was supported. Verified present in the Node runtime used by the tests;
+    // this branch exists for older browsers where it is not.
+    throw new Error('This browser cannot decompress .docx files. Save the document as .md or .txt and upload that instead.');
+  }
+  const ds = new DecompressionStream('deflate-raw');
+  const stream = new Blob([entry.bytes]).stream().pipeThrough(ds);
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+// Word wraps runs in <w:p> paragraphs; headings are marked by a pStyle whose value starts
+// "Heading" (or "Title"). Text lives in <w:t> runs which have to be concatenated — a single
+// sentence is routinely split across several because of spell-check or formatting boundaries.
+function docxBlocksFromXml(xml){
+  const blocks = [];
+  let cur = { heading: null, lines: [] };
+  const paras = xml.match(/<w:p[ >][\s\S]*?<\/w:p>/g) || [];
+  for (const p of paras) {
+    const text = (p.match(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g) || [])
+      .map(x => x.replace(/<[^>]+>/g, ''))
+      .join('')
+      .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'")
+      .trim();
+    const style = /<w:pStyle[^>]*w:val="([^"]*)"/.exec(p);
+    const isHeading = !!style && /^(heading|title)/i.test(style[1]);
+    if (isHeading && text) {
+      if (cur.heading !== null || cur.lines.join('').trim()) blocks.push(cur);
+      cur = { heading: text, lines: [] };
+    } else if (text) {
+      cur.lines.push(text);
+    }
+  }
+  if (cur.heading !== null || cur.lines.join('').trim()) blocks.push(cur);
+  return blocks.map(b => ({ heading: b.heading, text: b.lines.join('\n').trim() }));
+}
+
+registerDocumentAdapter({
+  id: 'docx',
+  label: 'Word document (.docx)',
+  binary: true,
+  accepts: (filename) => /\.docx$/i.test(filename || ''),
+  extract: async (content) => {
+    const bytes = content instanceof Uint8Array ? content : new Uint8Array(content);
+    const entry = zipFindEntry(bytes, 'word/document.xml');
+    if (!entry) throw new Error('That .docx has no word/document.xml — it may be a .doc renamed, or corrupt.');
+    const xml = new TextDecoder().decode(await zipInflate(entry));
+    const blocks = docxBlocksFromXml(xml);
+    return {
+      blocks,
+      wordCount: blocks.reduce((n, b) => n + ((b.heading || '') + ' ' + b.text).split(/\s+/).filter(Boolean).length, 0),
+    };
+  },
+});
+
 // ---- Domain: which blocks are requirements ----
 // Format-blind on purpose. This is the part that makes uploaded documents better than pasted
 // prompts rather than worse, and it is written once for every adapter that exists or ever will.
@@ -9839,10 +9976,30 @@ const NON_REQUIREMENT_HEADINGS = [
   'open questions', 'risks considered',
 ];
 
+// Words that mark a heading as carrying requirements. Used only to detect COMPOUND headings —
+// see below.
+const REQUIREMENT_HEADING_WORDS = ['goal', 'requirement', 'criteria', 'scope', 'objective', 'need'];
+
 function isRequirementBlock(block){
   const h = (block && block.heading ? block.heading : '').toLowerCase();
   if (!h) return true;   // untitled prose is the document's own body — assume it counts
-  return !NON_REQUIREMENT_HEADINGS.some(k => h.includes(k));
+  const hit = NON_REQUIREMENT_HEADINGS.find(k => h.includes(k));
+  if (!hit) return true;
+
+  // Compound headings are kept. "4. Goals & Non-Goals" is one of the most common headings in a
+  // real PRD and it carries requirements — matching "non-goal" and dropping the whole block would
+  // silently discard the goals with them. Found against this repo's own PRD.docx, where that exact
+  // heading matched; it survived only because that particular block had no body text of its own,
+  // which is luck rather than design.
+  //
+  // Decided by removing the matched phrase and asking whether a requirement word remains, so
+  // "Out of Scope" (nothing left but "out of") still drops while "Goals & Non-Goals" (leaves
+  // "goals &") is kept.
+  //
+  // The asymmetry is deliberate: over-keeping is visible in the confirm step and one click from
+  // correction, while over-dropping is silent and unrecoverable. When ambiguous, keep.
+  const remainder = h.split(hit).join(' ');
+  return REQUIREMENT_HEADING_WORDS.some(w => remainder.includes(w));
 }
 
 function classifyDocumentBlocks(blocks){
@@ -9879,16 +10036,16 @@ function documentSignalProvenance(blocks){
 
 // The whole pipeline, from one file to something analysable. Returns what was dropped and why, so
 // the confirm step can show it rather than silently discarding a third of the document.
-function ingestDocument(content, filename){
-  const adapter = documentAdapterFor(filename, content);
-  if (!adapter) return null;
-  const { blocks, wordCount } = adapter.extract(content);
+// Assembles an adapter's blocks into something analysable. Split out so the sync and async entry
+// points share every line that matters — the only difference between them is how the blocks were
+// obtained, which is exactly the difference the port exists to absorb.
+function ingestFromBlocks(adapterId, blocks, wordCount){
   const { requirement, excluded } = classifyDocumentBlocks(blocks);
   const text = documentRequirementText(requirement);
   const keptProvenance = documentSignalProvenance(requirement);
   const keptSignals = new Set(Object.keys(keptProvenance));
   return {
-    adapterId: adapter.id,
+    adapterId: adapterId,
     wordCount,
     text,
     blocks, requirementBlocks: requirement, excludedBlocks: excluded,
@@ -9902,6 +10059,24 @@ function ingestDocument(content, filename){
       .filter(k => !keptSignals.has(k)),
     provenance: keptProvenance,
   };
+}
+
+// Sync path: text adapters only. Keeps parseDiagramInput synchronous, which every existing caller
+// and test depends on.
+function ingestDocument(content, filename){
+  const adapter = documentAdapterFor(filename, content);
+  if (!adapter || adapter.binary) return null;
+  const { blocks, wordCount } = adapter.extract(content);
+  return ingestFromBlocks(adapter.id, blocks, wordCount);
+}
+
+// Async path: any adapter, including binary ones whose extract() returns a Promise. Used by the
+// file loader, which is already async because FileReader is.
+async function ingestDocumentAsync(content, filename){
+  const adapter = documentAdapterFor(filename, content);
+  if (!adapter) return null;
+  const { blocks, wordCount } = await adapter.extract(content);
+  return ingestFromBlocks(adapter.id, blocks, wordCount);
 }
 
 function parseManifest(content, filename) {
@@ -9993,18 +10168,33 @@ function parseDiagramInput(content, filename = 'diagram') {
 }
 
 function handleDiagramFile(file) {
+  // A binary adapter (.docx) needs bytes, not text — readAsText on a ZIP yields mojibake that
+  // would parse as "prose" and produce chips of garbage. The adapter declares `binary` and the
+  // loader honours it, which is the port doing its job: the loader learns nothing about ZIPs.
+  const adapter = documentAdapterFor(file.name, '');
+  const wantsBytes = !!(adapter && adapter.binary);
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     try {
       const content = e.target.result;
+      if (wantsBytes) {
+        const doc = await ingestDocumentAsync(new Uint8Array(content), file.name);
+        if (!doc || !doc.text) throw new Error('No readable text was found in that document.');
+        displayDiagramPreview(file.name, 'document', [], doc);
+        return;
+      }
       const parsed = parseDiagramInput(content, file.name);
       displayDiagramPreview(file.name, parsed.type, parsed.entities, parsed.document);
     } catch(err) {
-      console.error('Diagram parse error:', err);
-      alert('Could not parse diagram: ' + err.message);
+      console.error('Upload parse error:', err);
+      // The adapter's own message is shown verbatim — it knows why it failed (wrong container,
+      // unsupported compression, a browser without DecompressionStream) and a generic
+      // "could not parse" would throw that away.
+      alert(err.message || 'Could not read that file.');
     }
   };
-  reader.readAsText(file);
+  reader.onerror = () => alert('That file could not be read. Try attaching it again.');
+  if (wantsBytes) reader.readAsArrayBuffer(file); else reader.readAsText(file);
 }
 
 function handleDiagramFileSelect(event) {
@@ -10159,6 +10349,8 @@ function analyzeDiagramEntities() {
         + ' were inferred from this document but are not requirements.'
       : '';
     const text = uploadedDocument.text + corrections;
+    analysisFromDocument = true;   // arms the Refine/Ask consent prompt for this analysis
+    documentLlmConsent = false;
     document.getElementById('input').value = text;
     setAnalysis(text, detectSignals(text));
     document.getElementById('resultsShell').scrollIntoView({ behavior: 'smooth' });
@@ -10179,6 +10371,7 @@ function analyzeDiagramEntities() {
   // "only add AI" path and exactly wrong here: someone who just handed over their package.json is
   // asking what to do about their infrastructure, so suppressing it would answer a question they
   // did not ask. This wording names the stack without claiming the AI-only scope.
+  analysisFromDocument = false;   // diagram/manifest inputs carry no such confidentiality claim
   const synthesizedText = uploadedSourceKind === 'manifest'
     ? 'Current stack detected from a dependency manifest: ' + activeEntities.join(', ')
       + '. Assess this stack and recommend what to keep, what to change, and what is missing.'

@@ -359,3 +359,189 @@ def test_the_confirm_step_escapes_document_text():
     assert "&amp;" in body and "&lt;" in body, "no HTML escaping in the confirm renderer"
     assert re.search(r"esc\(\(?src\.excerpt", body) or "esc((src.excerpt" in body, \
         "the document excerpt must be escaped"
+
+# --------------------------------------------------------------------- compound headings
+
+@requires_node
+@pytest.mark.parametrize("heading,keep,why", [
+    ("Goals & Non-Goals", True, "carries requirements alongside the exclusions"),
+    ("4. Goals and Non-Goals", True, "same, numbered"),
+    ("Scope and Out of Scope", True, "compound"),
+    ("Non-Goals", False, "exclusions only"),
+    ("Out of Scope", False, "exclusions only — 'scope' here is part of the matched phrase"),
+    ("Glossary", False, "definitions only"),
+    ("Functional Requirements", True, "plain requirements section"),
+])
+def test_compound_headings_are_kept_and_pure_exclusions_dropped(heading, keep, why):
+    """Found against this repo's own PRD.docx, whose "4. Goals & Non-Goals" heading matched
+    "non-goal" and was dropped. It survived only because that block happened to have no body text
+    — luck, not design. A document with goals written under that heading would have had them
+    silently discarded, which is the exact failure this feature exists to prevent.
+
+    "Out of Scope" is the case that makes the rule non-trivial: it contains "scope", a requirement
+    word, but only as part of the matched phrase. Removing the match first is what separates them.
+
+    The asymmetry is deliberate — over-keeping is visible in the confirm step and one click from
+    correction; over-dropping is silent.
+    """
+    out = _js(f"console.log(JSON.stringify(isRequirementBlock({{heading: {json.dumps(heading)}, text: 'x'}})));")
+    assert out is keep, f"{heading!r} should be {'kept' if keep else 'dropped'} — {why}"
+
+
+# ------------------------------------------------------------------------- .docx adapter
+
+@requires_node
+def test_the_docx_adapter_reads_a_real_word_document():
+    """Exercised against this repo's own generated PRD rather than a synthetic fixture — a .docx
+    written by a real toolchain has the run-splitting, style names and ZIP layout that a
+    hand-built fixture would quietly get wrong."""
+    docx = json.dumps(str(ROOT / "docs" / "AI-Stack-Advisor-PRD.docx"))
+    out = _js("""
+      const fs = require('fs');
+      (async () => {
+        const buf = fs.readFileSync(%s);""" % docx + """
+        const doc = await ingestDocumentAsync(new Uint8Array(buf), 'prd.docx');
+        console.log(JSON.stringify({
+          adapter: doc.adapterId, words: doc.wordCount, blocks: doc.blocks.length,
+          dropped: doc.excludedBlocks.map(b => b.heading),
+          hasText: doc.text.length > 500
+        }));
+      })();
+    """)
+    assert out["adapter"] == "docx"
+    assert out["words"] > 1000, "a real PRD should yield substantial text"
+    assert out["blocks"] > 10, "Word heading styles should produce real structure"
+    assert out["hasText"]
+    assert any("Non-Goals" in (d or "") for d in out["dropped"])
+
+
+@requires_node
+def test_the_docx_adapter_uses_word_heading_styles_not_a_regex():
+    """The payoff of a format-specific adapter. Every other format makes us infer headings from
+    shape; a .docx states them in <w:pStyle w:val="Heading1"/>, so this one reads the document's
+    own structure and is correspondingly more reliable."""
+    out = _js("""
+      const xml = '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Non-</w:t></w:r><w:r><w:t>Goals</w:t></w:r></w:p>'
+                + '<w:p><w:r><w:t>We will not build a mobile app.</w:t></w:r></w:p>';
+      console.log(JSON.stringify(docxBlocksFromXml(xml)));
+    """)
+    assert out[0]["heading"] == "Non-Goals", "runs split across <w:t> must be concatenated"
+    assert "mobile app" in out[0]["text"]
+
+
+@requires_node
+def test_the_docx_adapter_declares_itself_binary():
+    """readAsText on a ZIP yields mojibake that would parse as prose and produce chips of garbage.
+    The adapter declares the need and the loader honours it — the loader learns nothing about
+    ZIPs, which is the port doing its job."""
+    out = _js("""
+      const a = documentAdapterFor('spec.docx', '');
+      console.log(JSON.stringify({id: a && a.id, binary: !!(a && a.binary)}));
+    """)
+    assert out == {"id": "docx", "binary": True}
+    text_adapter = _js("console.log(JSON.stringify(!!documentAdapterFor('spec.md','').binary));")
+    assert text_adapter is False, "the text adapter must not be marked binary"
+
+
+def test_the_loader_reads_bytes_only_for_binary_adapters():
+    text = _text()
+    m = re.search(r"function handleDiagramFile\(file\) \{(.*?)\n\}", text, re.S)
+    assert m, "handleDiagramFile not found"
+    body = m.group(1)
+    assert "readAsArrayBuffer" in body and "readAsText" in body
+    assert "adapter.binary" in body or "wantsBytes" in body
+
+
+@requires_node
+def test_a_non_docx_zip_fails_with_a_message_that_says_why():
+    """A generic "could not parse" throws away what the adapter knows. Someone renaming a .doc to
+    .docx should be told that, not left guessing."""
+    out = _js("""
+      (async () => {
+        let msg = '';
+        try { await ingestDocumentAsync(new Uint8Array([80,75,5,6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]), 'x.docx'); }
+        catch (e) { msg = e.message; }
+        console.log(JSON.stringify(msg));
+      })();
+    """)
+    assert "word/document.xml" in out
+
+
+def test_the_sync_path_refuses_binary_adapters():
+    """parseDiagramInput is synchronous and every existing caller depends on that. A binary
+    adapter must not be invoked from it and silently return a Promise where blocks are expected."""
+    m = re.search(r"function ingestDocument\(content, filename\)\{(.*?)\n\}", _text(), re.S)
+    assert m, "ingestDocument not found"
+    assert "adapter.binary" in m.group(1)
+
+# ------------------------------------------------------------------------- privacy guard
+
+@requires_node
+def test_refine_and_ask_ask_before_sending_an_uploaded_document():
+    """This feature is pitched on the analysis running entirely in the browser, and for the
+    analysis that is true. Refine and Ask are not part of it — they POST the requirement text to
+    an endpoint that calls a model. Someone who uploads a confidential PRD *because* nothing
+    leaves their machine, then clicks Refine, would have that assumption broken by a button.
+    """
+    out = _js("""
+      analysisFromDocument = true; documentLlmConsent = false;
+      let asked = 0;
+      global.confirm = () => { asked++; return false; };
+      const blocked = confirmDocumentLeavesTheBrowser('Refine');
+      console.log(JSON.stringify({asked, blocked}));
+    """)
+    assert out["asked"] == 1 and out["blocked"] is False
+
+
+@requires_node
+def test_consent_is_asked_once_per_document_not_once_per_click():
+    """Asking every time trains people to dismiss it, which is worse than not asking."""
+    out = _js("""
+      analysisFromDocument = true; documentLlmConsent = false;
+      let asked = 0;
+      global.confirm = () => { asked++; return true; };
+      confirmDocumentLeavesTheBrowser('Refine');
+      confirmDocumentLeavesTheBrowser('Ask AI');
+      confirmDocumentLeavesTheBrowser('Refine');
+      console.log(JSON.stringify(asked));
+    """)
+    assert out == 1
+
+
+@requires_node
+def test_typed_requirements_are_not_gated():
+    """The confidentiality claim was never made about text the user typed here — prompting for it
+    would be noise, and noise is what makes a real prompt get clicked through."""
+    out = _js("""
+      analysisFromDocument = false;
+      let asked = 0;
+      global.confirm = () => { asked++; return true; };
+      const allowed = confirmDocumentLeavesTheBrowser('Refine');
+      console.log(JSON.stringify({asked, allowed}));
+    """)
+    assert out == {"asked": 0, "allowed": True}
+
+
+def test_both_llm_entry_points_are_guarded():
+    """A guard on one of the two is not a guard."""
+    text = _text()
+    for fn in ("onRefineClick", "onAskClick"):
+        m = re.search(r"async function " + fn + r"\((.*?)\n\}", text, re.S)
+        assert m, f"{fn} not found"
+        assert "confirmDocumentLeavesTheBrowser" in m.group(1), f"{fn} sends text unguarded"
+
+
+@requires_node
+def test_a_later_non_document_analysis_clears_the_flag():
+    """Otherwise a diagram analysed after a document keeps prompting, and the prompt stops meaning
+    anything."""
+    out = _js("""
+      analysisFromDocument = true;
+      uploadedDocument = null; uploadedSourceKind = 'diagram';
+      document.querySelectorAll = () => [{textContent: 'PostgreSQL'}];
+      document.getElementById = () => ({ value:'', scrollIntoView(){}, style:{} });
+      setAnalysis = () => {};
+      analyzeDiagramEntities();
+      console.log(JSON.stringify(analysisFromDocument));
+    """)
+    assert out is False
