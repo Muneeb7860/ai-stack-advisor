@@ -173,8 +173,6 @@ global.requestAnimationFrame=(fn)=>fn();
     )
     js = run_node_json(stubs + script + "\n" + body)
     for text, got in zip(cases, js):
-        py_entry = next((x for x in _tradeoffs(text.replace(BASE, "").strip() or "") if x["d"].startswith("Architecture posture")), None) \
-            if text != BASE else None
         py_present = any(x["d"].startswith("Architecture posture") for x in recommend_stack(text)["recommendations"]["tradeoffs"])
         assert got["present"] == py_present, f"engines disagree on presence for {text!r}"
         if py_present:
