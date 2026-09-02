@@ -1,10 +1,12 @@
 # What-if levers — scope
 
-**Status:** Phase 1 SHIPPED (PR #77) — four levers with named stops, the shared boolean-override
-mechanism, and the changed-recommendation summary. Phases 2 and 3 remain: wiring
-`concurrencyTarget` into the picks that should read the number itself (it now trips `highScale`
-but nothing reads the figure), and a budget lever, which is still blocked on the product
-decision described below.
+**Status:** Phases 1-2 SHIPPED. Phase 1 (PR #77): four levers with named stops, the shared
+boolean-override mechanism, and the changed-recommendation summary. Phase 2 (PR #81): a stated
+concurrency figure's magnitude now changes the recommendation past a second, higher threshold
+(1,000,000) — not just the boolean it already tripped. Landed as a new tradeoff-section entry
+rather than a lever, since it is a fact the requirement states, not a knob to explore — the
+levers remain the four from Phase 1. Phase 3 (a budget lever) remains, still blocked on the
+product decision described below.
 
 Written after investigating the engine rather than from the proposal that prompted it.
 
