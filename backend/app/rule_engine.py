@@ -182,6 +182,14 @@ _QUANTITY_QUALIFIER_RE = re.compile(r"\b(?:another|a second|an additional|a diff
 # "must not <verb> in <X>", the prohibited subject sits BEFORE the verb and X is a destination.
 # Conservative on ambiguity for the same reason as _NON_EXCLUSION_QUALIFIERS: an unwanted
 # recommendation is visible, a silently deleted card is not.
+# Ported from index.html. "(no outbound API calls required)" excluded the API category, deleting
+# the gateway card from a document describing an API product. The negation targets "API calls", but
+# `outbound` scopes it to a DIRECTION of traffic: "we make no calls out", not "we expose no API".
+# Excludes "public" on purpose — "no public cloud" is a real exclusion and must keep working.
+_DIRECTIONAL_QUALIFIER_RE = re.compile(
+    r"\b(?:outbound|inbound|egress|ingress|upstream|downstream|third[- ]party|external)\s+$", re.I
+)
+
 _CONTAINMENT_DESTINATION_RE = re.compile(
     r"\b(?:appear|appears|surface|surfaces|show\s+up|shows\s+up|leak|leaks|be\s+(?:logged|stored|written|sent|included|exposed|present|recorded|persisted|captured|placed|kept)|logged|stored|written|sent|included|exposed|recorded|persisted|captured|placed|kept)\s+(?:in|into|to|on|onto|within|through|via|across)\s+(?:(?:any|every|all|the|a|an|our|your|its|their|each)\s+)?$", re.I
 )
@@ -199,7 +207,9 @@ def _record_exclusions(clause: str, out: dict, terms_by_key: dict | None = None)
         for term in terms:
             m = re.search(r"\b" + re.escape(term) + r"\b", clause)
             before = clause[: m.start()] if m else ""
-            if m and not _QUANTITY_QUALIFIER_RE.search(before) and not _CONTAINMENT_DESTINATION_RE.search(before):
+            if (m and not _QUANTITY_QUALIFIER_RE.search(before)
+                    and not _CONTAINMENT_DESTINATION_RE.search(before)
+                    and not _DIRECTIONAL_QUALIFIER_RE.search(before)):
                 out[key] = True
                 if terms_by_key is not None:
                     terms_by_key.setdefault(key, set()).add(term)
@@ -836,8 +846,14 @@ def detect_signals(text: str) -> dict:
             has(["large team", "many teams", "multiple teams", "platform team"])
             or bool(_team is not None and _team >= TEAM_LARGE_MIN)
         ),
-        "globalMultiRegion": has(["global", "multi-region", "worldwide", "international"]),
-        "search": has(["search engine", "semantic search", "recommendation"]),
+        # "global" alone matched any use of the word — "Global check rate" in a rate-limiting
+        # table meant across-the-tenant, not geographically distributed, and it drove cost and
+        # trade-off branches for a single-region product.
+        "globalMultiRegion": has(["globally", "global users", "global scale", "global audience", "globally distributed", "global footprint", "global deployment", "multi-region", "multi region", "worldwide", "international"]),
+        # Ported from index.html. "recommendation" alone matched any document that RECOMMENDS
+        # something — a design doc's "**Recommendation:** A as primary" made it a recommender
+        # product. Same bare-word over-match as `mvp` and `global`.
+        "search": has(["search engine", "semantic search", "recommendation engine", "recommendation system", "recommender", "product recommendations", "personalized recommendations", "personalised recommendations"]),
         "email": has(["email drafting", "email assistant", "draft email"]),
         "ragNeed": has(["knowledge base", "document search", "internal documents", "confluence", "faq", "clinical knowledge", "policy documents", "search across"]),
     }

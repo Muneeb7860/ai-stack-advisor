@@ -2232,6 +2232,16 @@ const QUANTITY_QUALIFIER_RE = /\b(?:another|a second|an additional|a different|o
 // Deliberately conservative in the same direction as NON_EXCLUSION_QUALIFIERS: where a phrase is
 // genuinely ambiguous ("must not be stored in Redis" could mean either), not excluding is the
 // cheaper error — an unwanted recommendation is visible, a silently deleted card is not.
+// "All LLM inference routes through local Ollama (no outbound API calls required)" excluded the
+// API category — deleting the gateway card from a document that describes an API product. The
+// negation genuinely targets "API calls", but `outbound` scopes it to a DIRECTION of traffic, not
+// to the category: the requirement is "we make no calls out", not "we expose no API".
+//
+// Deliberately excludes "public": "no public cloud" is a real, common exclusion of the cloud
+// category and must keep working. Checked against the text immediately before the matched term,
+// the same anchoring as QUANTITY_QUALIFIER_RE and CONTAINMENT_DESTINATION_RE.
+const DIRECTIONAL_QUALIFIER_RE = /\b(?:outbound|inbound|egress|ingress|upstream|downstream|third[- ]party|external)\s+$/i;
+
 const CONTAINMENT_DESTINATION_RE = /\b(?:appear|appears|surface|surfaces|show\s+up|shows\s+up|leak|leaks|be\s+(?:logged|stored|written|sent|included|exposed|present|recorded|persisted|captured|placed|kept)|logged|stored|written|sent|included|exposed|recorded|persisted|captured|placed|kept)\s+(?:in|into|to|on|onto|within|through|via|across)\s+(?:(?:any|every|all|the|a|an|our|your|its|their|each)\s+)?$/i;
 
 // Shared by detectExclusions() and detectExcludedLanguageTerms() — the former only ever needed
@@ -2256,7 +2266,8 @@ function findExclusions(text, termsByKey){
         const re = new RegExp('\\b' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b');
         const hit = re.exec(clause);
         const before = hit ? clause.slice(0, hit.index) : '';
-        if (hit && !QUANTITY_QUALIFIER_RE.test(before) && !CONTAINMENT_DESTINATION_RE.test(before)){
+        if (hit && !QUANTITY_QUALIFIER_RE.test(before) && !CONTAINMENT_DESTINATION_RE.test(before)
+            && !DIRECTIONAL_QUALIFIER_RE.test(before)){
           out[key] = true;
           if (termsByKey){
             if (!termsByKey[key]) termsByKey[key] = new Set();
@@ -2847,8 +2858,14 @@ function detectSignals(text){
       || !!(_team !== null && _team <= TEAM_SMALL_MAX),
     largeTeam: has(['large team','many teams','multiple teams','platform team'])
       || !!(_team !== null && _team >= TEAM_LARGE_MIN),
-    globalMultiRegion: has(['global','multi-region','worldwide','international']),
-    search: has(['search engine','semantic search','recommendation']),
+    // 'global' alone matched any use of the word — "Global check rate" in a rate-limiting table
+    // meant across-the-tenant, not geographically distributed, and it drove cost and trade-off
+    // branches for a single-region product. The other three terms are unambiguous and stay.
+    globalMultiRegion: has(['globally','global users','global scale','global audience','globally distributed','global footprint','global deployment','multi-region','multi region','worldwide','international']),
+    // 'recommendation' alone matched any document that RECOMMENDS something. A verification
+    // design doc saying "**Recommendation:** A as primary" tripped this and was classified as a
+    // search/recommender product. Same bare-word over-match as `mvp` and `global`.
+    search: has(['search engine','semantic search','recommendation engine','recommendation system','recommender','product recommendations','personalized recommendations','personalised recommendations']),
     email: has(['email drafting','email assistant','draft email']),
     ragNeed: has(['knowledge base','document search','internal documents','confluence','faq','clinical knowledge','policy documents','search across']),
   };
