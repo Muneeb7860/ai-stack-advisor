@@ -45,6 +45,7 @@
     "An internal admin tool built by a solo developer.",
     "A retail API. Team of 4. We must launch in 6 weeks.",
     "An enterprise reporting system. 200-engineer org, deadline is 4 months.",
-    "A logistics platform with 20 engineers and no fixed deadline."
+    "A logistics platform with 20 engineers and no fixed deadline.",
+    "As we are cpaas company need to modernising otp generation and otp validation system for cpaas. strictly no cloud and ai we should be deploy in our own servers."
   ]
 }
