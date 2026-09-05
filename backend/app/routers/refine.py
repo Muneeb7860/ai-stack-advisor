@@ -79,7 +79,21 @@ from ..retrieval import build_scale_aware_query, format_citation, retrieve
 # (costs prompt space, not correctness — the system prompt instructs the model to only cite
 # what it can actually justify), while true off-topic queries are filtered.
 GROUNDING_SCORE_THRESHOLD = 0.55
-GROUNDING_TOP_K = 3
+# Raised again from 3 to 5 after the communications domain (doc 19) landed. A requirement that
+# names a market ("for Indian businesses", "launching in the EU") carries its binding constraint
+# in the regulatory section, but states it as an ordinary business fact while stating its
+# technology in jargon — so the technical sections legitimately out-rank it whenever the
+# requirement is technically dense. Measured on the India-OTP case: the regulatory chunk ranked
+# 4th (0.63) behind the verification ladder (0.722), anti-patterns (0.662) and sender strategy
+# (0.658), so top_k=3 handed the model three true-but-secondary chunks and cut the one that
+# changes the answer. The chunks are ~1 section each and GROUNDING_SCORE_THRESHOLD still gates
+# them, so this widens the window rather than lowering the bar — but it is not free: measured
+# across four queries the grounding block grows by ~340-1,030 tokens per call (3,495 -> 7,619
+# chars on the India case, 3,194 -> 4,569 on an off-domain control). That is the price of the
+# constraint chunk surviving. It does NOT fix the related
+# routing-abstention case (a plain-language US-market query is refused by MIN_CONFIDENT_RRF
+# before ranking happens) — that one is un-fixed and documented in doc 19's own retrieval notes.
+GROUNDING_TOP_K = 5
 # Raised from 2 when GROUNDING_SCORE_THRESHOLD was re-tuned for embeddings (see that
 # constant's comment): embeddings' narrower score band means a document's own most-useful
 # chunk (e.g. an anti-patterns section) can land 3rd rather than in the top 2 by a fraction of
