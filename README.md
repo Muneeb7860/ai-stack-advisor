@@ -86,7 +86,7 @@ not just guessed.
 
 **Grounded follow-up Q&A, independent of refine.** Ask a question about any card's recommendation
 — it doesn't require having clicked refine first, just a real analysis to ground the answer in.
-Both refine and ask are grounded against an 18-domain use-case knowledge base (two-stage hybrid
+Both refine and ask are grounded against a 19-domain use-case knowledge base (two-stage hybrid
 retrieval — ChromaDB embeddings plus BM25, fused by Reciprocal Rank Fusion) when the requirement
 touches a covered domain.
 
