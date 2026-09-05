@@ -10,7 +10,7 @@ must stay that way** (PRD NFR-5) — nothing here is a hard dependency for the c
 | Share links | **Built, tested** | `POST /api/analyses`, `POST /api/analyses/{id}/share`, `GET /api/analyses/shared/{slug}` |
 | LLM refinement | **Built, tested** | `POST /api/refine` — see `app/routers/refine.py` docstring for the constrained-reasoning design, RAG grounding, and a resolved gap (optional `analysis_id`) not covered by the original spec |
 | Grounded follow-up Q&A | **Built, tested** | `POST /api/ask` — see `app/routers/ask.py` docstring; scoped structurally to one `analysis_id`, replays full conversation history each turn, RAG-grounded on the follow-up question |
-| RAG retrieval | **Built, tested** | `app/retrieval.py` — two-stage retrieval (routing + content, see module docstring) over `../docs/use-case-knowledge-base/`, backed by hybrid ChromaDB embeddings (`nomic-embed-text`) + hand-rolled BM25 lexical scoring, fused via Reciprocal Rank Fusion, plus an embedding-model version pin that fails loudly on drift — not pure embeddings and not TF-IDF anymore. `tests/test_retrieval_eval.py`'s 24-test eval: **TF-IDF** (pre-migration) 21 passed/1 xfailed/1 xpassed; **pure embeddings** (one commit later) 20 passed/3 xfailed/0 xpassed — a real, re-verified regression (2 genuine new failures, not the "fixed 1 cost 3" the aggregate count first suggested — see the file's top-of-file comment for the corrected per-case story); **hybrid RRF** (current) 22 passed/1 xfailed/0 xpassed — both regressions recovered, only the pre-existing, long-documented case 21 (needs a learned reranker) remains open. See that file's `KNOWN_XFAIL_IDS`/`_XFAIL_REASONS` for the full per-case detail |
+| RAG retrieval | **Built, tested** | `app/retrieval.py` — two-stage retrieval (routing + content, see module docstring) over `../docs/use-case-knowledge-base/`, backed by hybrid ChromaDB embeddings (`nomic-embed-text`) + hand-rolled BM25 lexical scoring, fused via Reciprocal Rank Fusion, plus an embedding-model version pin that fails loudly on drift — not pure embeddings and not TF-IDF anymore. `tests/test_retrieval_eval.py` currently runs 50 passed/1 xfailed over a 48-case eval set. The three retrieval approaches were compared like-for-like on the 23-case set that existed at migration time: **TF-IDF** (pre-migration) 21 passed/1 xfailed/1 xpassed; **pure embeddings** (one commit later) 20 passed/3 xfailed/0 xpassed — a real, re-verified regression (2 genuine new failures, not the "fixed 1 cost 3" the aggregate count first suggested — see the file's top-of-file comment for the corrected per-case story); **hybrid RRF** (adopted, and still what ships) 22 passed/1 xfailed/0 xpassed — both regressions recovered, only the pre-existing, long-documented case 21 (needs a learned reranker) remains open. See that file's `KNOWN_XFAIL_IDS`/`_XFAIL_REASONS` for the full per-case detail |
 | Local-model fallback | **Built, tested (opt-in, degraded)** | `POST /api/refine` / `POST /api/ask` with `provider: "ollama"` — see `app/llm_providers.py`. Claude stays primary/default; this only activates when the deployment sets `LLM_PROVIDER=ollama` AND the caller explicitly opts in per-request. Real measured structured-output pass rates against `qwen2.5:7b`/`mistral:latest` (native tool-calling + a JSON-parse fallback) are in that module's docstring — shipped as a genuine fallback for both endpoints, not narrowed to ask-only, because the measured combined reliability supported it |
 | MCP tool wrapper | **Built, tested — exercised end-to-end over real stdio** | `app/mcp/server.py` — `recommend_stack()` tool, backed by `app/rule_engine.py` (Python port of `index.html`'s rule engine, verified against it — see `../docs/adr/0001-mcp-rule-engine-port.md`). A real stdio JSON-RPC client (initialize → tools/list → tools/call) confirmed it end-to-end; found in the process that the `mcp` SDK does not inherit arbitrary env vars into the server subprocess by default (`mcp.client.stdio.get_default_environment()` only passes an allowlist like `PATH`/`HOME`) — a real Claude Desktop/Code MCP config for this server needs an explicit `"env": {"DATABASE_URL": "..."}` block, or it falls back to `config.py`'s default and silently can't reach Postgres |
 
@@ -52,19 +52,25 @@ absent, so the counts differ by machine:
 
 | Environment | Result |
 |---|---|
-| Ollama running (`ollama serve` + `ollama pull nomic-embed-text`) | 158 passed, 1 xfailed |
-| No Ollama (and what CI runs) | 133 passed, 26 skipped |
+| Ollama running (`ollama serve` + `ollama pull nomic-embed-text`) | 1,231 passed, 1 skipped, 1 xfailed |
+| No Ollama (and what CI runs) | 1,179 passed, 54 skipped |
 
-The 26 are the retrieval eval plus two grounding-context tests — they embed against the local
-Ollama daemon, so without it they would fail on missing infrastructure rather than on retrieval
-quality (see `tests/ollama_gate.py`). **CI therefore does not enforce retrieval quality** — run
+53 of those 54 skips are the retrieval eval plus two grounding-context tests — they embed against
+the local Ollama daemon, so without it they would fail on missing infrastructure rather than on
+retrieval quality (see `tests/ollama_gate.py`). The 54th is unrelated and skips in both
+environments: a `test_semantic_color_tokens.py` assertion whose constraint only binds in light
+theme. **CI therefore does not enforce retrieval quality** — run
 the suite locally against a live Ollama before changing `app/retrieval.py`. Node.js is the other
 gate: `test_architecture_contracts.py`'s runtime tests skip without it, which is why
 `.github/workflows/ci.yml` installs Node and verifies it on PATH.
 
-Per-file breakdown (counts as of the parity-gate commit; 1 xfailed by design — see
+Per-file breakdown of the seven core files (the suite is 86 files in total; the other 79 are
+mostly per-feature regression files named after the feature they guard). Counts below were
+re-derived from `pytest --collect-only`, not copied forward — several had fallen behind the files
+they describe. Each description covers what the file was built to check; a file whose count has
+since grown may test more than the description lists. 1 xfailed by design — see
 `test_retrieval_eval.py` below for the retrieval eval's own count and why it changed across the
-TF-IDF -> pure-embeddings -> hybrid-RRF history):
+TF-IDF -> pure-embeddings -> hybrid-RRF history:
 - `test_guided_synthesis.py` (7): validates `index.html`'s guided-mode wizard synthesis
   (`synthesizeRequirementText()`) via a Python mirror, verified byte-for-byte against the real
   JS before being trusted — 7 scenarios covering every wizard branch including the skip-logic
@@ -76,13 +82,13 @@ TF-IDF -> pure-embeddings -> hybrid-RRF history):
   `access-control-allow-origin` for a whitelisted origin — the frontend's guided-mode +
   refine/ask/share wiring (see `../index.html`, `../KICKOFF_BRIEF.md` "What's next") depends on
   this working, not just being configured.
-- `test_refine.py` (11): analysis creation-vs-reuse based on whether `analysis_id` is passed,
+- `test_refine.py` (22): analysis creation-vs-reuse based on whether `analysis_id` is passed,
   the exact inputs forwarded to the model, the API key never appearing in the response,
   append-only persistence of `RefinementResult` across repeat calls, the input-length
   guardrail (422), Anthropic API failures surfacing as 502 rather than a crash, and RAG
   grounding (`_build_grounding_context`) returning citable content for covered domains, empty
   for zero-overlap queries, and never gating the core refine flow either way.
-- `test_ask.py` (12): 404 on unknown analysis, the system prompt actually grounding in the
+- `test_ask.py` (18): 404 on unknown analysis, the system prompt actually grounding in the
   analysis's requirement text/recommendations, question+answer persistence, conversation
   history replay across turns, strict per-analysis scoping (a second analysis never sees the
   first's history — the DDD 4.3 invariant), the API key never appearing in the response, the
@@ -90,7 +96,7 @@ TF-IDF -> pure-embeddings -> hybrid-RRF history):
   question-with-no-answer row when the model call fails, and RAG grounding keyed on the
   follow-up question (not the original requirement text) per the ingestion guide's own
   "anti-patterns answer 'is X okay?' phrasing" note.
-- `test_rule_engine.py` (23): regression tests for `app/rule_engine.py`, one per bug
+- `test_rule_engine.py` (24): regression tests for `app/rule_engine.py`, one per bug
   `../validation-report.md` found and fixed in the original JS (negation handling, on-prem
   override, warehouse detection, team-size conflicts, the small-team regex fallback), one per
   new dimension from the frontend-expansion pass (live-multiplayer, collaborative editing,
@@ -106,11 +112,11 @@ TF-IDF -> pure-embeddings -> hybrid-RRF history):
   swallowed by a broad exception handler instead of erroring, so no unit test calling the
   function with a hand-built argument could have caught it. Only driving a real stdio
   JSON-RPC session end-to-end and checking what actually landed in Postgres did.
-- `test_retrieval_eval.py` (24): the 21-case retrieval eval set from
+- `test_retrieval_eval.py` (51): the 48-case retrieval eval set from
   `../docs/use-case-knowledge-base/` (direct retrieval, anti-pattern "is X okay?" phrasing,
   cross-document queries, decision-point boundary cases, negative controls) wired to the real
   `app/retrieval.py` implementation — a structural check that a Signals/triggers chunk is
-  never returned as citable content for any of the 21 queries, a regression test (found during
+  never returned as citable content for any of the 48 queries, a regression test (found during
   audit) confirming a genuinely missing corpus degrades to "no grounding" instead of a 500,
   and a regression test confirming a confirmed embedding-model version mismatch fails loudly
   (ERROR log + forced index rebuild) instead of silently serving vectors computed by a
@@ -121,14 +127,16 @@ TF-IDF -> pure-embeddings -> hybrid-RRF history):
   xfail marker on an already-passing case, not a real failure); **pure embeddings** (one
   commit later) 20 passed / 3 xfailed (cases 7, 20, 21) / 0 xpassed — exactly 2 genuine new
   regressions (cases 7 and 20) plus 1 label correction (case 15), not the "fixed 1, broke 3"
-  an aggregate-count-only read suggested; **hybrid retrieval** (current — BM25 lexical + the
-  same embeddings, fused via Reciprocal Rank Fusion) 22 passed / 1 xfailed (case 21 only) /
+  an aggregate-count-only read suggested; **hybrid retrieval** (adopted, and still what ships — BM25
+  lexical + the same embeddings, fused via Reciprocal Rank Fusion) 22 passed / 1 xfailed (case 21 only) /
   0 xpassed — both real regressions recovered (case 7 via RRF-boosted lexical routing, case 20
   via a fused-confidence abstention gate — see `MIN_CONFIDENT_RRF` in `app/retrieval.py`),
   leaving only case 21's long-documented, pre-existing "needs a learned reranker" gap, which
   predates every retrieval-metric change in this file's history and none of them have closed.
   See that file's `KNOWN_XFAIL_IDS`/`_XFAIL_REASONS` for the full per-case reasoning — nothing
-  here was tuned away to force green.
+  here was tuned away to force green. Those three figures are a like-for-like comparison over the
+  23-case set that existed when the migration happened; the eval set has since grown to 48 cases
+  and currently runs 50 passed / 1 xfailed — still case 21, still the only one.
 
 `test_refine.py` and `test_ask.py` monkeypatch the real Anthropic call
 (`app.routers.refine._run_refinement` / `app.routers.ask._run_ask`) — no live API key or

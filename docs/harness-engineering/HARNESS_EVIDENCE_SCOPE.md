@@ -1,7 +1,12 @@
 # Harness Readiness — evidence upload (Shape A/B hybrid)
 
-Status: **scoped, not yet built**. Follow-on to `HARNESS_READINESS_SCOPE.md` (implemented,
-merged in [PR #49](https://github.com/Muneeb7860/ai-stack-advisor/pull/49)), addressing the
+Status: **shipped** in [PR #50](https://github.com/Muneeb7860/ai-stack-advisor/pull/50), with
+report-under-claim handling and upload-path guards added in
+[PR #66](https://github.com/Muneeb7860/ai-stack-advisor/pull/66); guarded by
+`backend/tests/test_harness_evidence_upload.py` and
+`backend/tests/test_harness_evidence_underclaim.py`. Follow-on to `HARNESS_READINESS_SCOPE.md`
+(implemented, merged in [PR #49](https://github.com/Muneeb7860/ai-stack-advisor/pull/49)),
+addressing the
 one weakness pure self-report has: nothing stops a team from picking 3 on every question
 regardless of what's actually true. This does not replace the guided questionnaire — it adds
 one optional action per question.

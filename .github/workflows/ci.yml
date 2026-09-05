@@ -15,7 +15,7 @@
 #   adapter output) self-skip via `shutil.which("node")`. Without Node here, the hexagon
 #   contract would appear green while its 7 strongest assertions silently never ran.
 #
-# Known coverage gap, stated rather than hidden: no Ollama daemon runs here, so the 26 tests
+# Known coverage gap, stated rather than hidden: no Ollama daemon runs here, so the 53 tests
 # guarded by tests/ollama_gate.py (the retrieval eval + two grounding-context tests) SKIP.
 # Retrieval quality is not enforced by CI — run those locally against `ollama serve` before
 # changing app/retrieval.py. `-rs` below prints every skip with its reason so that gap stays

@@ -1,9 +1,17 @@
 # "Challenge This Pick" — feedback widget spec
 
-Status: **spec only, not built**. Written to scope the feature properly before any code —
-per the standing plan file's "Explore first, then plan mode" discipline used for every other
-feature this session. Everything below was checked against the actual codebase before being
-proposed; nothing here assumes the pasted GTM plan's mockup is accurate as-is.
+Status: **shipped** in [PR #27](https://github.com/Muneeb7860/ai-stack-advisor/pull/27); the
+one gap that shipped with it — `CATEGORY_VENDORS` missing entries, so the widget rendered an
+empty alternatives box for some cards — was closed in
+[PR #71](https://github.com/Muneeb7860/ai-stack-advisor/pull/71). Guarded by
+`backend/tests/test_challenge_this_pick.py` and
+`backend/tests/test_flow_view_challenge_integration.py`. What follows is the original scope as
+written before any code, kept as the decision record; read the tests for what actually shipped.
+
+Written to scope the feature properly before any code — per the standing plan file's "Explore
+first, then plan mode" discipline used for every other feature this session. Everything below was
+checked against the actual codebase before being proposed; nothing here assumes the pasted GTM
+plan's mockup is accurate as-is.
 
 ## Why this exists
 
