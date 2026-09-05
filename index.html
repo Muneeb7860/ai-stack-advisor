@@ -2417,6 +2417,59 @@ function detectTeamSize(text){
   return best;
 }
 
+// A stated RATE is a different measurement from stated concurrency, and the engine could read
+// neither until now. "At 300M/day" in a real OTP design document produced concurrencyTarget=null
+// and highScale=false, so ~3,472 checks/second was treated as ordinary load and the report
+// recommended plain autoscaling containers and an unqualified Postgres.
+//
+// Kept as its own signal rather than folded into detectConcurrencyTarget(): concurrency is
+// simultaneous in-flight work, throughput is volume over time, and they size different things.
+// Conflating them would let "300M/day" be compared against CONCURRENCY_MASSIVE_MIN and declared a
+// million-concurrent-user system, which it is not.
+//
+// Normalised to per-second so one threshold can be applied to any stated unit. `year` is
+// deliberately absent — annual figures in these documents are almost always money or contract
+// terms, not traffic. A leading currency symbol is captured and used to reject the match for the
+// same reason ("$6/user/mo" is pricing).
+const THROUGHPUT_UNIT_SECONDS = {second:1, sec:1, s:1, minute:60, min:60, hour:3600, hr:3600,
+                                 day:86400, week:604800, month:2592000};
+const THROUGHPUT_RE = /([$£€₹])?\s*([0-9][0-9,\.]*)\s*(k|m|b|bn)?\s*(?:\+\s*)?(?:(?:requests?|reqs?|messages?|msgs?|events?|calls?|transactions?|txns?|checks?|verifications?|operations?|ops|queries|hits|users?|records?)\s*)?(?:\/\s*|\s+per\s+|\s+a\s+)(second|sec|s|minute|min|hour|hr|day|week|month)\b/g;
+const THROUGHPUT_COMPACT_RE = /([0-9][0-9,\.]*)\s*(k|m|b|bn)?\s*(rps|qps|tps)\b/g;
+
+// Sustained requests/second beyond which the stack decisions genuinely change — horizontal
+// scaling, connection pooling and caching stop being optional. Deliberately far below
+// CONCURRENCY_HIGH_SCALE_THRESHOLD's 10,000, because that figure counts simultaneous users while
+// this one counts completed work per second; they are not the same quantity and must not share a
+// number. Twin of rule_engine.py's THROUGHPUT_HIGH_SCALE_RPS.
+const THROUGHPUT_HIGH_SCALE_RPS = 1000;
+
+function detectThroughputTarget(text){
+  const t = String(text || '').toLowerCase();
+  let best = null, m;
+  const consider = (n, mult, unitSeconds, matchText) => {
+    if (!isFinite(n)) return;
+    if (mult === 'k') n *= 1e3;
+    else if (mult === 'm') n *= 1e6;
+    else if (mult === 'b' || mult === 'bn') n *= 1e9;
+    const perSecond = n / unitSeconds;
+    if (best === null || perSecond > best.perSecond){
+      best = {count: n, perSecond: perSecond, text: matchText.trim()};
+    }
+  };
+  THROUGHPUT_RE.lastIndex = 0;
+  while ((m = THROUGHPUT_RE.exec(t)) !== null){
+    if (m[1]) continue;                      // a currency prefix means this is a price, not traffic
+    const unitSeconds = THROUGHPUT_UNIT_SECONDS[m[4]];
+    if (!unitSeconds) continue;
+    consider(parseFloat(m[2].replace(/,/g, '')), m[3], unitSeconds, m[0]);
+  }
+  THROUGHPUT_COMPACT_RE.lastIndex = 0;
+  while ((m = THROUGHPUT_COMPACT_RE.exec(t)) !== null){
+    consider(parseFloat(m[1].replace(/,/g, '')), m[2], 1, m[0]);
+  }
+  return best;
+}
+
 function detectConcurrencyTarget(text){
   const t = String(text || '').toLowerCase();
   const RE = /([0-9][0-9,\.]*)\s*(k|m)?\s*(?:\+\s*)?(?:concurrent|simultaneous|parallel|peak|active)\s+(?:users|sessions|connections|requests|clients)/g;
@@ -2535,6 +2588,7 @@ function detectSignals(text){
   // Parsed once and reused: the returned signal and the highScale expression below must
   // derive from the same value, or a change to one silently stops matching the other.
   const _ct = detectConcurrencyTarget(text);
+  const _tt = detectThroughputTarget(text);
   const _team = detectTeamSize(text);
   return {
     onPrem: strongOnPrem || softOnPrem,
@@ -2551,6 +2605,7 @@ function detectSignals(text){
     // "p95 below 500ms". null when the requirement states no number (see detectLatencyTarget).
     latencyTarget: detectLatencyTarget(text),
     concurrencyTarget: _ct,
+    throughputTarget: _tt,
     teamSize: _team,
     timeline: detectTimeline(text),
     healthcare: has(['health','hipaa','patient','clinical','ehr','medical']),
@@ -2572,7 +2627,11 @@ function detectSignals(text){
     // "500,000 concurrent users" was parsed into a structured count that nothing read, so it
     // produced an identical stack to "1,000". Strictly additive — OR'd with the keywords, never
     // replacing them — so a low stated number cannot cancel an explicit "high traffic" claim.
+    // A stated rate past THROUGHPUT_HIGH_SCALE_RPS is high scale whether or not the document
+    // also uses one of the keywords. The OTP design document that exposed this said
+    // "At 300M/day" and none of these words, so highScale stayed false at ~3,472 req/s.
     highScale: has(['high traffic','high volume','high transaction','scale','millions of users','peak load','sales event','black friday'])
+      || !!(_tt && _tt.perSecond >= THROUGHPUT_HIGH_SCALE_RPS)
                || !!(_ct && _ct.count >= CONCURRENCY_HIGH_SCALE_THRESHOLD),
     realtime: has(['real-time','real time','low latency','streaming','live']),
     chatbot: has(['chatbot','conversational','customer support bot','assistant','virtual agent']),
@@ -22388,6 +22447,10 @@ function renderArc42(ix, recs, adrs, drivers, input) {
   }
   if (input.concurrencyTarget) {
     stated.push(`| Scalability | Load reaches the stated peak | The system serves it without error-rate or latency regression | ${input.concurrencyTarget.count.toLocaleString()} concurrent (stated: "${input.concurrencyTarget.text}") |`);
+  }
+  if (input.throughputTarget) {
+    const tt = input.throughputTarget;
+    stated.push(`| Scalability | Sustained traffic reaches the stated volume | The system serves it without error-rate or latency regression | ${Math.round(tt.perSecond).toLocaleString()} req/s sustained (stated: "${tt.text}") |`);
   }
   if (input.timeline) {
     stated.push(`| Delivery | Team builds against this architecture | First production release ships inside the stated window | ≤ ${input.timeline.days} days (stated: "${input.timeline.text}") |`);

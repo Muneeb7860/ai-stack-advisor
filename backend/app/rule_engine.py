@@ -406,6 +406,61 @@ TIMELINE_DISQUALIFIERS = ("retain", "retention", "archive", "history", "historic
                           "contract", "licen")
 
 
+# Twin of index.html's throughput block — see that file for the full reasoning. A stated RATE is a
+# different measurement from stated concurrency and the engine could read neither; "At 300M/day" in
+# a real OTP design document left concurrencyTarget=None and highScale=False, so ~3,472 checks/sec
+# was treated as ordinary load. Kept separate from concurrency deliberately: conflating them would
+# compare 300M/day against the million-concurrent-user band it has nothing to do with.
+_THROUGHPUT_UNIT_SECONDS = {"second": 1, "sec": 1, "s": 1, "minute": 60, "min": 60, "hour": 3600,
+                            "hr": 3600, "day": 86400, "week": 604800, "month": 2592000}
+_THROUGHPUT_RE = re.compile(
+    r"([$\u00a3\u20ac\u20b9])?\s*([0-9][0-9,\.]*)\s*(k|m|b|bn)?\s*(?:\+\s*)?"
+    r"(?:(?:requests?|reqs?|messages?|msgs?|events?|calls?|transactions?|txns?|checks?|"
+    r"verifications?|operations?|ops|queries|hits|users?|records?)\s*)?"
+    r"(?:/\s*|\s+per\s+|\s+a\s+)(second|sec|s|minute|min|hour|hr|day|week|month)\b", re.I)
+_THROUGHPUT_COMPACT_RE = re.compile(r"([0-9][0-9,\.]*)\s*(k|m|b|bn)?\s*(rps|qps|tps)\b", re.I)
+
+# Twin of index.html's THROUGHPUT_HIGH_SCALE_RPS. Deliberately far below
+# CONCURRENCY_HIGH_SCALE_THRESHOLD: that counts simultaneous users, this counts completed work per
+# second, and they must not share a number.
+THROUGHPUT_HIGH_SCALE_RPS = 1000
+
+
+def detect_throughput_target(text: str):
+    """Mirrors index.html's detectThroughputTarget(). Normalised to per-second so one threshold
+    covers any stated unit. `year` is absent on purpose — annual figures here are money, not
+    traffic — and a leading currency symbol rejects the match for the same reason."""
+    t = str(text or "").lower()
+    best = None
+
+    def consider(raw, mult, unit_seconds, match_text):
+        nonlocal best
+        try:
+            n = float(raw.replace(",", ""))
+        except ValueError:
+            return
+        if mult == "k":
+            n *= 1e3
+        elif mult == "m":
+            n *= 1e6
+        elif mult in ("b", "bn"):
+            n *= 1e9
+        per_second = n / unit_seconds
+        if best is None or per_second > best["perSecond"]:
+            best = {"count": n, "perSecond": per_second, "text": match_text.strip()}
+
+    for m in _THROUGHPUT_RE.finditer(t):
+        if m.group(1):
+            continue  # a currency prefix means this is a price, not traffic
+        unit_seconds = _THROUGHPUT_UNIT_SECONDS.get(m.group(4))
+        if not unit_seconds:
+            continue
+        consider(m.group(2), m.group(3), unit_seconds, m.group(0))
+    for m in _THROUGHPUT_COMPACT_RE.finditer(t):
+        consider(m.group(1), m.group(2), 1, m.group(0))
+    return best
+
+
 def detect_concurrency_target(text: str):
     """Mirrors index.html's detectConcurrencyTarget(). "500 concurrent users" parsed to nothing —
     it does not even trip highScale, whose keywords are "high traffic"/"millions of users"."""
@@ -512,6 +567,7 @@ def detect_signals(text: str) -> dict:
     # Parsed once and reused: the returned signal and the highScale expression below must be
     # derived from the same value, or a change to one silently stops matching the other.
     _ct = detect_concurrency_target(text)
+    _tt = detect_throughput_target(text)
     _team = detect_team_size(text)
 
     strong_on_prem = has_raw(
@@ -564,6 +620,7 @@ def detect_signals(text: str) -> dict:
         "known": detect_known_tech(text, _exclusions),
         "latencyTarget": detect_latency_target(text),
         "concurrencyTarget": _ct,
+        "throughputTarget": _tt,
         "teamSize": _team,
         "timeline": detect_timeline(text),
         "brownfieldOmnichannel": has([
@@ -591,7 +648,11 @@ def detect_signals(text: str) -> dict:
         # to one naming a thousand. detect_concurrency_target's own docstring recorded the gap.
         # Strictly additive — OR'd with the keywords, never replacing them — so a low stated number
         # cannot cancel an explicit "high traffic" claim made in the same sentence.
+        # A stated rate past THROUGHPUT_HIGH_SCALE_RPS is high scale whether or not the
+        # document also uses one of these keywords — the OTP design document said
+        # "At 300M/day" and none of them, leaving highScale False at ~3,472 req/s.
         "highScale": has(["high traffic", "high volume", "high transaction", "scale", "millions of users", "peak load", "sales event", "black friday"])
+        or bool(_tt and _tt["perSecond"] >= THROUGHPUT_HIGH_SCALE_RPS)
                      or bool(_ct and _ct["count"] >= CONCURRENCY_HIGH_SCALE_THRESHOLD),
         "realtime": has(["real-time", "real time", "low latency", "streaming", "live"]),
         "chatbot": has(["chatbot", "conversational", "customer support bot", "assistant", "virtual agent"]),
