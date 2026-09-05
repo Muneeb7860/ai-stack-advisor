@@ -15,10 +15,11 @@ chunk ranked 4th behind the verification ladder, anti-patterns and sender strate
 Two changes were made together and are asserted together here, because either alone leaves the
 case failing: doc 19 §E gained plain-language market vocabulary, and GROUNDING_TOP_K went 3 -> 5.
 
-Deliberately NOT asserted: that a plain-language US-market query retrieves anything at all. It
-still returns zero — MIN_CONFIDENT_RRF refuses it during routing, before ranking happens — and
-that constant is the one the repo already documents as having no clean setting on this corpus.
-Asserting the fix that was not made would be the more comfortable lie.
+When this was written, a plain-language US-market query still returned zero results and this
+docstring said so, deliberately refusing to assert a fix that had not been made. That abstention
+was a separate defect in retrieval.py's gate — it read peak fused RRF, which encodes rank
+agreement rather than relevance — and has since been fixed by replacing it with a top-1 cosine
+gate (MIN_CONFIDENT_COSINE). The US case is now asserted below, because it now works.
 """
 import pytest
 
@@ -79,3 +80,13 @@ def test_an_off_domain_query_still_leaves_the_communications_document():
     """Doc 19 is large and keyword-dense; a corpus-wide regression would show up here first."""
     docs = {h["doc"] for h in retrieve("which database for a multi-tenant SaaS with strict tenant isolation", top_k=3)}
     assert "05-multi-tenant-saas.md" in docs, docs
+
+
+@requires_ollama
+def test_a_plain_language_us_market_query_now_retrieves():
+    """Was zero hits until the abstention gate was replaced. Kept as its own test, separate from
+    the market-vocabulary ones above, because it failed for a different reason: not ranking, but a
+    gate that refused the query outright before ranking ran."""
+    hits = retrieve("We want to send SMS one-time passcodes to customers across the United States.", top_k=3)
+    assert hits, "the US-market query returned nothing"
+    assert any(h["doc"] == "19-cpaas-communications.md" for h in hits), [h["doc"] for h in hits]
