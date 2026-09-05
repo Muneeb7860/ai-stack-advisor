@@ -38,7 +38,11 @@ import re
 # read as a positive mention. Stop only at a true sentence end, or at a subordinating/
 # contrasting conjunction, so a later, unrelated positive requirement in the SAME sentence
 # ("...but we do need Postgres for durability") is never swept into the negated clause.
-_CLAUSE_END = r"(?=\s+(?:because|since|but|however|whereas|although|while)\b|[.!?;\n]|$)"
+# Ported from index.html. The temporal/conditional subordinators were missing, which let a
+# negation reach 8 words past its own object: "no internet connectivity required after initial
+# container pull" excluded CONTAINERS, from a clause that exists to say containers are pulled.
+# "while" was already here; "after"/"once"/"until" are the same family.
+_CLAUSE_END = r"(?=\s+(?:because|since|but|however|whereas|although|while|after|before|once|until|unless|when|whenever|upon|following)\b|[.!?;\n]|$)"
 
 # Passive-voice negation phrases ("Kubernetes must not be used") — the excluded subject sits
 # BEFORE the negation phrase here, which the active-voice "no|not|..." regexes can never see
@@ -69,7 +73,9 @@ _PASSIVE_NEGATION_ALT = "|".join(_PASSIVE_NEGATION_PHRASES)
 # "but"-style contrast. Each character position must not be the START of a subordinating/
 # contrasting conjunction (negative lookahead per position) — this is the backward-looking
 # equivalent of _CLAUSE_END, which achieves the same thing looking forward.
-_PASSIVE_NEGATION_PREFIX = r"(?<!\w)(?:(?!\b(?:because|since|but|however|whereas|although|while)\b)[^.!?;\n]){0,300}?"
+# Same list as _CLAUSE_END, and it must stay the same list — a subordinator that ends an
+# active-voice negation must end a passive one too, or the two phrasings disagree.
+_PASSIVE_NEGATION_PREFIX = r"(?<!\w)(?:(?!\b(?:because|since|but|however|whereas|although|while|after|before|once|until|unless|when|whenever|upon|following)\b)[^.!?;\n]){0,300}?"
 
 
 def strip_negations(text: str) -> str:
