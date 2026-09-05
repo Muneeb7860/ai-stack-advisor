@@ -2589,6 +2589,10 @@ function detectSignals(text){
   // derive from the same value, or a change to one silently stops matching the other.
   const _ct = detectConcurrencyTarget(text);
   const _tt = detectThroughputTarget(text);
+  // "in MVP scope" / "out of MVP scope" scopes a decision; it does not say the project is an MVP.
+  const _mvpAll = (String(text||'').toLowerCase().match(/\bmvp\b/g) || []).length;
+  const _mvpScoping = (String(text||'').toLowerCase().match(/\b(?:in|out of|within|outside|into)\s+(?:the\s+)?mvp\s+scope\b/g) || []).length;
+  const _mvpIsStageClaim = _mvpAll > 0 && _mvpAll > _mvpScoping;
   const _team = detectTeamSize(text);
   return {
     onPrem: strongOnPrem || softOnPrem,
@@ -2612,7 +2616,17 @@ function detectSignals(text){
     finance: has(['fintech','bank','payment','fraud','pci','transaction','trading','ledger','finance']),
     ecommerce: has(['ecommerce','e-commerce','retail','shopping','product recommendation','cart','checkout']),
     enterprise: has(['enterprise','large organization','corporate','multi-region','audit logging','role-based access','okta','sso']),
-    startupMvp: has(['startup','mvp','early-stage','small team','move fast','budget conscious','budget-conscious','bootstrapped']),
+    // "mvp" split out of the keyword list. A real OTP-verification design document for a
+    // 300M/day enterprise platform tripped startupMvp on ONE occurrence — "Is `cancel` in MVP
+    // scope?", a row in its own decisions table — and startupMvp then out-voted the four genuine
+    // `enterprise` mentions in pickIAM, which recommended a small-team identity vendor for a
+    // platform doing 3,472 checks/second. Asking whether a feature is in MVP scope is scoping a
+    // decision, not declaring the project's stage. Same shape as TIMELINE_DISQUALIFIERS above,
+    // where "retain audit logs for 12 months" was being read as a ship date.
+    //
+    // Only fires when EVERY occurrence is a scoping phrase: "MVP is send-code and check-code over
+    // SMS" alongside "is X in MVP scope?" is still a genuine stage claim and must keep working.
+    startupMvp: has(['startup','early-stage','small team','move fast','budget conscious','budget-conscious','bootstrapped']) || _mvpIsStageClaim,
     // Distinct from startupMvp: a startup still intends to acquire real users and may need to
     // scale. A minimal/learning project explicitly does not — the honest floor is "the simplest
     // thing that runs," not "the simplest thing that could later become a startup." Without this,
