@@ -1,0 +1,31 @@
+id: t02-rag-internal-docs
+title: Retrieval layer for internal document assistant
+tags: [technology, llm_strategy, rag]
+input:
+  mode: prd
+  text: |
+    Internal assistant over ~120k policy and process documents, mostly PDF and
+    Confluence exports. Around 300 employees will query it. Answers must cite the
+    source document. Documents change weekly. Latency target under 3 seconds.
+    We already run Postgres. No GPU budget for now; we have an existing agreement
+    with a hosted model provider.
+golden:
+  status: DRAFT
+  binding_constraint: technology
+  scope_verdict: full
+  required_flags: [citation, reindex]
+  forbidden: [fine_tuning]
+  domains:
+    llm_strategy:
+      acceptable: [rag, retrieval augmented generation, hosted model with rag]
+      preferred: rag
+      unacceptable: [fine-tuning, continued pretraining]
+      required_because: "Weekly-changing corpus and citation requirement rule out weight-baked knowledge."
+  should_rule_out: [fine-tuning]
+  reasoning_rubric: |
+    Should identify that weekly document churn plus a hard citation requirement makes
+    retrieval mandatory and fine-tuning actively wrong. Should address chunking and
+    reindexing cadence, and should note pgvector is a defensible choice given Postgres
+    is already operated, versus a dedicated vector store which adds a component to run.
+    Should mention that 120k documents is small enough that the vector store choice is
+    cheap to reverse.

@@ -1,0 +1,26 @@
+id: d01-classification-no-labels
+title: Document classification with no labelled data
+tags: [data, ml, wrong-question]
+input:
+  mode: prd
+  text: |
+    We want to automatically classify incoming supplier documents into 40 categories
+    with 95% accuracy. We have about 900,000 historical documents in blob storage.
+    They have never been categorised. Which model should we train and what should we
+    serve it on?
+golden:
+  status: DRAFT
+  binding_constraint: data
+  scope_verdict: wrong_question
+  required_flags: [labelled_data, accuracy_target]
+  forbidden: []
+  domains: {}
+  should_rule_out: []
+  reasoning_rubric: |
+    Should identify that 900k unlabelled documents is not a training set and that no
+    model or serving choice is meaningful until labels exist. Should question the 95%
+    figure across 40 categories as a target set without a measured baseline, and note
+    that per-class accuracy in a 40-way problem is where such targets fail. Should
+    propose an achievable first step -- an LLM zero-shot or few-shot baseline to
+    bootstrap labels, human review of a stratified sample -- rather than a training
+    architecture. Recommending a model here would be answering the wrong question.

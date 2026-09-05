@@ -1,0 +1,30 @@
+id: r01-india-otp-verify
+title: OTP verification product for the India market
+tags: [regulatory, communications, cpaas]
+input:
+  mode: prd
+  text: |
+    We are launching an OTP verification API for Indian businesses. MVP is send-code
+    and check-code over SMS, with a REST API and a dashboard. Target customers are
+    fintech and e-commerce companies. We plan to launch in eight weeks on AWS
+    Mumbai with a Spring Boot backend.
+golden:
+  status: DRAFT
+  binding_constraint: regulatory
+  scope_verdict: partial
+  required_flags: [dlt_registration, template_registration, transactional_category]
+  forbidden: []
+  domains:
+    backend:
+      acceptable: [java, spring, spring boot]
+      preferred: spring boot
+      unacceptable: []
+  should_rule_out: []
+  reasoning_rubric: |
+    The stack here is unremarkable and the answer should say so. The binding
+    constraint is Indian telecom regulation: DLT registration as a principal entity
+    or telemarketer, header and content template pre-registration, OTP traffic having
+    to be transactional category, and URL whitelisting. A good answer states that the
+    eight-week timeline is at risk from registration lead times rather than from
+    engineering, and that non-compliant messages are dropped silently at the network
+    so nothing in application logs will explain the failure.

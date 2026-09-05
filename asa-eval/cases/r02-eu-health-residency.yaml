@@ -1,0 +1,31 @@
+id: r02-eu-health-residency
+title: Patient-facing scheduling platform for EU clinics
+tags: [regulatory, cloud, health]
+input:
+  mode: prd
+  text: |
+    Appointment scheduling used by clinics in Germany and France. Stores patient
+    names, contact details, appointment reasons and clinician notes. Clinics have
+    told us data must not leave the EU and several have asked about processing
+    agreements. We would like to use a US-managed AI service to summarise notes.
+    Team wants to move fast on a serverless stack.
+golden:
+  status: DRAFT
+  binding_constraint: regulatory
+  scope_verdict: partial
+  required_flags: [data_residency, processing_agreement, special_category_data]
+  forbidden: []
+  domains:
+    cloud:
+      acceptable: [eu region, aws eu, azure eu, gcp eu, ovh, scaleway, hetzner]
+      preferred: eu region
+      unacceptable: [us region]
+      required_because: "Stated residency requirement forecloses US-region processing."
+  should_rule_out: [us-hosted ai summarisation]
+  reasoning_rubric: |
+    Should treat clinician notes as special-category health data under GDPR rather
+    than ordinary PII, and should identify residency as a hard gate that eliminates
+    options rather than a preference to trade off. Should flag that a US-managed
+    summarisation service is a transfer problem, not a latency or cost problem, and
+    that the answer depends on contractual terms the advisor cannot verify. Should
+    be explicit about what it cannot determine.

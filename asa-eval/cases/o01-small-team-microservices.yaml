@@ -1,0 +1,30 @@
+id: o01-small-team-microservices
+title: Microservices platform for a two-engineer team
+tags: [organizational, architecture]
+input:
+  mode: prd
+  text: |
+    We are two engineers building a marketplace MVP. We want to do it properly from
+    the start: microservices on Kubernetes, service mesh, event-driven communication,
+    separate databases per service, full observability stack. We expect to raise a
+    seed round in nine months.
+golden:
+  status: DRAFT
+  binding_constraint: organizational
+  scope_verdict: wrong_question
+  required_flags: [team_size, operational_burden]
+  forbidden: [service mesh, kubernetes]
+  domains:
+    backend:
+      acceptable: [monolith, modular monolith, majestic monolith]
+      preferred: modular monolith
+      unacceptable: [microservices, service mesh]
+      required_because: "Two engineers cannot operate a distributed system and ship a marketplace in nine months."
+  should_rule_out: [microservices]
+  reasoning_rubric: |
+    Should say directly that the constraint is team capacity, not technology, and
+    that this architecture would consume the runway it is meant to protect. Should
+    make the case for a modular monolith with clean internal boundaries as the path
+    that preserves the option to split later. Should push back on 'properly from the
+    start' as a premise rather than accommodating it. Being agreeable here is the
+    failure mode.

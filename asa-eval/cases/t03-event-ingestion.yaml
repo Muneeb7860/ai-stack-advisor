@@ -1,0 +1,30 @@
+id: t03-event-ingestion
+title: Event ingestion for device telemetry
+tags: [technology, backend, scale]
+input:
+  mode: prd
+  text: |
+    IoT telemetry from 50,000 devices reporting every 30 seconds. Roughly 1,700
+    events/sec steady, 5x burst on the hour when devices sync. Events must not be
+    lost. Consumers: a real-time alerting service and a nightly analytics batch.
+    We run on AWS. Team of 8, comfortable with Java, no Kafka experience.
+golden:
+  status: DRAFT
+  binding_constraint: technology
+  scope_verdict: full
+  required_flags: [durability, replay, burst]
+  forbidden: []
+  domains:
+    backend:
+      acceptable: [kafka, msk, kinesis, amazon kinesis]
+      preferred: kinesis
+      unacceptable: [rabbitmq, sqs standard queue]
+      required_because: "Two independent consumers with different cadences need replayable log semantics, not a queue."
+  should_rule_out: [sqs]
+  reasoning_rubric: |
+    Should recognise that two consumers with different read patterns (real-time and
+    nightly batch) need a replayable log rather than a queue, which eliminates plain
+    SQS. Should weigh Kafka's power against a team with no Kafka experience and no
+    platform team, and should be explicit that the operational cost of self-managed
+    Kafka is the deciding factor rather than throughput, since 1,700/sec is modest
+    for any of these options.

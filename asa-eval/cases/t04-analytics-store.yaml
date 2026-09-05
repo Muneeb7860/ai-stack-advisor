@@ -1,0 +1,31 @@
+id: t04-analytics-store
+title: Analytics store for product usage reporting
+tags: [technology, database, analytics]
+input:
+  mode: prd
+  text: |
+    We need customer-facing usage dashboards. Around 2TB of event data growing 200GB
+    a month, queries are aggregations over time ranges grouped by a handful of
+    dimensions. Dashboards must load in under 2 seconds for the last 90 days.
+    Data can be up to 15 minutes stale. Small data team, currently everything is in
+    Postgres and the dashboard queries are timing out.
+golden:
+  status: DRAFT
+  binding_constraint: technology
+  scope_verdict: full
+  required_flags: [columnar, freshness]
+  forbidden: []
+  domains:
+    database:
+      acceptable: [clickhouse, duckdb, snowflake, bigquery, timescaledb]
+      preferred: clickhouse
+      unacceptable: [mongodb, elasticsearch]
+      required_because: "Time-bucketed aggregation over a fixed dimension set is a columnar workload."
+  should_rule_out: [postgres]
+  reasoning_rubric: |
+    Should identify this as a columnar OLAP workload and explain why row-store
+    Postgres is timing out rather than just asserting a replacement. Should treat the
+    15-minute staleness allowance as the thing that makes a separate analytical store
+    viable. Should weigh a managed warehouse against a self-hosted engine given a
+    small data team, and note that customer-facing latency targets are a stricter
+    requirement than internal BI.

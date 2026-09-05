@@ -1,0 +1,29 @@
+id: r03-us-a2p-messaging
+title: US appointment reminders by SMS
+tags: [regulatory, communications]
+input:
+  mode: prd
+  text: |
+    We want to send appointment reminders by SMS to US customers of our salon
+    booking product. Roughly 40,000 messages a month across our merchant base,
+    sent from a single number. Launching next month.
+golden:
+  status: DRAFT
+  binding_constraint: regulatory
+  scope_verdict: partial
+  required_flags: [a2p_registration, consent, throughput]
+  forbidden: []
+  domains:
+    communications:
+      acceptable: [toll-free, short code, messaging service, sender pool, 10dlc]
+      preferred: messaging service
+      unacceptable: [single long code]
+      required_because: "A single long code cannot carry 40k/month across multiple merchants at ~1 msg/sec."
+  should_rule_out: [single long code]
+  reasoning_rubric: |
+    Should catch two independent problems: registration (A2P brand and campaign
+    registration is required before traffic flows, and it takes time) and throughput
+    (one long code at roughly one message per second cannot deliver the peaks implied
+    by 40k a month). Should also raise consent capture as a legal requirement, and
+    should note that sending on behalf of merchants makes this an ISV pattern with
+    per-merchant registration rather than a single brand.
