@@ -833,10 +833,20 @@ def pick_cloud(s):
         return {"v": "AWS", "why": "Explicit AWS usage detected — build on existing footprint (IAM, VPC, billing) rather than introducing a second cloud.", "conf": "high"}
     if s["huaweiShop"]:
         return {"v": "Huawei Cloud", "why": "Explicit Huawei Cloud usage detected — build on existing footprint rather than introducing a second cloud, particularly relevant for APAC/China-market deployments or markets where Huawei is an approved vendor under local data-residency rules.", "conf": "high"}
-    if s["gcpShop"] or s["agentic"]:
-        return {"v": "Google Cloud (GCP)", "why": "GCP mentioned, or agentic/data-heavy workload — GCP pairs well with Vertex AI, BigQuery, and Gemini models.", "conf": "high" if s["gcpShop"] else "medium"}
-    if s["azureShop"] or s["enterprise"]:
-        return {"v": "Microsoft Azure", "why": "Azure mentioned, or enterprise context with likely existing Microsoft 365/AD investment.", "conf": "high" if s["azureShop"] else "medium"}
+    # Ported from index.html. These two branches used to read "GCP mentioned, or agentic workload"
+    # and "Azure mentioned, or enterprise context" — one sentence covering a detection and an
+    # inference, so a reader could not tell which had happened. A real OTP design document naming
+    # no cloud came back "Microsoft Azure — Azure mentioned, or enterprise context...", which reads
+    # as though the document said Azure. It did not; `enterprise` alone routed there. Split so the
+    # stated reason matches what was found, following the AWS/Huawei branches above.
+    if s["gcpShop"]:
+        return {"v": "Google Cloud (GCP)", "why": "Explicit GCP usage detected — build on existing footprint rather than introducing a second cloud.", "conf": "high"}
+    if s["azureShop"]:
+        return {"v": "Microsoft Azure", "why": "Explicit Azure usage detected — build on existing footprint (Entra ID, subscriptions, billing) rather than introducing a second cloud.", "conf": "high"}
+    if s["agentic"]:
+        return {"v": "Google Cloud (GCP)", "why": "No cloud provider named in the requirement. GCP is suggested on the strength of the agentic/data-heavy workload itself — Vertex AI, BigQuery and Gemini are a good fit for it. This is a fit argument, not a detected footprint: if you already run on AWS or Azure, that existing footprint should win over this suggestion.", "conf": "medium"}
+    if s["enterprise"]:
+        return {"v": "Microsoft Azure", "why": "No cloud provider named in the requirement. Azure is a weak default here, inferred only from the enterprise context on the assumption of an existing Microsoft 365/Entra ID investment — common in large organisations, but nothing in your text confirms it. If you already run on AWS or GCP, that footprint should win. Name your current cloud to get a grounded answer instead of this guess.", "conf": "low"}
     if s["minimalProject"] and not s["highScale"] and not s["compliance"] and not s["finance"] and not s["healthcare"]:
         return {"v": "No cloud provider needed — deploy to a free-tier PaaS (Vercel/Netlify/Render/Railway/Fly.io) or run it locally", "why": "Nothing about this project needs a cloud ACCOUNT, let alone a specific provider — that's infrastructure for handling scale, uptime SLAs, and multi-region traffic, none of which a learning/personal project has. A free-tier PaaS deploy gives you a public URL to share with zero cloud-provider setup, IAM, or billing account. Introduce AWS/Azure/GCP only if you outgrow the PaaS's free tier or need a managed service (e.g. a specific ML API) the PaaS doesn't offer.", "conf": "high"}
     if s["startupMvp"]:

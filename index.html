@@ -2831,8 +2831,16 @@ function pickCloud(s){
   if(s.onPrem) return {v:'On-premises / private infrastructure — no public cloud', why:'An air-gapped or explicit no-public-cloud requirement rules out AWS/Azure/GCP entirely. You need a private data center, bare-metal, or air-gapped virtualization stack (VMware, OpenStack, or a vetted sovereign/government enclave) instead.', conf:'high'};
   if(s.awsShop) return {v:'AWS', why:'Explicit AWS usage detected — build on existing footprint (IAM, VPC, billing) rather than introducing a second cloud.', conf:'high'};
   if(s.huaweiShop) return {v:'Huawei Cloud', why:'Explicit Huawei Cloud usage detected — build on existing footprint rather than introducing a second cloud, particularly relevant for APAC/China-market deployments or markets where Huawei is an approved vendor under local data-residency rules.', conf:'high'};
-  if(s.gcpShop || s.agentic) return {v:'Google Cloud (GCP)', why:'GCP mentioned, or agentic/data-heavy workload — GCP pairs well with Vertex AI, BigQuery, and Gemini models.', conf: s.gcpShop ? 'high' : 'medium'};
-  if(s.azureShop || s.enterprise) return {v:'Microsoft Azure', why:'Azure mentioned, or enterprise context with likely existing Microsoft 365/AD investment.', conf: s.azureShop ? 'high' : 'medium'};
+  // These two branches used to read "GCP mentioned, or agentic workload" and "Azure mentioned, or
+  // enterprise context" — one sentence covering both a detection and an inference, so a reader
+  // could not tell which had happened. A real OTP design document that names no cloud at all came
+  // back "Microsoft Azure — Azure mentioned, or enterprise context...", which reads as though the
+  // document said Azure. It did not; `enterprise` alone routed there. Split so the stated reason
+  // matches what was actually found, following the AWS/Huawei branches above.
+  if(s.gcpShop) return {v:'Google Cloud (GCP)', why:'Explicit GCP usage detected — build on existing footprint rather than introducing a second cloud.', conf:'high'};
+  if(s.azureShop) return {v:'Microsoft Azure', why:'Explicit Azure usage detected — build on existing footprint (Entra ID, subscriptions, billing) rather than introducing a second cloud.', conf:'high'};
+  if(s.agentic) return {v:'Google Cloud (GCP)', why:'No cloud provider named in the requirement. GCP is suggested on the strength of the agentic/data-heavy workload itself — Vertex AI, BigQuery and Gemini are a good fit for it. This is a fit argument, not a detected footprint: if you already run on AWS or Azure, that existing footprint should win over this suggestion.', conf:'medium'};
+  if(s.enterprise) return {v:'Microsoft Azure', why:'No cloud provider named in the requirement. Azure is a weak default here, inferred only from the enterprise context on the assumption of an existing Microsoft 365/Entra ID investment — common in large organisations, but nothing in your text confirms it. If you already run on AWS or GCP, that footprint should win. Name your current cloud to get a grounded answer instead of this guess.', conf:'low'};
   // Guarded on !highScale/!compliance so a genuine scale or regulatory need still wins even inside
   // a learning project — the floor is for the common case, not an override of a real constraint.
   if(s.minimalProject && !s.highScale && !s.compliance && !s.finance && !s.healthcare){
