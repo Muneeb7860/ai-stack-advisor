@@ -1,0 +1,30 @@
+id: d02-corpus-rights
+title: Assistant trained on aggregated customer content
+tags: [data, llm_strategy, rights]
+input:
+  mode: prd
+  text: |
+    We host content for 2,000 customers and want to build an assistant that answers
+    questions using patterns learned across all of them, so smaller customers benefit
+    from what larger ones have written. Our terms of service say we may process
+    customer data to provide the service. We want to start next quarter.
+golden:
+  status: DRAFT
+  binding_constraint: data
+  scope_verdict: partial
+  required_flags: [data_rights, cross_tenant, tenant_isolation]
+  forbidden: []
+  domains:
+    llm_strategy:
+      acceptable: [per-tenant rag, tenant-scoped retrieval, opt-in]
+      preferred: per-tenant rag
+      unacceptable: [cross-tenant fine-tuning, pooled training]
+      required_because: "Cross-tenant learning from customer content is a rights question before it is an architecture."
+  should_rule_out: [cross-tenant fine-tuning]
+  reasoning_rubric: |
+    Should recognise that 'process to provide the service' very likely does not cover
+    using one customer's content to benefit another, and that this is a legal
+    determination the advisor cannot make. Should distinguish tenant-scoped retrieval
+    (defensible) from pooled training (leaks across the tenant boundary and is hard
+    to undo once weights exist). Should flag the irreversibility: you cannot remove
+    one customer's contribution from a trained model on request.

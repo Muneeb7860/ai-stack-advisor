@@ -1,0 +1,31 @@
+id: t01-multitenant-oltp
+title: B2B SaaS multi-tenant OLTP store
+tags: [technology, database, saas]
+input:
+  mode: prd
+  text: |
+    We are building a B2B workflow SaaS. Expected 400 tenants in year one, largest
+    tenant ~2M rows in the busiest table, most under 50k. Tenants are contractually
+    promised logical data isolation and the ability to export or delete all their
+    data on request. Team is 6 engineers, strong Java/Spring, no dedicated DBA.
+    Reads are heavily filtered by tenant. We need per-tenant point-in-time restore.
+golden:
+  status: DRAFT
+  binding_constraint: technology
+  scope_verdict: full
+  required_flags: [tenant_isolation, point_in_time_restore]
+  forbidden: []
+  domains:
+    database:
+      acceptable: [postgresql, postgres, mysql]
+      preferred: postgresql
+      unacceptable: [mongodb, dynamodb, cassandra]
+      required_because: "Relational with row-level security and mature PITR tooling."
+  should_rule_out: [database-per-tenant]
+  reasoning_rubric: |
+    Should engage with the isolation-vs-operability trade-off: shared schema with
+    row-level security is operable by a team with no DBA, database-per-tenant gives
+    the cleanest deletion and restore story but 400 databases is an ops burden that
+    this team cannot carry. Should note per-tenant PITR is the constraint that most
+    strongly argues against a single shared table, and should flag that the choice
+    is expensive to reverse once tenant data exists.

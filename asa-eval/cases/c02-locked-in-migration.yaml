@@ -1,0 +1,25 @@
+id: c02-locked-in-migration
+title: Replace an incumbent analytics vendor
+tags: [commercial, migration]
+input:
+  mode: prd
+  text: |
+    Our analytics vendor is expensive and we want to move to something better. We
+    are 14 months into a 3-year committed contract with a minimum annual spend, and
+    our contract includes the data pipeline our finance reporting depends on.
+    Engineering wants to move to an open-source stack this quarter.
+golden:
+  status: DRAFT
+  binding_constraint: commercial
+  scope_verdict: partial
+  required_flags: [committed_spend, contract_term]
+  forbidden: []
+  domains: {}
+  should_rule_out: []
+  reasoning_rubric: |
+    Should lead with the contract, not the technology: a committed minimum spend
+    means migrating this quarter pays for two stacks simultaneously for the remaining
+    20 months, so the sensible sequencing question is when to start rather than what
+    to move to. Should identify finance reporting as the risk-bearing dependency and
+    suggest running in parallel through at least one reporting cycle. Technology
+    options are secondary and should be presented as such.

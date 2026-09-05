@@ -1,0 +1,29 @@
+id: t05-internal-admin-ui
+title: Internal admin UI for operations team
+tags: [technology, frontend, reversibility]
+input:
+  mode: prd
+  text: |
+    Internal CRUD admin panel for our 12-person ops team. About 30 screens over
+    existing REST APIs. No public exposure, no SEO, no mobile requirement. We want
+    it in about six weeks. Two backend engineers will build it; neither is a
+    specialist frontend developer.
+golden:
+  status: DRAFT
+  binding_constraint: technology
+  scope_verdict: full
+  required_flags: [low_reversal_cost]
+  forbidden: []
+  domains:
+    frontend:
+      acceptable: [react, vue, svelte, htmx, retool, admin framework, refine, next.js]
+      preferred: react
+      unacceptable: []
+      required_because: "Any mainstream choice works; the honest answer is that this decision barely matters."
+  should_rule_out: []
+  reasoning_rubric: |
+    A good answer says plainly that this is a low-stakes, cheaply reversible decision
+    and that arguing about the framework is a poor use of the team's time. It should
+    weight developer familiarity and time-to-ship above technical merit, and should
+    seriously consider an off-the-shelf admin tool given two non-specialist engineers
+    and a six-week window. Confidence should be high but the stated impact low.

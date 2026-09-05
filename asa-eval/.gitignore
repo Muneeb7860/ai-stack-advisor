@@ -1,0 +1,5 @@
+# Run records and rendered reports are per-run artifacts, not source. Keeping a
+# baseline is deliberate (`--baseline runs/last-good.json`), so commit that one
+# explicitly with `git add -f` rather than tracking the whole directory.
+runs/
+__pycache__/

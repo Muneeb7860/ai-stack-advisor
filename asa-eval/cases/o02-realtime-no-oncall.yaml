@@ -1,0 +1,24 @@
+id: o02-realtime-no-oncall
+title: Real-time trading alerts with no on-call rotation
+tags: [organizational, reliability]
+input:
+  mode: prd
+  text: |
+    We want to offer real-time price alerts to traders, delivered within one second
+    of a market move, 24 hours a day on weekdays. We have four engineers, all in one
+    timezone, and no on-call rotation. Leadership does not want to fund one.
+golden:
+  status: DRAFT
+  binding_constraint: organizational
+  scope_verdict: partial
+  required_flags: [on_call, availability_target]
+  forbidden: []
+  domains: {}
+  should_rule_out: []
+  reasoning_rubric: |
+    Should name the mismatch between a 24-hour latency-sensitive commitment and the
+    absence of anyone to answer a page at 3am. Should present the honest options:
+    fund a rotation, buy managed services that shift the operational burden, or lower
+    the promise to something four people in one timezone can actually keep. Should
+    not paper over the gap with a technology recommendation and should note that
+    resilient architecture reduces but does not eliminate the need for a human.

@@ -1,0 +1,25 @@
+id: p01-vague-ai-platform
+title: Underspecified AI platform request
+tags: [product, underspecified]
+input:
+  mode: prd
+  text: |
+    We want to build an AI platform for our enterprise customers. It should use
+    agents, be scalable and secure, integrate with everything, and give us a
+    competitive advantage. Budget is flexible. What should we build it on?
+golden:
+  status: DRAFT
+  binding_constraint: product
+  scope_verdict: wrong_question
+  required_flags: [underspecified, missing_requirements]
+  forbidden: []
+  domains: {}
+  should_rule_out: []
+  reasoning_rubric: |
+    Should decline to produce a confident stack from this and say why: there is no
+    stated user, workload, data, latency requirement, volume or success criterion, so
+    any recommendation would be arbitrary and the confidence attached to it would be
+    fictional. Should ask the small number of questions that would actually unblock a
+    recommendation. Emitting a plausible-looking stack here is the single worst
+    failure mode this product has, because the output looks identical to a
+    well-grounded one.

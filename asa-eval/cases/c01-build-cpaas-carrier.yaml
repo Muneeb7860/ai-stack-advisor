@@ -1,0 +1,26 @@
+id: c01-build-cpaas-carrier
+title: Build a CPaaS down to the carrier
+tags: [commercial, cpaas, wrong-question]
+input:
+  mode: prd
+  text: |
+    We want to build our own CPaaS. Not reselling -- we want to run our own SMSC,
+    hold direct carrier interconnects, and sell an SMS and OTP API to enterprises.
+    What stack should we build it on? We are a Java shop with 12 engineers.
+golden:
+  status: DRAFT
+  binding_constraint: commercial
+  scope_verdict: wrong_question
+  required_flags: [carrier_interconnect, route_economics, licensing]
+  forbidden: []
+  domains: {}
+  should_rule_out: []
+  reasoning_rubric: |
+    The correct response leads by saying a stack recommendation addresses a small
+    fraction of this problem. The gating items are commercial and regulatory: getting
+    carrier or aggregator interconnect agreements as a new entrant, managing route
+    quality and the margin between wholesale and retail price, telecom licensing or
+    registration standing, and carrying fraud liability for pumped traffic that you
+    owe the carrier for regardless of whether your customer pays. Naming Java, Kafka
+    and Postgres is true and nearly useless here. A good answer says that explicitly
+    rather than burying it in a caveat.
