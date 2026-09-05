@@ -105,8 +105,24 @@ vendor conversion claims as unverified.
 
 ### E. Regulatory preconditions — the failure is invisible to your logs
 
+**This section is the binding constraint whenever a requirement names a market at all** — whether
+it says "for Indian businesses", "customers across the United States", "users in Germany and
+France", "launching in the EU", "our India launch", "the US market", or simply names the country
+its customers are in. A requirement usually states its geography in plain language and its
+technology in jargon, so the regulatory question arrives worded as an ordinary business fact
+("we are launching for Indian businesses in eight weeks") rather than as a compliance question.
+Read the market first: it decides whether the project can carry traffic at all, which no
+technology choice below it can.
+
 In several markets compliance is a precondition for any traffic, enforced at the network. A
 non-compliant message is dropped silently: no error, no bounce, nothing in application logs.
+
+Markets this document covers in detail: **India** (below), the **United States** and the
+**European Union** (summarised after the India table). Any other market — Brazil, Indonesia,
+Nigeria, the UAE, Saudi Arabia, Vietnam, and most of the rest — has its own registration regime
+with the same shape (register the sender, pre-register the content, respect a category and a
+timing window) and is **not covered here**. Treat an uncovered market as an open question to
+research before committing a launch date, not as an absence of regulation.
 
 **India (TCCCPR 2018, amended February 2025)** — the strictest common case:
 
@@ -126,7 +142,9 @@ and DNC lists, PCI DSS where payment details are captured or recorded, HIPAA BAA
 carried.
 
 The scheduling consequence is the one architects miss: registration lead time is measured in weeks
-and runs in parallel with nothing. A timeline is at risk from registration, not from engineering.
+and runs in parallel with nothing. When a requirement states a launch date — "in eight weeks", "next
+quarter", "by end of year" — alongside a market, the date is at risk from registration, not from
+engineering. Say so explicitly: the stack is usually unremarkable and the schedule usually is not.
 
 ### F. Fraud — AIT has moved past pattern matching
 
