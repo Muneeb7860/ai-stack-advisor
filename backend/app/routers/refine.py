@@ -90,9 +90,9 @@ GROUNDING_SCORE_THRESHOLD = 0.55
 # them, so this widens the window rather than lowering the bar — but it is not free: measured
 # across four queries the grounding block grows by ~340-1,030 tokens per call (3,495 -> 7,619
 # chars on the India case, 3,194 -> 4,569 on an off-domain control). That is the price of the
-# constraint chunk surviving. It does NOT fix the related
-# routing-abstention case (a plain-language US-market query is refused by MIN_CONFIDENT_RRF
-# before ranking happens) — that one is un-fixed and documented in doc 19's own retrieval notes.
+# constraint chunk surviving. The related routing-abstention case noted here originally (a
+# plain-language US-market query returning nothing) was a separate defect in retrieval.py's
+# abstention gate and has since been fixed there — see MIN_CONFIDENT_COSINE.
 GROUNDING_TOP_K = 5
 # Raised from 2 when GROUNDING_SCORE_THRESHOLD was re-tuned for embeddings (see that
 # constant's comment): embeddings' narrower score band means a document's own most-useful

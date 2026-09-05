@@ -523,35 +523,46 @@ def _invalidate_index(reason: str) -> None:
 # below for case 20.
 ROUTING_BOOST_WEIGHT = 0.4
 
-# Abstention gate: the minimum peak content-stage RRF score (see _rrf_scores()) required for
-# retrieve() to return anything at all, checked BEFORE the top_k slice. Exists because of a
-# real, measured limit of the design above: `score` (the field callers threshold on —
-# GROUNDING_SCORE_THRESHOLD, CONFIDENCE_THRESHOLD) is deliberately left as raw embedding
-# cosine similarity (see retrieve()'s docstring for why), and on THIS corpus under
-# nomic-embed-text every chunk's raw cosine similarity to every query sits at ~0.5+ regardless
-# of relevance (documented in tests/test_retrieval_eval.py's case-20/21 xfail reasons) — so no
-# value of that threshold can ever separate a true negative control from a genuine hit by raw
-# score alone; RRF reordering changes WHICH chunks make top_k but can't be reflected in
-# `score` without breaking those other thresholds. The peak fused RRF score, by contrast, DOES
-# separate cleanly on real measurement — but re-measure this after any corpus/embedding-model
-# change, don't trust the number below to stay valid: it already drifted once (see below) and
-# the gap is narrow enough that it can drift again.
+# Abstention gate: the minimum top-1 content score (raw embedding cosine) required for
+# retrieve() to return anything at all, checked after ranking.
 #
-# RE-MEASURED (superseding this constant's original 0.0300 tuning): a full test-suite run on
-# a freshly rebuilt container found case 20 ("CI/CD for our Kubernetes deployments" — no doc in
-# this corpus is actually about CI/CD, several mention Kubernetes in passing) now peaks at
-# 0.03126, up from the 0.0281 measured when this threshold was first set — corpus/embedding
-# drift moved the gap, and 0.0300 no longer sat inside it. Checked all 23 eval cases directly
-# (not just case 20) to find the real current separation point: every genuine-hit case's best
-# candidate is now >=0.03200 (down slightly from the original >=0.0323), case 20 is the ONLY
-# one below that. 0.0316 sits inside the current (narrower) gap with real margin on both sides,
-# not at either edge. If this drifts again, re-run the measurement in this comment's method
-# (query every eval case directly against _get_index(), sort by peak fused RRF) rather than
-# nudging the constant by feel.
-# Case 21 (DNS/SSL certs) is NOT reliably separated by this gate (also ~0.0323, same as the
-# genuine hits) — consistent with that case's own long-documented conclusion that it needs a
-# learned reranker, not a threshold, lexical or fused.
-MIN_CONFIDENT_RRF = 0.0316
+# REPLACES a peak-fused-RRF gate (MIN_CONFIDENT_RRF = 0.0316), removed after measuring it rather
+# than re-tuning it. That constant's own comment said the gap was narrow and told the next person
+# to re-run the measurement instead of nudging by feel. Re-run, it turned out the two classes no
+# longer merely sat close — they overlapped completely:
+#
+#     genuine hits      0.0301 - 0.0328 peak RRF
+#     should-be-blocked 0.0311 - 0.0320 peak RRF
+#
+# "How should I train for my first marathon" (0.031778) outscored three genuine queries, and two
+# unrelated queries produced the IDENTICAL peak to fourteen decimal places (0.03149801587301).
+# That is the tell: an RRF score is a sum of 1/(K + rank) terms, so the peak mostly encodes
+# whether the two rankers AGREE ON A TOP ITEM, not how relevant that item is. It was never a
+# confidence measure, which is why no value of it could separate the classes.
+#
+# Its calibration had also gone stale in a way worth recording. It was set just above eval case
+# 20 ("CI/CD for our Kubernetes deployments"), then believed to be a true negative because no
+# document covered CI/CD. Document 12 (secure delivery pipeline) has since been added and case 20
+# now has an expected doc — so the gate was tuned to sit above a case the corpus can now answer.
+#
+# MEASURED SEPARATION for the replacement, across all 47 positive eval cases, the 1 negative
+# control, 5 off-domain probes and 3 real queries the old gate wrongly blocked:
+#
+#     lowest genuine top-1 cosine     0.5484
+#     highest off-domain top-1 cosine 0.4868
+#     gap                             0.0615   (the old gate's gap was 0.00074)
+#
+# 0.52 sits mid-gap with ~0.03 margin on both sides. Re-run the measurement after any corpus or
+# embedding-model change — the method is: query every eval case plus a handful of deliberately
+# off-domain probes directly against _get_index(), and compare the top-1 `score` distributions.
+#
+# Case 21 (DNS/SSL certs) is still NOT separated: its top-1 cosine is 0.5324, above this gate and
+# between two genuine cases. Unchanged and still xfailed, consistent with that case's own
+# long-documented conclusion that it needs a learned reranker, not a threshold of any kind. The
+# module docstring's older claim that every chunk scores "~0.5+ regardless of relevance" is what
+# ruled cosine out originally; that is no longer true on this corpus with BM25 in the blend —
+# off-domain queries measure 0.42-0.49.
+MIN_CONFIDENT_COSINE = 0.52
 
 
 def retrieve(query: str, top_k: int = 5) -> list[dict]:
@@ -614,11 +625,7 @@ def retrieve(query: str, top_k: int = 5) -> list[dict]:
     content_bm25_ranked_ids = idx.content_bm25.ranked_ids(query) if idx.content_bm25 else []
     content_rrf = _rrf_scores(content_embed_ranked_ids, content_bm25_ranked_ids)
 
-    # Abstention gate — see MIN_CONFIDENT_RRF's own comment. Checked against the peak fused
-    # score across the WHOLE candidate pool, before the top_k slice: no candidate here has
-    # cross-system-corroborated support, so returning any of them (even ones with a
-    # deceptively high raw embedding score) would be presenting a guess as a citation.
-    if not content_rrf or max(content_rrf.values()) < MIN_CONFIDENT_RRF:
+    if not content_rrf:
         return []
 
     scored = []
@@ -638,6 +645,13 @@ def retrieve(query: str, top_k: int = 5) -> list[dict]:
             "header": chunk["header"],
             "score": content_score,
         })
+
+    # Abstention gate. Moved here, and onto a different signal, after measuring the old one:
+    # see MIN_CONFIDENT_COSINE's comment for the numbers. It has to run after ranking because
+    # it reads the top result's own content score, which only exists once the blend has picked
+    # a winner.
+    if not results or results[0]["score"] < MIN_CONFIDENT_COSINE:
+        return []
     return results
 
 
