@@ -2203,6 +2203,23 @@ const NON_EXCLUSION_QUALIFIERS = [
 // per-term-match instead, against the text immediately preceding that specific match.
 const QUANTITY_QUALIFIER_RE = /\b(?:another|a second|an additional|a different|one more)\s*$/i;
 
+// Found by running a real OTP-verification design document through the engine. It said "The code
+// must not appear in any observability surface" — a rule about SECRETS NOT REACHING logs — and the
+// engine deleted the Observability card at high confidence, reporting "you excluded an
+// observability vendor" to a document whose own retention section requires reporting, disputes and
+// audit. The phrasing that gave the tool MORE security information produced the LESS secure
+// recommendation, which is the same shape as the NON_EXCLUSION_QUALIFIERS bug above.
+//
+// The grammar: in "must not <verb> in <X>", the thing being prohibited sits BEFORE the verb ("the
+// code") and X is a DESTINATION, not the thing being declined. Checked against the text
+// immediately preceding the matched term, like QUANTITY_QUALIFIER_RE, because the qualifying words
+// sit next to the term rather than at the start of the clause.
+//
+// Deliberately conservative in the same direction as NON_EXCLUSION_QUALIFIERS: where a phrase is
+// genuinely ambiguous ("must not be stored in Redis" could mean either), not excluding is the
+// cheaper error — an unwanted recommendation is visible, a silently deleted card is not.
+const CONTAINMENT_DESTINATION_RE = /\b(?:appear|appears|surface|surfaces|show\s+up|shows\s+up|leak|leaks|be\s+(?:logged|stored|written|sent|included|exposed|present|recorded|persisted|captured|placed|kept)|logged|stored|written|sent|included|exposed|recorded|persisted|captured|placed|kept)\s+(?:in|into|to|on|onto|within|through|via|across)\s+(?:(?:any|every|all|the|a|an|our|your|its|their|each)\s+)?$/i;
+
 // Shared by detectExclusions() and detectExcludedLanguageTerms() — the former only ever needed
 // the boolean, but picking a real language ALTERNATIVE (see _pickLanguageAlternative) needs to
 // know exactly which language(s) were named, so both are computed together here instead of
@@ -2224,7 +2241,8 @@ function findExclusions(text, termsByKey){
       for (const term of EXCLUSION_TERMS[key]){
         const re = new RegExp('\\b' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b');
         const hit = re.exec(clause);
-        if (hit && !QUANTITY_QUALIFIER_RE.test(clause.slice(0, hit.index))){
+        const before = hit ? clause.slice(0, hit.index) : '';
+        if (hit && !QUANTITY_QUALIFIER_RE.test(before) && !CONTAINMENT_DESTINATION_RE.test(before)){
           out[key] = true;
           if (termsByKey){
             if (!termsByKey[key]) termsByKey[key] = new Set();

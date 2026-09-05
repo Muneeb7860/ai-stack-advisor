@@ -166,6 +166,16 @@ NON_EXCLUSION_QUALIFIERS = (
 # match instead, against the text immediately preceding that specific match.
 _QUANTITY_QUALIFIER_RE = re.compile(r"\b(?:another|a second|an additional|a different|one more)\s*$", re.I)
 
+# Ported from index.html. "The code must not appear in any observability surface" is a rule about
+# secrets not reaching logs, not a rejection of observability — but it deleted the Observability
+# card at high confidence for a document that separately requires audit retention. In
+# "must not <verb> in <X>", the prohibited subject sits BEFORE the verb and X is a destination.
+# Conservative on ambiguity for the same reason as _NON_EXCLUSION_QUALIFIERS: an unwanted
+# recommendation is visible, a silently deleted card is not.
+_CONTAINMENT_DESTINATION_RE = re.compile(
+    r"\b(?:appear|appears|surface|surfaces|show\s+up|shows\s+up|leak|leaks|be\s+(?:logged|stored|written|sent|included|exposed|present|recorded|persisted|captured|placed|kept)|logged|stored|written|sent|included|exposed|recorded|persisted|captured|placed|kept)\s+(?:in|into|to|on|onto|within|through|via|across)\s+(?:(?:any|every|all|the|a|an|our|your|its|their|each)\s+)?$", re.I
+)
+
 
 def _record_exclusions(clause: str, out: dict, terms_by_key: dict | None = None) -> None:
     """Shared by every negation pattern (active, passive, neither/nor) — records every
@@ -178,7 +188,8 @@ def _record_exclusions(clause: str, out: dict, terms_by_key: dict | None = None)
     for key, terms in EXCLUSION_TERMS.items():
         for term in terms:
             m = re.search(r"\b" + re.escape(term) + r"\b", clause)
-            if m and not _QUANTITY_QUALIFIER_RE.search(clause[: m.start()]):
+            before = clause[: m.start()] if m else ""
+            if m and not _QUANTITY_QUALIFIER_RE.search(before) and not _CONTAINMENT_DESTINATION_RE.search(before):
                 out[key] = True
                 if terms_by_key is not None:
                     terms_by_key.setdefault(key, set()).add(term)
