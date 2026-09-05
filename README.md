@@ -7,7 +7,7 @@ in your text.
 
 Two layers, built to work independently:
 
-- **v1 — a single static HTML file.** A deterministic rule engine (`detectSignals()` + 45
+- **v1 — a single static HTML file.** A deterministic rule engine (`detectSignals()` + 59
   `pickX()` category functions) runs entirely in your browser. No server, no signup, no data
   leaves the page. This is the whole product if you never touch the backend.
 - **v2 — an optional FastAPI + Postgres backend.** Adds LLM-assisted refinement of the rule
@@ -55,16 +55,23 @@ the container, not from the host).
 
 ## What it actually does
 
-**Free-text or guided input.** Paste a requirement paragraph, or answer a 6-question wizard
-(equal-weight choice, neither is the default) that synthesizes the same kind of paragraph the
-rule engine already knows how to parse — no separate signal-mapping logic, same engine either
-way.
+**Four ways in.** Paste a requirement paragraph, answer a 6-question wizard (equal-weight
+choice, neither is the default), or upload a requirements document (`.md`, `.txt`, `.docx`), an
+architecture diagram (Draw.io, Mermaid, PlantUML, SVG) or a dependency manifest (`package.json`,
+`requirements.txt`, `go.mod`, `Gemfile`, `pom.xml`, `docker-compose.yml`). Every path funnels
+into the same `detectSignals()` — the wizard and the uploaders synthesize the same kind of
+paragraph the rule engine already knows how to parse, so there is no separate signal-mapping
+logic anywhere. Uploads are parsed in your browser and shown for you to confirm before anything
+is analysed.
 
-**A full recommendation, not just a stack pick.** Cloud, gateway, IAM, languages, architecture
-style, compute, messaging, service mesh, caching, database(s), containers, observability,
-frontend, CI/CD, DNS, LLM strategy, RAG architecture, guardrails, MCP servers, cost optimization
-and estimate, concurrency/throughput targets, and governance (KRA/KPI/SLA/reliability) — 16
-sections, each with a confidence level and a cited "why."
+**A full recommendation, not just a stack pick.** 25 stack cards — cloud, gateway, IAM,
+languages, architecture style, compute, messaging, service mesh, caching, database(s),
+real-time analytics, code execution sandbox, containers, observability, frontend, CI/CD,
+GitOps, DNS, hybrid connectivity, audit logging, privileged access, testing strategy, network
+boundary, multi-cloud bridging, security gates — plus LLM strategy, RAG architecture,
+guardrails, agent framework, LLM observability, MCP servers, cost optimization and estimate,
+concurrency/throughput targets, and governance (KRA/KPI/SLA/reliability). 19 sections in all,
+each with a confidence level and a cited "why."
 
 **"Why this pick," made inspectable.** Every stack card shows exactly which detected signals
 drove that specific recommendation — not just a confidence badge, the actual signal keys the
@@ -79,15 +86,34 @@ not just guessed.
 
 **Grounded follow-up Q&A, independent of refine.** Ask a question about any card's recommendation
 — it doesn't require having clicked refine first, just a real analysis to ground the answer in.
-Both refine and ask are grounded against an 11-domain use-case knowledge base (two-stage TF-IDF
-retrieval) when the requirement touches a covered domain.
+Both refine and ask are grounded against an 18-domain use-case knowledge base (two-stage hybrid
+retrieval — ChromaDB embeddings plus BM25, fused by Reciprocal Rank Fusion) when the requirement
+touches a covered domain.
 
 **Shareable, read-only.** Share a completed analysis via a link (`?shared=SLUG`) — renders the
-exact same 16-section view, minus the input form and AI buttons.
+exact same 19-section view, minus the input form and AI buttons.
 
 **Callable from an agent.** The same rule engine is exposed as an MCP tool
 (`recommend_stack()`) — verified byte-for-byte against the browser JS via an automated diff
 harness, not just code-reviewed.
+
+**What-if levers.** Four named levers on the results view (plus a stated concurrency figure read
+straight from the requirement) re-run the engine with one constraint changed and summarize which
+recommendations actually moved — so a "what if we drop the on-prem requirement" question is
+answered by the engine, not guessed at.
+
+**Challenge this pick.** Disagree with any card and say why. Entries are kept in `localStorage`
+and, when a backend is reachable, POSTed best-effort to `/api/analyses/{id}/disagreements` —
+this is the instrumentation behind the BRD's "disagreement rate" success metric.
+
+**Harness Readiness.** A separate five-question audit that scores how ready a team's *agent
+harness* is (system of record, tools, guardrails, verification, observability), with optional
+per-question evidence upload that checks a real file against the self-reported score, score
+history with per-component deltas, and a generated remediation pack. Entirely client-side —
+uploaded files are read in the browser and discarded, never transmitted.
+
+**Keyboard-first.** A ⌘K command palette, plus per-analysis history, diagram export (Draw.io,
+Mermaid, SVG) and an ADR export.
 
 ---
 
@@ -99,9 +125,9 @@ index.html                    v1 — the entire client-side app (rule engine, UI
 backend/                       v2 — FastAPI + Postgres + Alembic
   app/rule_engine.py            Python port of index.html's rule engine (verified identical)
   app/routers/{refine,ask}.py   LLM-assisted refinement / grounded Q&A endpoints
-  app/retrieval.py               Two-stage TF-IDF RAG retrieval
+  app/retrieval.py               Two-stage hybrid RAG retrieval (embeddings + BM25, RRF)
   app/mcp/server.py              MCP tool wrapper
-  tests/                         93 tests — see backend/README.md for the breakdown
+  tests/                         1,233 tests — see backend/README.md for the breakdown
 docs/                          BRD, PRD, DDD, design docs, ADRs, use-case knowledge base
 diagrams/                      C4 architecture diagram, ERD, UI mockups, guided-mode sketch
 KICKOFF_BRIEF.md               Full decision record + current status — read this first if
@@ -122,9 +148,11 @@ KICKOFF_BRIEF.md               Full decision record + current status — read th
   request body; the backend passes it straight through and never logs or persists it. This was
   an explicit, discussed decision — don't "simplify" it into a shared key without raising that
   first.
-- **Disclosed limitations over hidden ones.** Known gaps (TF-IDF vs. real embeddings, one
-  documented xfail in the retrieval eval set, etc.) are recorded as tests/comments, not silently
-  patched over or hidden.
+- **Disclosed limitations over hidden ones.** Known gaps are recorded as tests and comments
+  rather than quietly patched over: one documented `xfail` in the retrieval eval set (case 21 —
+  a false positive no confidence threshold on this corpus separates cleanly from genuine weak
+  hits; it needs a learned reranker, not a tuned constant), and CI's inability to enforce
+  retrieval quality at all, since no Ollama daemon runs there.
 
 For the full history of what's been decided, verified, and what's still open, start with
 [`KICKOFF_BRIEF.md`](KICKOFF_BRIEF.md).

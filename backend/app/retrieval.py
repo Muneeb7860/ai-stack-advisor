@@ -71,7 +71,7 @@ as matching once) and document-length normalization make it the better-establish
 exactly this pairing — it's the standard lexical half of hybrid dense+sparse retrieval systems
 elsewhere (Elasticsearch/Lucene's default scorer, Weaviate's and Qdrant's own hybrid-search
 lexical component). Implemented by hand below (~40 lines) rather than adding a dependency
-(`rank_bm25` or scikit-learn): the corpus is 11 files/~50 chunks, BM25 over that is a few dozen
+(`rank_bm25` or scikit-learn): the corpus is 18 files/~240 chunks, BM25 over that is a few dozen
 lines of arithmetic, and this project already goes out of its way to avoid an unnecessary
 runtime dependency (see the ChromaDB-default-embedding-function rejection above) — the same
 discipline applies here.
