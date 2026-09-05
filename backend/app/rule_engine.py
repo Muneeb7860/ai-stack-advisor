@@ -42,7 +42,11 @@ import re
 # negation reach 8 words past its own object: "no internet connectivity required after initial
 # container pull" excluded CONTAINERS, from a clause that exists to say containers are pulled.
 # "while" was already here; "after"/"once"/"until" are the same family.
-_CLAUSE_END = r"(?=\s+(?:because|since|but|however|whereas|although|while|after|before|once|until|unless|when|whenever|upon|following)\b|[.!?;\n]|$)"
+# A dash ends the clause too — "not building a web frontend — it is API only" excluded the API
+# category from a sentence whose second half says the product IS API-only. Guarded against a
+# dash used as a LIST continuation ("no database — or a cache") by refusing the boundary when
+# a coordinating conjunction follows.
+_CLAUSE_END = r"(?=\s+(?:because|since|but|however|whereas|although|while|after|before|once|until|unless|when|whenever|upon|following)\b|\s*[\u2014\u2013](?!\s*(?:or|and|nor)\b)|[.!?;\n]|$)"
 
 # Passive-voice negation phrases ("Kubernetes must not be used") — the excluded subject sits
 # BEFORE the negation phrase here, which the active-voice "no|not|..." regexes can never see
@@ -75,7 +79,7 @@ _PASSIVE_NEGATION_ALT = "|".join(_PASSIVE_NEGATION_PHRASES)
 # equivalent of _CLAUSE_END, which achieves the same thing looking forward.
 # Same list as _CLAUSE_END, and it must stay the same list — a subordinator that ends an
 # active-voice negation must end a passive one too, or the two phrasings disagree.
-_PASSIVE_NEGATION_PREFIX = r"(?<!\w)(?:(?!\b(?:because|since|but|however|whereas|although|while|after|before|once|until|unless|when|whenever|upon|following)\b)[^.!?;\n]){0,300}?"
+_PASSIVE_NEGATION_PREFIX = r"(?<!\w)(?:(?!\b(?:because|since|but|however|whereas|although|while|after|before|once|until|unless|when|whenever|upon|following)\b)[^.!?;\n\u2014\u2013]){0,300}?"
 
 
 def strip_negations(text: str) -> str:
@@ -2984,6 +2988,27 @@ def apply_exclusions(rec: dict, s: dict) -> dict:
         rec["observability"] = excluded_pick("an observability vendor")
     if ex.get("languages"):
         rec["languages"] = _pick_language_alternative(s, s.get("excludedLanguageTerms") or set())
+    # Ported from index.html. Found by a domain x exclusion sweep: these two registered the
+    # exclusion correctly and then recommended the excluded thing anyway. The ten categories above
+    # replace their card; "api" and "serverless" only ever suppressed the VENDOR pick, so the
+    # comparison greyed out while the primary card carried on. Recommending what the user
+    # explicitly refused is worse than deleting what they wanted.
+    if ex.get("api"):
+        rec["gateway"] = excluded_pick("an API/gateway layer")
+    # Serverless is deliberately NOT excluded_pick(): ruling out serverless does not rule out
+    # COMPUTE — the code still has to run somewhere. Same treatment as _pick_language_alternative,
+    # which answers an excluded language with a different language rather than with silence.
+    if ex.get("serverless") and re.search(
+            r"serverless|lambda|cloud run|cloud functions|fargate",
+            str((rec.get("compute") or {}).get("v") or ""), re.I):
+        rec["compute"] = {
+            "v": "Containers on Kubernetes (managed EKS/GKE/AKS, or self-managed) — no serverless",
+            "why": "You ruled out serverless, so the compute recommendation is containers instead. "
+                   "This is a stated constraint rather than a heuristic default: long-running "
+                   "workers, predictable latency and no cold starts are the usual reasons, and "
+                   "containers give all three at the cost of running an orchestrator. If the "
+                   "exclusion was picked up in error, rephrase and re-run.",
+            "conf": "high"}
 
     # rag/llm carry different shapes from the {v, why, conf} cards.
     if ex.get("rag"):

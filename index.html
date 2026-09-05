@@ -2102,7 +2102,12 @@ function clearAll(){
 // excluded CONTAINERS — from a clause that exists to say containers are pulled. It reported
 // dockerMentioned and excluded.containers as true simultaneously. "while" was already here;
 // "after"/"once"/"until" are the same family and end a negation's scope the same way.
-const NEGATION_CLAUSE_END = '(?=\\s+(?:because|since|but|however|whereas|although|while|after|before|once|until|unless|when|whenever|upon|following)\\b|[.!?;\\n]|$)';
+// A dash ends the clause too. "We are not building a web frontend — it is API only" excluded
+// the API category from a sentence whose second half says the product IS API-only: the dash
+// starts a new independent clause and the negation was reaching straight through it.
+// Guarded against a dash used as a LIST continuation — "no database — or a cache" must keep
+// excluding the cache — by refusing the boundary when a coordinating conjunction follows.
+const NEGATION_CLAUSE_END = '(?=\\s+(?:because|since|but|however|whereas|although|while|after|before|once|until|unless|when|whenever|upon|following)\\b|\\s*[\u2014\u2013](?!\\s*(?:or|and|nor)\\b)|[.!?;\\n]|$)';
 
 // Passive-voice negation phrases ("Kubernetes must not be used") — the excluded subject sits
 // BEFORE the negation phrase here, which the active-voice "no|not|..." regexes can never see
@@ -2137,7 +2142,7 @@ const PASSIVE_NEGATION_ALT = PASSIVE_NEGATION_PHRASES.join('|');
 // Same list as NEGATION_CLAUSE_END above, and it has to stay the same list — a subordinator
 // that ends an active-voice negation's scope must end a passive one's too, or the two
 // phrasings of the same sentence disagree.
-const PASSIVE_NEGATION_PREFIX = '(?<!\\w)(?:(?!\\b(?:because|since|but|however|whereas|although|while|after|before|once|until|unless|when|whenever|upon|following)\\b)[^.!?;\\n]){0,300}?';
+const PASSIVE_NEGATION_PREFIX = '(?<!\\w)(?:(?!\\b(?:because|since|but|however|whereas|although|while|after|before|once|until|unless|when|whenever|upon|following)\\b)[^.!?;\\n\u2014\u2013]){0,300}?';
 
 // Passive-voice clauses are stripped FIRST: "Kubernetes must not be used" would otherwise have
 // its "not be used" tail consumed by the active-voice pass below (which fires on the bare word
@@ -4843,6 +4848,29 @@ function applyExclusions(rec, s){
   if (ex.mesh)          rec.mesh  = excludedPick('a service mesh');
   if (ex.iam)           rec.iam   = excludedPick('a managed identity provider');
   if (ex.observability) rec.obs   = excludedPick('an observability vendor');
+  // Found by a domain x exclusion sweep: these two categories registered the exclusion correctly
+  // and then recommended the excluded thing anyway. Ten categories above replace their card;
+  // `api` and `serverless` only ever called suppress() on the VENDOR pick, so the comparison
+  // table greyed out while the primary card carried on. "Avoid serverless entirely" still
+  // returned "Hybrid: serverless for bursty/event-driven work"; "we do not need an API" still
+  // returned "Cloud-native gateway (AWS API Gateway / GCP API Gateway)". Recommending what the
+  // user explicitly refused is worse than deleting what they wanted — it is the same silence,
+  // pointing the wrong way.
+  if (ex.api) rec.gw = excludedPick('an API/gateway layer');
+  // Serverless is deliberately NOT excludedPick(): ruling out serverless does not rule out
+  // COMPUTE — the code still has to run somewhere, so blanking the card would answer a real
+  // question with nothing. Same treatment as _pickLanguageAlternative(), which answers an
+  // excluded language with a different language rather than with silence. Only rewritten when
+  // the pick actually names serverless; the on-prem and high-scale branches already return
+  // Kubernetes and must be left alone.
+  if (ex.serverless && /serverless|lambda|cloud run|cloud functions|fargate/i.test(String(rec.compute && rec.compute.v || ''))){
+    rec.compute = {v:'Containers on Kubernetes (managed EKS/GKE/AKS, or self-managed) — no serverless',
+      why:'You ruled out serverless, so the compute recommendation is containers instead. This is a ' +
+          'stated constraint rather than a heuristic default: long-running workers, predictable ' +
+          'latency and no cold starts are the usual reasons, and containers give all three at the ' +
+          'cost of running an orchestrator. If the exclusion was picked up in error, rephrase and re-run.',
+      conf:'high'};
+  }
   if (ex.languages)     rec.lang  = _pickLanguageAlternative(s, s.excludedLanguageTerms || []);
 
   // rag/llm carry different shapes from the {v,why,conf} cards — handle each explicitly rather
