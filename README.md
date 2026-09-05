@@ -127,7 +127,7 @@ backend/                       v2 — FastAPI + Postgres + Alembic
   app/routers/{refine,ask}.py   LLM-assisted refinement / grounded Q&A endpoints
   app/retrieval.py               Two-stage hybrid RAG retrieval (embeddings + BM25, RRF)
   app/mcp/server.py              MCP tool wrapper
-  tests/                         1,233 tests — see backend/README.md for the breakdown
+  tests/                         1,299 tests — see backend/README.md for the breakdown
 docs/                          BRD, PRD, DDD, design docs, ADRs, use-case knowledge base
 diagrams/                      C4 architecture diagram, ERD, UI mockups, guided-mode sketch
 KICKOFF_BRIEF.md               Full decision record + current status — read this first if

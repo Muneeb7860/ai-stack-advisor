@@ -568,6 +568,11 @@ def detect_signals(text: str) -> dict:
     # derived from the same value, or a change to one silently stops matching the other.
     _ct = detect_concurrency_target(text)
     _tt = detect_throughput_target(text)
+    # "in MVP scope" / "out of MVP scope" scopes a decision; it does not say the project is
+    # an MVP. Only a text where EVERY "mvp" is such a phrase loses the stage claim.
+    _mvp_all = len(re.findall(r"\bmvp\b", str(text or "").lower()))
+    _mvp_scoping = len(re.findall(r"\b(?:in|out of|within|outside|into)\s+(?:the\s+)?mvp\s+scope\b", str(text or "").lower()))
+    _mvp_is_stage_claim = _mvp_all > 0 and _mvp_all > _mvp_scoping
     _team = detect_team_size(text)
 
     strong_on_prem = has_raw(
@@ -631,7 +636,12 @@ def detect_signals(text: str) -> dict:
         "finance": has(["fintech", "bank", "payment", "fraud", "pci", "transaction", "trading", "ledger", "finance"]),
         "ecommerce": has(["ecommerce", "e-commerce", "retail", "shopping", "product recommendation", "cart", "checkout"]),
         "enterprise": has(["enterprise", "large organization", "corporate", "multi-region", "audit logging", "role-based access", "okta", "sso"]),
-        "startupMvp": has(["startup", "mvp", "early-stage", "small team", "move fast", "budget conscious", "budget-conscious", "bootstrapped"]),
+        # Ported from index.html. "mvp" split out of the keyword list: a 300M/day enterprise
+        # design document tripped startupMvp on one occurrence — "Is `cancel` in MVP scope?",
+        # a row in its own decisions table — which then out-voted four genuine `enterprise`
+        # mentions in pick_iam. Scoping a decision is not declaring a stage. Same shape as
+        # _TIMELINE_DISQUALIFIERS, where "retain audit logs for 12 months" read as a ship date.
+        "startupMvp": has(["startup", "early-stage", "small team", "move fast", "budget conscious", "budget-conscious", "bootstrapped"]) or _mvp_is_stage_claim,
         # Distinct from startupMvp: a startup still intends to acquire real users and may need to
         # scale. A minimal/learning project explicitly does not — mirrors index.html's minimalProject.
         "minimalProject": has([
