@@ -28,18 +28,60 @@ vertical buried inside NAICS "Manufacturing" and "Professional Services".
 
 ## Signals / triggers
 
-patients, clinicians, providers, EHR, EMR, HL7, FHIR, DICOM, PACS, HIPAA, claims, payer,
-policyholders, premiums, underwriting, claims adjuster, ACORD, actuarial, core banking, ledger,
-settlement, ISO 20022, SWIFT, ISO 8583, open banking, AML, KYC, Basel, subscribers, MSISDN, BSS,
-OSS, charging, interconnect, number portability, TM Forum, SKUs, storefront, basket, fulfilment,
-order management, EDI, GS1, GTIN, guests, reservations, rooms, PMS, channel manager, rate parity,
-OTA, GDS, shipments, consignments, waybill, TMS, WMS, ELD, customs, freight, telematics, work
-orders, shop floor, MES, SCADA, PLC, historian, OPC-UA, ISA-95, OT network, substation, grid,
-meter, AMI, DERMS, IEC 61850, NERC CIP, BIM, IFC, permitting, lease accounting, students,
-enrolment, SIS, LMS, FERPA, LTI, sorties, mission systems, C4ISR, ITAR, CMMC, DO-178C,
-classified enclave, tactical data link, growers, agronomy, ISOBUS, yield maps, rights window,
-royalties, MAM, DAM, DRM, matters, ethical wall, LEDES, e-discovery, clinical trial, GxP,
-21 CFR Part 11, CDISC, LIMS, case management, FedRAMP, StateRAMP, records retention
+Grouped rather than listed flat, and each group is its own `###` so it becomes its own routing
+chunk. A single Signals section spanning eighteen verticals embeds to the centroid of healthcare,
+banking, telecom, hospitality, defence and agriculture at once — which points nowhere, and measured
+that way: this document failed to route at all for "guests book rooms across several OTAs", losing
+to three documents that never mention hospitality. Narrowing the section to hospitality terms alone
+moved it from unrouted to rank 1, which is what identified dilution as the cause rather than
+content ranking. Grouping keeps every vertical routable without any group being diluted by the
+others.
+
+### Signals / triggers — financial services
+
+core banking, ledger, double-entry, settlement, reconciliation, ISO 20022, SWIFT, ISO 8583,
+open banking, PSD2, AML, KYC, Basel, policyholders, premiums, underwriting, claims adjuster,
+policy administration, ACORD, actuarial, solvency, OMS, EMS, FIX, best execution, post-trade,
+market data, MiFID
+
+### Signals / triggers — health and life sciences
+
+patients, clinicians, providers, EHR, EMR, HL7, FHIR, DICOM, PACS, HIPAA, HITECH, claims, payer,
+interface engine, e-prescribing, clinical trial, GxP, 21 CFR Part 11, CDISC, LIMS, CTMS,
+pharmacovigilance, computer system validation
+
+### Signals / triggers — commerce, hospitality and travel
+
+SKUs, storefront, basket, checkout, fulfilment, order management, PIM, merchandising, EDI, GS1,
+GTIN, guests, reservations, rooms, hotel, property management system, PMS, central reservation
+system, channel manager, rate parity, availability, overbooking, OTA, GDS, distribution channels,
+revenue management, passenger service system
+
+### Signals / triggers — physical operations and the OT boundary
+
+shipments, consignments, waybill, freight, carriers, customs, TMS, WMS, ELD, telematics, route
+optimisation, work orders, shop floor, MES, MOM, SCADA, PLC, DCS, historian, OPC-UA, ISA-95,
+MTConnect, IEC 62443, OT network, substation, grid, meter, AMI, DERMS, IEC 61850, DNP3, Modbus,
+NERC CIP, growers, agronomy, ISOBUS, yield maps, intermittent connectivity, offline-first
+
+### Signals / triggers — public sector, defence and education
+
+case management, permitting, licensing, benefits eligibility, records retention, FedRAMP,
+StateRAMP, Section 508, procurement cycle, sorties, mission systems, C4ISR, ITAR, EAR, CMMC,
+DO-178C, DO-254, classified enclave, tactical data link, Link 16, MIL-STD-1553, students,
+enrolment, SIS, LMS, FERPA, COPPA, LTI, academic calendar
+
+### Signals / triggers — media, legal and professional services
+
+rights window, royalties, licensing territory, MAM, DAM, DRM, SMPTE, MXF, IMF, EIDR, playout,
+transcoding, matters, ethical wall, privilege, LEDES, e-discovery, EDRM, practice management,
+document management, matter billing
+
+### Signals / triggers — cross-cutting
+
+system of record, vertical spine, regulatory shell, industry vertical, integration protocol,
+interface engine, data exchange standard, registration regime, certification regime, conduct
+regime, IT/OT boundary, data gravity, vertical SaaS, build versus buy
 
 ## Decision points
 
@@ -174,6 +216,27 @@ than two projects inside one vertical with different shapes.
 | Education | The academic calendar — releases happen between terms or not at all |
 | Media | Rights windows decide what may be served, to whom, in which territory |
 | Legal | Ethical walls: access boundaries that must be provable, not merely implemented |
+
+Two of those rows describe a problem the rest of this corpus discusses under a different name, and
+the collision is worth stating because it misleads both readers and retrieval.
+
+**Hospitality distribution is a parity problem, not a synchronisation problem.** A hotel's rates
+and availability have to agree across a property management system, a central reservation system,
+a channel manager, a dozen OTAs and a GDS — and the words people reach for are "keep the rates in
+sync across channels". That phrasing collides with real-time collaborative editing, where "sync"
+means converging concurrent edits to one document via CRDTs or OT. They are different problems with
+opposite shapes. Rate parity has one authoritative source (the PMS), many read-mostly replicas, and
+minutes of acceptable staleness; the failure is a commercial incident — an overbooking or a rate
+disparity a channel penalises you for — not a lost keystroke. Architect it as outbound
+reconciliation against a system of record over HTNG/OpenTravel/NDC, not as a convergence protocol.
+Guests booking rooms across several OTAs is a distribution problem.
+
+**Logistics visibility is the same shape again, with a worse clock.** Shipments, consignments and
+carrier events arrive late, out of order, and sometimes never, so the truth about where a shipment
+is arrives after the fact. Event sourcing and reconciliation, not transactional correctness.
+
+Both are the general rule from §G in concrete form: the vertical's name tells you less than the
+data-gravity shape underneath it, and the shared vocabulary actively misleads.
 
 ## Anti-patterns
 

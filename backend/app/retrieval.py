@@ -392,9 +392,31 @@ class _Index:
                 else:
                     content_chunks.append(chunk)
 
-        # In-memory client, rebuilt fresh each process — no on-disk persistence needed for an
-        # 11-file static corpus (matches the old singleton's lifetime exactly).
+        # In-memory client, rebuilt fresh each process — no on-disk persistence needed for a
+        # static corpus (matches the old singleton's lifetime exactly).
         self.client = chromadb.EphemeralClient()
+
+        # Drop any collections a PREVIOUS build left behind. chromadb.EphemeralClient() does not
+        # give you a private database: clients constructed with identical settings share one
+        # in-process System, so a second build() sees the first build's collections and
+        # create_collection() raises "Collection [kb_routing] already exists".
+        #
+        # That made the embedding-stamp guard's promised self-healing a no-op. _get_index()
+        # discards the stale index on a confirmed stamp mismatch and the docstring says "the next
+        # retrieve() call will rebuild it fresh" — but the rebuild crashed with an unhandled
+        # chromadb.errors.InternalError, so retrieval stayed broken for the rest of the process
+        # instead of recovering. Exactly backwards from the guard's intent, and worse than the
+        # silent-wrong-answer it exists to prevent, because it takes the whole endpoint down.
+        #
+        # Found when a new test file happened to run after the stamp-mismatch test and every
+        # retrieval in it returned nothing. The existing test asserted only that the index was
+        # discarded (`assert retr._index is None`) and never that the rebuild afterwards worked,
+        # which is why a broken rebuild path sat green.
+        for _stale in ("kb_routing", "kb_content"):
+            try:
+                self.client.delete_collection(_stale)
+            except Exception:  # noqa: BLE001 - absent is the normal case, not an error
+                pass
 
         routing_docs = list(routing_texts_by_doc.keys())
         routing_texts = [" ".join(routing_texts_by_doc[d]) for d in routing_docs]

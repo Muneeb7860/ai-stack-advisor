@@ -261,3 +261,14 @@ def test_embedding_model_stamp_mismatch_fails_loudly_not_silently(monkeypatch, c
     # Self-healing: the stale singleton was torn down, so the next call rebuilds fresh rather
     # than staying permanently broken for the rest of the process.
     assert retr._index is None
+
+    # ...and the rebuild has to actually WORK. This assertion was missing, and without it the
+    # rebuild path was broken for an unknown length of time while this test stayed green:
+    # chromadb.EphemeralClient() shares one in-process System between clients, so build() hit
+    # "Collection [kb_routing] already exists" and raised an unhandled InternalError. Every
+    # retrieval after a stamp mismatch failed for the rest of the process — the opposite of the
+    # self-healing this test's own comment claims. Asserting the discard without asserting the
+    # recovery tested half the behaviour.
+    monkeypatch.undo()
+    healed = retr.retrieve("multi-tenant SaaS tenant isolation", top_k=2)
+    assert healed, "the index did not rebuild after a stamp mismatch — self-healing is broken"
