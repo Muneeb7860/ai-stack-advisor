@@ -200,11 +200,20 @@ NON_EXCLUSION_QUALIFIERS = (
 _LIVE_REALTIME_RE = re.compile(
     r"(?<!\bgo\s)(?<!\bgoes\s)(?<!\bgoing\s)(?<!\bwent\s)(?<!\bgo-)\blive\b", re.I)
 
+# A place you own is a self-hosting verb too. The first version required "our own <noun>", which
+# no English speaker says about a colo or a rack — you say "our colo", "our racks", "our data
+# centre" — so "We already run Docker Swarm on servers in our colo" was missed. It shipped as a
+# stated limitation in 68cd8f5 rather than being widened blind; this is the measurement.
+# "own" stays REQUIRED for hardware/servers/infrastructure/gpus: "our infrastructure" is what a
+# team on managed EKS calls their cluster, and the possessive alone does not mean they operate it.
+_SELF_HOST_PLACE = (
+    r"our\s+(?:own\s+)?(?:colo(?:cation)?(?:\s+facility)?|racks?|data\s*cent(?:er|re))"
+)
 _SELF_HOST_TOOL_RE = re.compile(
     r"(?:(?:self[\s-]?host(?:ed|ing)?|run(?:ning)?\s+our\s+own|our\s+own|on[\s-]?prem(?:ise|ises)?|"
-    r"bare[\s-]?metal|manage\s+our\s+own)[^.!?;\n]{0,40}?\b(?:docker|kubernetes|k8s)\b)"
+    r"bare[\s-]?metal|manage\s+our\s+own|" + _SELF_HOST_PLACE + r")[^.!?;\n]{0,40}?\b(?:docker|kubernetes|k8s)\b)"
     r"|(?:\b(?:docker|kubernetes|k8s)\b[^.!?;\n]{0,40}?(?:self[\s-]?host(?:ed|ing)?|"
-    r"our\s+own\s+(?:hardware|servers|infrastructure|gpus?|data\s*cent(?:er|re))|bare[\s-]?metal|on[\s-]?prem))",
+    r"our\s+own\s+(?:hardware|servers|infrastructure|gpus?|data\s*cent(?:er|re))|" + _SELF_HOST_PLACE + r"|bare[\s-]?metal|on[\s-]?prem))",
     re.I,
 )
 _QUANTITY_QUALIFIER_RE = re.compile(r"\b(?:another|a second|an additional|a different|one more)\s*$", re.I)

@@ -221,3 +221,47 @@ def test_both_engines_agree_on_the_live_boundary():
     assert "realtime: has(['real-time','real time','low latency','streaming'])" in js, (
         "bare 'live' is back in the JS realtime term list"
     )
+
+
+# ---------------------------------------------------------------- a place you own is a self-host verb
+# The container-tool narrowing (68cd8f5) shipped with a stated recall gap: it required "our own
+# <noun>", and nobody says "our own colo" — you say "our colo", "our racks", "our data centre". So
+# "We already run Docker Swarm on servers in our colo" named a tool inside a building the team
+# operates and still did not set selfHostInfra. Recorded rather than widened blind at the time;
+# this is the measurement that closes it.
+@pytest.mark.parametrize("text", [
+    "We already run Docker Swarm on servers in our colo.",
+    "Kubernetes running in our colocation facility.",
+    "Docker hosts sitting in our racks.",
+    "In our colo we run Kubernetes for everything.",
+    "We rack our own Kubernetes nodes in our data centre.",
+])
+def test_a_container_tool_in_premises_we_operate_is_self_hosting(text):
+    assert _self_host(text), f"{text!r} should set selfHostInfra but did not"
+
+
+@pytest.mark.parametrize("text", [
+    # "own" stays required for these: a team on managed EKS calls the cluster "our infrastructure"
+    # and the nodes "our servers", and the possessive alone says nothing about who operates them.
+    "Kubernetes manages our infrastructure across three regions.",
+    "Our servers run Docker images built by CI.",
+    "Our cloud provider's data center runs the Kubernetes control plane.",
+    "Managed GKE Autopilot handles our Kubernetes for us.",
+])
+def test_a_possessive_alone_does_not_make_it_self_hosted(text):
+    assert not _self_host(text), f"{text!r} wrongly set selfHostInfra"
+
+
+def test_the_place_list_is_identical_in_both_engines():
+    """Both engines carry this regex by hand. A place added to one side only is a signal that
+    fires in the browser and not through the API — the divergence class 300718d closed for the
+    brownfield signals."""
+    js = INDEX_HTML.read_text(encoding="utf-8")
+    m = re.search(r"const SELF_HOST_TOOL_RE = /(.+?)/i;", js)
+    assert m, "SELF_HOST_TOOL_RE not found in index.html"
+    place = r"our\s+(?:own\s+)?(?:colo(?:cation)?(?:\s+facility)?|racks?|data\s*cent(?:er|re))"
+    assert m.group(1).count(place) == 2, (
+        "the owned-place alternative must appear in BOTH branches of the JS regex "
+        "(tool-after-verb and verb-after-tool)"
+    )
+    assert "\\\\s" not in m.group(1), "the JS regex is double-escaped"

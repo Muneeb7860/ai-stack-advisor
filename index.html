@@ -2284,7 +2284,9 @@ const NON_EXCLUSION_QUALIFIERS = [
 // March" (a launch date) out of a latency signal.
 const LIVE_REALTIME_RE = /(?<!\bgo\s)(?<!\bgoes\s)(?<!\bgoing\s)(?<!\bwent\s)(?<!\bgo-)\blive\b/i;
 
-const SELF_HOST_TOOL_RE = /(?:(?:self[\s-]?host(?:ed|ing)?|run(?:ning)?\s+our\s+own|our\s+own|on[\s-]?prem(?:ise|ises)?|bare[\s-]?metal|manage\s+our\s+own)[^.!?;\n]{0,40}?\b(?:docker|kubernetes|k8s)\b)|(?:\b(?:docker|kubernetes|k8s)\b[^.!?;\n]{0,40}?(?:self[\s-]?host(?:ed|ing)?|our\s+own\s+(?:hardware|servers|infrastructure|gpus?|data\s*cent(?:er|re))|bare[\s-]?metal|on[\s-]?prem))/i;
+// A place you own is a self-hosting verb too — see rule_engine.py's _SELF_HOST_PLACE for why
+// "our colo"/"our racks" need no "own", and why hardware/servers/infrastructure still do.
+const SELF_HOST_TOOL_RE = /(?:(?:self[\s-]?host(?:ed|ing)?|run(?:ning)?\s+our\s+own|our\s+own|on[\s-]?prem(?:ise|ises)?|bare[\s-]?metal|manage\s+our\s+own|our\s+(?:own\s+)?(?:colo(?:cation)?(?:\s+facility)?|racks?|data\s*cent(?:er|re)))[^.!?;\n]{0,40}?\b(?:docker|kubernetes|k8s)\b)|(?:\b(?:docker|kubernetes|k8s)\b[^.!?;\n]{0,40}?(?:self[\s-]?host(?:ed|ing)?|our\s+own\s+(?:hardware|servers|infrastructure|gpus?|data\s*cent(?:er|re))|our\s+(?:own\s+)?(?:colo(?:cation)?(?:\s+facility)?|racks?|data\s*cent(?:er|re))|bare[\s-]?metal|on[\s-]?prem))/i;
 const QUANTITY_QUALIFIER_RE = /\b(?:another|a second|an additional|a different|one more)\s*$/i;
 
 // Found by running a real OTP-verification design document through the engine. It said "The code
