@@ -111,7 +111,11 @@
     --dot-rgb:10,12,17; --dot-alpha:0.05;
   }
   *{box-sizing:border-box;}
+  /* Fonts are loaded via <link> in <head>, not @import — blocking @import delays first paint. */
   html{-webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;}
+  /* Skip-to-content link — visible only on keyboard focus, first focusable element in <body>. */
+  .skip-link{position:absolute; left:-9999px; top:auto; width:1px; height:1px; overflow:hidden; z-index:10001;}
+  .skip-link:focus{position:fixed; top:8px; left:8px; width:auto; height:auto; overflow:visible; padding:8px 16px; background:var(--accent); color:#fff; border-radius:var(--radius); font-weight:600; font-size:14px; text-decoration:none; box-shadow:0 2px 8px rgba(0,0,0,0.3);}
   /* Global keyboard-focus indicator. Several components below remove the default outline on
      plain :focus (textarea, refine-keyprompt/ask-input-row inputs) so a mouse click doesn't
      leave a visible ring — that's a legitimate choice, but only if a keyboard user still gets
@@ -245,7 +249,7 @@
      that class) so it sits in normal flow at the bottom of the sidebar instead of floating over
      the viewport corner. */
   .app-sidebar .theme-toggle{position:static; align-self:flex-start; margin-top:8px;}
-  .app-main{flex:1; min-width:0;}
+  .app-main, main.app-main{flex:1; min-width:0;}
   /* Phase 5a (responsive collapse) — the mobile bottom nav. Hidden outside the 860px breakpoint
      (below); reuses the exact onclick handlers already wired to the desktop sidebar buttons. */
   .mobile-bottom-nav{display:none;}
@@ -1453,10 +1457,11 @@
 </style>
 </head>
 <body>
+<a href="#appMain" class="skip-link">Skip to main content</a>
 
 <!-- Reusable glide panel — single instance, populated by openGlidePanel() -->
 <div class="glide-backdrop" id="glideBackdrop" onclick="closeGlidePanel()"></div>
-<div class="glide-panel" id="glidePanel">
+<div class="glide-panel" id="glidePanel" role="dialog" aria-modal="true" aria-label="Detail panel">
   <div class="glide-head"><h3 id="glideTitle"></h3><button class="glide-close" onclick="closeGlidePanel()" aria-label="Close">✕</button></div>
   <div class="glide-list" id="glideList"></div>
 </div>
@@ -1584,10 +1589,10 @@
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
     </button>
     <button type="button" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle theme">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z"/></svg>
     </button>
   </nav>
   <div class="app-main">
+  <main id="appMain">
 
 <!-- ================= Mode picker (decision #3: equal weight, no default) ================= -->
 <div id="screenMode">
@@ -1751,7 +1756,7 @@
   <div class="wiz-step" data-step="8">
     <div class="wiz-q" id="wizStep8Q">Anything else worth knowing?</div>
     <div class="wiz-sub" id="wizStep8Sub">Optional — existing cloud provider, latency needs, budget constraints, anything the questions above didn't cover.</div>
-    <textarea id="wizFreetext" style="width:100%; min-height:90px; resize:vertical; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); padding:12px; font-family:inherit;" placeholder="e.g. We're already on AWS, need to launch in 6 weeks, budget is tight..."></textarea>
+    <textarea id="wizFreetext" aria-label="Additional context (optional)" style="width:100%; min-height:90px; resize:vertical; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); padding:12px; font-family:inherit;" placeholder="e.g. We're already on AWS, need to launch in 6 weeks, budget is tight..."></textarea>
     <div class="skip-note" id="wizStep8Skip">Skip this and we'll work from your answers above alone.</div>
   </div>
 
@@ -1767,7 +1772,7 @@
 <div class="wrap" id="screenUpload" style="max-width:760px; margin:0 auto; padding:8px 0 20px;">
   <div class="intro-col">
     <header>
-      <h1>Upload Architecture Diagram</h1>
+      <h2>Upload Architecture Diagram</h2>
       <div class="sub">Upload a <b>requirements document</b> (PRD, BRD or spec — .md, .txt, .docx), an <b>architecture diagram</b> (Draw.io, Mermaid, PlantUML, SVG), or a <b>dependency manifest</b> (package.json, requirements.txt, go.mod, Gemfile, pom.xml, docker-compose.yml). Everything is parsed in your browser and shown for you to confirm before anything is analysed. For a document, sections like <i>Non-Goals</i>, <i>Alternatives Rejected</i> and <i>Glossary</i> are excluded from the requirements — you will see exactly what was dropped and what it would have changed.</div>
       <div class="sub" style="margin-top:8px;"><a href="#" onclick="backToMode(); return false;" style="color:var(--accent); text-decoration:none;">← choose a different way to describe this</a></div>
     </header>
@@ -1782,7 +1787,7 @@
            disagreeing about what is acceptable is the actual bug; an unfiltered picker matches
            the drop zone, and parseDiagramInput already falls through harmlessly on anything
            it does not recognise. -->
-        <input type="file" id="diagramFileInput" style="display:none;" onchange="handleDiagramFileSelect(event)">
+        <input type="file" id="diagramFileInput" style="display:none;" aria-label="Upload architecture diagram or document" onchange="handleDiagramFileSelect(event)">
         <div class="dropzone-icon">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"/></svg>
         </div>
@@ -1828,7 +1833,7 @@
      research found got bought out or archived in 2026). -->
 <div class="wrap" id="screenHarnessAudit" style="max-width:640px; margin:0 auto; padding:8px 0 20px;">
   <header>
-    <h1>Audit your harness</h1>
+    <h2>Audit your harness</h2>
     <div class="sub">Five questions, one per component, scored 0–3 against the self-audit rubric from the Harness Engineering Build Guide. This scores your team's own practices — it never recommends a vendor.</div>
     <div class="sub" style="margin-top:8px;"><a href="#" onclick="backToMode(); return false;" style="color:var(--accent); text-decoration:none;">← choose a different way to describe this</a></div>
   </header>
@@ -1843,9 +1848,9 @@
   </div>
 </div>
 
-<div class="wrap" id="screenHarnessResults" style="max-width:760px; margin:0 auto; padding:8px 0 40px;">
+<div class="wrap" id="screenHarnessResults" aria-live="polite" style="max-width:760px; margin:0 auto; padding:8px 0 40px;">
   <header>
-    <h1>Harness Readiness</h1>
+    <h2>Harness Readiness</h2>
     <div class="sub" id="haResultsSub"></div>
     <div class="sub" style="margin-top:8px;"><a href="#" onclick="backToMode(); return false;" style="color:var(--accent); text-decoration:none;">← start over</a></div>
   </header>
@@ -1870,7 +1875,7 @@
       <button type="button" class="ghost" onclick="copyTurnkeyAgentsMd()">Copy AGENTS.md</button>
       <button type="button" class="ghost" onclick="copyTurnkeyClaudeSettings()">Copy .claude/settings.json</button>
     </div>
-    <div id="haRemediationNotice" style="font-size:12px; color:var(--good-text); margin-top:8px; display:none;"></div>
+    <div id="haRemediationNotice" role="status" aria-live="polite" style="font-size:12px; color:var(--good-text); margin-top:8px; display:none;"></div>
   </div>
   <div class="card" id="haHistoryCard" style="display:none;"></div>
   <div class="card" id="haFeedbackCard">
@@ -1880,7 +1885,7 @@
         <button type="button" class="ha-evidence-toggle" id="haFeedbackYes" onclick="haSetFeedbackHelpful(true)">Yes, useful</button>
         <button type="button" class="ha-evidence-toggle" id="haFeedbackNo" onclick="haSetFeedbackHelpful(false)">Not really</button>
       </div>
-      <textarea id="haFeedbackComment" rows="3" placeholder="Anything you'd change, or that was missing? (optional)" style="width:100%; box-sizing:border-box; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text); padding:9px 11px; font-family:inherit; font-size:13px; resize:vertical;"></textarea>
+      <textarea id="haFeedbackComment" aria-label="Harness audit feedback (optional)" rows="3" placeholder="Anything you'd change, or that was missing? (optional)" style="width:100%; box-sizing:border-box; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text); padding:9px 11px; font-family:inherit; font-size:13px; resize:vertical;"></textarea>
       <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:10px;">
         <button type="button" class="ha-evidence-toggle" id="haFeedbackSubmit" onclick="submitHarnessFeedback()" disabled>Send feedback</button>
         <span style="font-size:11.5px; color:var(--muted2); line-height:1.5;">Sends your score (<span id="haFeedbackScorePreview"></span>), the five component answers, and your comment. Nothing else — no email, no identifier, and not the requirement text from any other mode.</span>
@@ -1894,7 +1899,7 @@
 <div class="wrap" id="screenFreetext">
  <div class="intro-col">
   <header>
-    <h1>AI Stack Advisor</h1>
+    <h2>AI Stack Advisor</h2>
     <div class="sub">Describe your product or business requirement in plain language. This tool synthesizes the perspectives of a Solution Architect, Enterprise Architect, Application Architect, AI Architect, TPM, and senior SDE to recommend a full technical + AI architecture — stack, cost optimization, concurrency/throughput design, and governance (KRA/KPI/SLA/Reliability targets) — grounded in signals detected in your text.</div>
     <div class="sub" id="wizBackToModeRow" style="margin-top:8px;"><a href="#" onclick="backToMode(); return false;" style="color:var(--accent); text-decoration:none;">← choose a different way to describe this</a></div>
   </header>
@@ -1902,7 +1907,7 @@
   <div class="card">
     <label style="font-size:13px; color:var(--muted); font-weight:600;">Business / Product Requirements</label>
     <div style="margin-top:8px;">
-      <textarea id="input" placeholder="e.g. We're a fintech startup building a mobile + web app for real-time fraud detection on card transactions. Need to handle high transaction volume, support a chatbot for customer support that can answer questions from our internal policy documents, must be SOC2/PCI compliant, small team of 6 engineers, want to move fast..."></textarea>
+      <textarea id="input" aria-label="Describe your project requirements" placeholder="e.g. We're a fintech startup building a mobile + web app for real-time fraud detection on card transactions. Need to handle high transaction volume, support a chatbot for customer support that can answer questions from our internal policy documents, must be SOC2/PCI compliant, small team of 6 engineers, want to move fast..."></textarea>
     </div>
     <div class="examples">
       <button class="ex-btn" onclick="loadExample(0)">Fintech fraud detection</button>
@@ -1927,8 +1932,8 @@
 
 <div class="results-shell" id="resultsShell">
   <nav class="toc" id="sideNav"></nav>
-  <div class="results-col">
-    <div id="sharedBanner"></div>
+  <div class="results-col" aria-live="polite">
+    <div id="sharedBanner" role="status"></div>
     <div class="results-header" id="resultsHeader" style="display:none;">
       <div id="refineHistoryControls" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
     </div>
@@ -1980,7 +1985,7 @@
          silently falls back to the module default instead of failing where you'd notice.
      A config missing any of the three produces a server that either won't start or answers
      tools/list while being unable to do anything — see that function's own comment. -->
-<div id="mcpModal" class="custom-modal-backdrop" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:9999; align-items:center; justify-content:center;" onclick="if(event.target===this) closeMcpModal();">
+<div id="mcpModal" class="custom-modal-backdrop" role="dialog" aria-modal="true" aria-label="MCP configuration" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:9999; align-items:center; justify-content:center;" onclick="if(event.target===this) closeMcpModal();">
   <div class="custom-modal-box" style="background:var(--panel); border:1px solid var(--border); border-radius:12px; width:90%; max-width:620px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 20px 40px rgba(0,0,0,0.5);">
     <div style="padding:16px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
       <div>
@@ -2006,14 +2011,14 @@
   </div>
 </div>
 
-<div id="customTechModal" class="custom-modal-backdrop" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); z-index:9999; align-items:center; justify-content:center;" onclick="if(event.target===this) closeCustomTechModal();">
+<div id="customTechModal" class="custom-modal-backdrop" role="dialog" aria-modal="true" aria-label="Custom technology and knowledge base" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); z-index:9999; align-items:center; justify-content:center;" onclick="if(event.target===this) closeCustomTechModal();">
   <div class="custom-modal-box" style="background:var(--panel); border:1px solid var(--border); border-radius:12px; width:90%; max-width:650px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 20px 40px rgba(0,0,0,0.5);">
     <div style="padding:16px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
       <div>
         <h3 style="margin:0; font-size:16px; color:var(--text);">Custom Technology &amp; Knowledge Base</h3>
         <p style="margin:2px 0 0; font-size:12px; color:var(--muted);">Add custom or internal proprietary tools into the advisor session (stored in localStorage) or suggest upstream.</p>
       </div>
-      <button type="button" onclick="closeCustomTechModal()" style="background:none; border:none; color:var(--muted); font-size:18px; cursor:pointer;">✕</button>
+      <button type="button" onclick="closeCustomTechModal()" aria-label="Close" style="background:none; border:none; color:var(--muted); font-size:18px; cursor:pointer;">✕</button>
     </div>
 
     <div style="padding:20px; overflow-y:auto; flex:1;">
@@ -2031,22 +2036,22 @@
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
           <div>
             <label style="display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:4px;">Tech ID (kebab-case) *</label>
-            <input type="text" id="ctId" required placeholder="e.g. internal-auth-gateway" style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
+            <input type="text" id="ctId" required aria-label="Technology ID" placeholder="e.g. internal-auth-gateway" style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
           </div>
           <div>
             <label style="display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:4px;">Display Name *</label>
-            <input type="text" id="ctName" required placeholder="e.g. Enterprise Auth Gateway" style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
+            <input type="text" id="ctName" required aria-label="Display name" placeholder="e.g. Enterprise Auth Gateway" style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
           </div>
         </div>
 
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
           <div>
             <label style="display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:4px;">Category *</label>
-            <input type="text" id="ctCategory" required placeholder="e.g. identity-gateway" style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
+            <input type="text" id="ctCategory" required aria-label="Category slug" placeholder="e.g. identity-gateway" style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
           </div>
           <div>
             <label style="display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:4px;">Domain *</label>
-            <select id="ctDomain" required style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
+            <select id="ctDomain" required aria-label="Domain" style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
               <option value="identity">Identity</option>
               <option value="frontend">Frontend</option>
               <option value="backend">Backend</option>
@@ -2066,22 +2071,22 @@
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
           <div>
             <label style="display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:4px;">Signal Keywords (comma-separated) *</label>
-            <input type="text" id="ctKeywords" required placeholder="e.g. auth gateway, internal auth, sso proxy" style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
+            <input type="text" id="ctKeywords" required aria-label="Detection keywords" placeholder="e.g. auth gateway, internal auth, sso proxy" style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
           </div>
           <div>
             <label style="display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:4px;">License *</label>
-            <input type="text" id="ctLicense" required placeholder="e.g. Proprietary / Internal / Apache-2.0" value="Proprietary / Internal" style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
+            <input type="text" id="ctLicense" required aria-label="License" placeholder="e.g. Proprietary / Internal / Apache-2.0" value="Proprietary / Internal" style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
           </div>
         </div>
 
         <div style="margin-bottom:12px;">
           <label style="display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:4px;">Best When (comma-separated) *</label>
-          <input type="text" id="ctBestWhen" required placeholder="e.g. internal corporate zero-trust network, high compliance" style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
+          <input type="text" id="ctBestWhen" required aria-label="Best used when" placeholder="e.g. internal corporate zero-trust network, high compliance" style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
         </div>
 
         <div style="margin-bottom:16px;">
           <label style="display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:4px;">Avoid When (comma-separated) *</label>
-          <input type="text" id="ctAvoidWhen" required placeholder="e.g. public b2c registration without VPN" style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
+          <input type="text" id="ctAvoidWhen" required aria-label="Avoid when" placeholder="e.g. public b2c registration without VPN" style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px;">
         </div>
 
         <div style="display:flex; justify-content:flex-end; gap:8px;">
@@ -2101,6 +2106,7 @@
  </div>
 </div>
 
+  </main>
   </div><!-- /.app-main -->
 </div><!-- /.app-shell -->
 
@@ -7062,7 +7068,7 @@ function renderSelectedTiles(groupKey){
   };
   const arr = wizState[groupKey] || [];
   container.innerHTML = arr.map(val => `
-    <span class="sel-tile" data-val="${val}">${labelFor(val)}<span class="st-x" title="Remove" onclick="removeTileItem('${groupKey}','${val}')">✕</span></span>
+    <span class="sel-tile" data-val="${val}">${labelFor(val)}<span class="st-x" role="button" tabindex="0" title="Remove" aria-label="Remove ${labelFor(val)}" onclick="removeTileItem('${groupKey}','${val}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();removeTileItem('${groupKey}','${val}');}">✕</span></span>
   `).join('');
 }
 function removeTileItem(groupKey, val){
@@ -7078,6 +7084,56 @@ function removeTileItem(groupKey, val){
   renderSelectedTiles(groupKey);
   wizUpdateNextEnabled();
   wizMaybeShowInference();
+}
+
+let activeFocusTrap = null;
+let preModalFocus = null;
+
+function enableModalFocusTrap(modalEl){
+  if (!modalEl) return;
+  preModalFocus = document.activeElement;
+  const getFocusables = () => Array.from(modalEl.querySelectorAll(
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  )).filter(el => el.offsetParent !== null && !el.hasAttribute('disabled'));
+
+  const trapHandler = (e) => {
+    if (e.key !== 'Tab') return;
+    const focusable = getFocusables();
+    if (!focusable.length) { e.preventDefault(); return; }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey) {
+      if (document.activeElement === first || !modalEl.contains(document.activeElement)) {
+        e.preventDefault();
+        last.focus();
+      }
+    } else {
+      if (document.activeElement === last || !modalEl.contains(document.activeElement)) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  };
+
+  modalEl.addEventListener('keydown', trapHandler);
+  activeFocusTrap = { el: modalEl, handler: trapHandler };
+
+  setTimeout(() => {
+    const focusable = getFocusables();
+    if (focusable.length) focusable[0].focus();
+  }, 40);
+}
+
+function disableModalFocusTrap(modalEl){
+  if (!modalEl) return;
+  if (activeFocusTrap && activeFocusTrap.el === modalEl) {
+    modalEl.removeEventListener('keydown', activeFocusTrap.handler);
+    activeFocusTrap = null;
+  }
+  if (preModalFocus && typeof preModalFocus.focus === 'function') {
+    preModalFocus.focus();
+    preModalFocus = null;
+  }
 }
 
 function openGlidePanel(groupKey){
@@ -7100,11 +7156,17 @@ function openGlidePanel(groupKey){
       <div class="gi-check">✓</div><span class="gi-icon">${GLIDE_ITEM_ICONS[it.val] || GLIDE_ITEM_ICONS[it.category] || ''}</span><span class="gi-label">${it.label}</span>
     </div>`;
   }).join('');
-  document.getElementById('glidePanel').classList.add('show');
+  const gp = document.getElementById('glidePanel');
+  gp.classList.add('show');
   document.getElementById('glideBackdrop').classList.add('show');
+  enableModalFocusTrap(gp);
 }
 function closeGlidePanel(){
-  document.getElementById('glidePanel').classList.remove('show');
+  const gp = document.getElementById('glidePanel');
+  if (gp) {
+    gp.classList.remove('show');
+    disableModalFocusTrap(gp);
+  }
   document.getElementById('glideBackdrop').classList.remove('show');
 }
 function toggleGlideItem(groupKey, val, el){
@@ -8200,7 +8262,7 @@ function buildChallengeBoxHtml(cardKey, category){
   // always the last option so a real alternative not in the KB can still be named.
   const categoryVendors = CATEGORY_VENDORS[category];
   const challengeSelectHtml = categoryVendors
-    ? `<select id="challengeSelect-${cardKey}">
+    ? `<select id="challengeSelect-${cardKey}" aria-label="Select alternative technology">
          ${categoryVendors.map(v => `<option value="${v.name}">${v.name}</option>`).join('')}
          <option value="">Other (specify below)</option>
        </select>`
@@ -8209,14 +8271,14 @@ function buildChallengeBoxHtml(cardKey, category){
     <div class="challenge-box" id="challengeBox-${cardKey}">
       <div class="challenge-field-label">What would you choose instead?</div>
       ${challengeSelectHtml}
-      <input type="text" id="challengeAltInput-${cardKey}" placeholder="${categoryVendors ? 'If “Other”, name it here' : 'Name an alternative'}">
+      <input type="text" id="challengeAltInput-${cardKey}" aria-label="Alternative technology name" placeholder="${categoryVendors ? 'If “Other”, name it here' : 'Name an alternative'}">
       <div class="challenge-field-label">Why is this a better fit for your case?</div>
-      <textarea id="challengeReason-${cardKey}" placeholder="e.g. For our 20k/sec real-time volume, a dedicated pub/sub tier is overkill..."></textarea>
+      <textarea id="challengeReason-${cardKey}" aria-label="Reason for choosing this alternative" placeholder="e.g. For our 20k/sec real-time volume, a dedicated pub/sub tier is overkill..."></textarea>
       <div class="challenge-actions">
         <button class="challenge-submit-btn" onclick="onChallengeSubmit('${cardKey}')">Submit</button>
         <button class="challenge-cancel-btn" onclick="onChallengeToggleClick('${cardKey}')">Cancel</button>
       </div>
-      <div class="challenge-confirm" id="challengeConfirm-${cardKey}"></div>
+      <div class="challenge-confirm" id="challengeConfirm-${cardKey}" role="status"></div>
     </div>
   `;
 }
@@ -8260,7 +8322,7 @@ function attachRefineToCard(card, category, label, cardKey){
     <div class="ask-box" id="askBox-${cardKey}">
       <div class="ask-thread" id="askThread-${cardKey}"></div>
       <div class="ask-input-row">
-        <input type="text" id="askInput-${cardKey}" placeholder="Ask a follow-up about this recommendation...">
+        <input type="text" id="askInput-${cardKey}" aria-label="Ask a follow-up question" placeholder="Ask a follow-up about this recommendation...">
         <button onclick="onAskClick('${cardKey}')">Send</button>
       </div>
     </div>
@@ -8285,7 +8347,7 @@ function renderRefineKeyPrompt(cardKey, intent){
   const el = document.getElementById(`refineResult-${cardKey}`);
   el.innerHTML = `
     <div class="refine-keyprompt" data-intent="${intent || 'refine'}">
-      <input type="password" id="apiKeyInput-${cardKey}" placeholder="Paste your Anthropic API key (never stored on our server)">
+      <input type="password" id="apiKeyInput-${cardKey}" aria-label="Anthropic API key" placeholder="Paste your Anthropic API key (never stored on our server)">
       <button onclick="onSaveKeyClick('${cardKey}')">Save &amp; Continue</button>
     </div>`;
 }
@@ -8553,7 +8615,7 @@ function renderRefineHistoryUI(){
       ${refineHistory.map((entry, i) => {
         const isCurrent = entry.result === refineResultCache;
         const n = i + 1; // oldest = Pass 1; .reverse() below only changes display order, not numbering
-        return `<div class="refine-history-item${isCurrent ? ' current' : ''}" ${isCurrent ? '' : `onclick="viewHistoryPass(${i})"`}>
+        return `<div class="refine-history-item${isCurrent ? ' current' : ''}" ${isCurrent ? '' : `role="button" tabindex="0" onclick="viewHistoryPass(${i})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();viewHistoryPass(${i});}"`}>
           <span class="refine-history-time">Pass ${n}${isCurrent ? ' — viewing now' : ''} · ${entry.ts.toLocaleTimeString()}</span>
           <div class="refine-history-rationale">${entry.result.rationale}</div>
         </div>`;
@@ -8949,9 +9011,9 @@ function renderSidebarHistory(){
   list.innerHTML = history.map(e => {
     const label = e.text.length > 60 ? e.text.slice(0, 60) + '…' : e.text;
     const safeLabel = escapeHtml(label);
-    return `<div class="sidebar-history-item" onclick="openHistoryEntry('${e.id}')" title="${safeLabel}">
+    return `<div class="sidebar-history-item" role="button" tabindex="0" onclick="openHistoryEntry('${e.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openHistoryEntry('${e.id}');}" title="${safeLabel}">
       <span class="shi-label">${safeLabel}</span>
-      <span class="shi-x" title="Remove" onclick="deleteHistoryEntry('${e.id}', event)">✕</span>
+      <span class="shi-x" role="button" tabindex="0" title="Remove" aria-label="Remove history item" onclick="deleteHistoryEntry('${e.id}', event)" onkeydown="if(event.key==='Enter'||event.key===' '){event.stopPropagation();event.preventDefault();deleteHistoryEntry('${e.id}', event);}">✕</span>
     </div>`;
   }).join('');
 }
@@ -8983,12 +9045,16 @@ function openCustomTechModal(){
   if (m) {
     m.style.display = 'flex';
     renderCustomTechList();
+    enableModalFocusTrap(m);
   }
 }
 
 function closeCustomTechModal(){
   const m = document.getElementById('customTechModal');
-  if (m) m.style.display = 'none';
+  if (m) {
+    m.style.display = 'none';
+    disableModalFocusTrap(m);
+  }
 }
 
 // Built as one string so the copy button and the rendered block cannot drift apart — the whole
@@ -9012,11 +9078,15 @@ function openMcpModal(){
   // textContent, not innerHTML: this string contains no markup and must never be parsed as any.
   if (block) block.textContent = MCP_CONFIG_SNIPPET;
   m.style.display = 'flex';
+  enableModalFocusTrap(m);
 }
 
 function closeMcpModal(){
   const m = document.getElementById('mcpModal');
-  if (m) m.style.display = 'none';
+  if (m) {
+    m.style.display = 'none';
+    disableModalFocusTrap(m);
+  }
 }
 
 function copyMcpConfig(){
