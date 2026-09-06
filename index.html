@@ -539,6 +539,53 @@
   .token-budget.over .tb-fill{background:var(--warn);}
   .token-budget.over .tb-value{color:var(--warn);}
   .token-budget .tb-note{margin-top:8px; font-size:var(--fs-sm); color:var(--muted2); line-height:1.5;}
+  /* Architecture review pack — the third view (Cards / Flow / Review). Panels reuse the .card
+     shape rather than inventing a surface: this is the same analysis, laid out for a different
+     reader. Nothing here computes a recommendation. */
+  #arbWrap{display:none;}
+  .arb-deck{max-width:1000px;}
+  .arb-intro{font-size:var(--fs-sm); color:var(--muted2); line-height:1.6; margin:0 0 16px;}
+  .arb-panel{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:18px 20px; margin-bottom:14px;}
+  .arb-panel > h3{margin:0 0 4px; font-size:var(--fs-md); color:var(--text);}
+  .arb-panel > .arb-sub{margin:0 0 14px; font-size:var(--fs-sm); color:var(--muted); line-height:1.5;}
+  .arb-record{display:flex; gap:12px; align-items:baseline; padding:9px 0; border-top:1px solid var(--border);}
+  .arb-record:first-of-type{border-top:none;}
+  .arb-num{font-family:var(--font-mono); font-size:var(--fs-xs); color:var(--muted); white-space:nowrap;}
+  .arb-title{flex:1; font-size:var(--fs-sm); color:var(--text);}
+  .arb-tokens{font-family:var(--font-mono); font-size:var(--fs-xs); color:var(--muted); white-space:nowrap;}
+  .arb-gap{padding:9px 0; border-top:1px solid var(--border); font-size:var(--fs-sm); line-height:1.55; color:var(--muted2);}
+  .arb-gap:first-of-type{border-top:none;}
+  .arb-gap b{color:var(--text); font-weight:600;}
+  .arb-warn{display:flex; gap:9px; font-size:var(--fs-sm); line-height:1.55; padding:6px 0; color:var(--muted2);}
+  .arb-warn .lvl{font-family:var(--font-mono); font-size:var(--fs-xs); font-weight:700; white-space:nowrap;}
+  /* The five levels buildWarnings() actually emits — enumerated from that function rather than
+     guessed, after a first pass styled a "warning" class the exporter never produces. */
+  .arb-warn.error .lvl{color:var(--bad);}
+  .arb-warn.warn .lvl{color:var(--warn-text);}
+  .arb-warn.stale .lvl{color:var(--warn-text);}
+  .arb-warn.ask .lvl{color:var(--accent);}
+  .arb-warn.info .lvl{color:var(--muted);}
+  .arb-cost{display:grid; grid-template-columns:118px 1fr; gap:4px 14px; padding:11px 0; border-top:1px solid var(--border);}
+  .arb-cost:first-of-type{border-top:none;}
+  .arb-cost .c-label{font-size:var(--fs-xs); text-transform:uppercase; letter-spacing:0.05em; color:var(--muted); font-weight:600;}
+  .arb-cost .c-value{font-family:var(--font-mono); font-size:var(--fs-sm); font-weight:700; color:var(--text);}
+  .arb-cost .c-detail{grid-column:2; font-size:var(--fs-sm); color:var(--muted2); line-height:1.55;}
+  .arb-nototal{margin:13px 0 0; padding-top:12px; border-top:1px dashed var(--border); font-size:var(--fs-sm); color:var(--muted); line-height:1.55;}
+  .arb-sign{display:flex; gap:12px; align-items:flex-start; padding:11px 0; border-top:1px solid var(--border);}
+  .arb-sign:first-of-type{border-top:none;}
+  .arb-sign input{margin-top:3px; width:15px; height:15px; accent-color:var(--accent); flex:none;}
+  .arb-sign .s-body{flex:1;}
+  .arb-sign .s-role{font-size:var(--fs-sm); font-weight:600; color:var(--text);}
+  .arb-sign .s-asks{font-size:var(--fs-sm); color:var(--muted2); line-height:1.5;}
+  .arb-sign .s-stamp{font-family:var(--font-mono); font-size:var(--fs-xs); color:var(--muted); white-space:nowrap;}
+  .arb-empty{font-size:var(--fs-sm); color:var(--muted2); line-height:1.6; margin:0;}
+  /* Same 860px breakpoint the results shell uses. At 375px the cost grid's value column fell to
+     169px, which wraps "$10,000–$50,000+/mo" mid-figure; one column reads better than two narrow
+     ones. Measured, not assumed — the deck does not overflow at either width. */
+  @media (max-width:860px){
+    .arb-cost{grid-template-columns:1fr; gap:2px;}
+    .arb-cost .c-detail{grid-column:1;}
+  }
   .grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(264px,1fr)); gap:10px;}
   .stack-card{
     background:var(--panel2); box-shadow:0 1px 6px rgba(17,24,39,0.05);
@@ -1873,6 +1920,7 @@
   <div class="view-toggle" id="viewToggle">
     <button id="viewCardsBtn" class="icon-btn" onclick="setView('cards')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z"/></svg> Cards</button>
     <button id="viewFlowBtn" class="active icon-btn" onclick="setView('flow')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 7.125C2.25 6.504 2.754 6 3.375 6h6c.621 0 1.125.504 1.125 1.125v3.75c0 .621-.504 1.125-1.125 1.125h-6a1.125 1.125 0 0 1-1.125-1.125v-3.75ZM14.25 8.625c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v8.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-8.25ZM3.75 16.125c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v2.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-2.25Z"/></svg> Flow</button>
+    <button id="viewArbBtn" class="icon-btn" onclick="setView('arb')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25Z"/></svg> Review</button>
   </div>
  </div>
 </div>
@@ -1902,6 +1950,11 @@
       </div>
     </div>
     <div class="flow-popover" id="flowPopover"></div>
+
+    <!-- Third view, populated by renderArbDeck() from the same analysis the other two render.
+         A sibling of #results and #flowWrap inside .results-col — NOT of .results-col itself,
+         which is a flex row and put the deck in a second column beside an empty report. -->
+    <div id="arbWrap"></div>
   </div>
   <aside id="contextPanel">
     <div class="ctx-panel-header">
@@ -5504,6 +5557,7 @@ function renderRecommendations(s, rec){
 
   const graph = buildFlowGraph({cloud,gw,iam,lang,arch,compute,msg,mesh,cache,db,containers,obs,fe,cicd,dns,llm,rag,mcp,guardrails,vectorDb,hybridConnectivity,multiCloudBridging}, s);
   renderFlow(graph);
+  renderArbDeck(rec, s);
   // Honour the per-analysis force without persisting it, so the user's preference survives.
   setView(s.brownfieldAiOnly ? 'cards' : currentView, !s.brownfieldAiOnly);
 }
@@ -5818,8 +5872,10 @@ function setView(v, remember = true){
   if (remember) currentView = v;
   document.getElementById('viewCardsBtn').classList.toggle('active', v==='cards');
   document.getElementById('viewFlowBtn').classList.toggle('active', v==='flow');
+  document.getElementById('viewArbBtn').classList.toggle('active', v==='arb');
   document.getElementById('results').style.display = v==='cards' ? 'block' : 'none';
   document.getElementById('flowWrap').style.display = v==='flow' ? 'block' : 'none';
+  document.getElementById('arbWrap').style.display = v==='arb' ? 'block' : 'none';
   document.getElementById('flowPopover').style.display = 'none';
   if(v==='flow' && flowState.graph){ requestAnimationFrame(flowFit); }
 }
@@ -9495,6 +9551,182 @@ function buildAdrInput(s){
   };
 }
 
+// ---------------- Architecture review pack (the "Review" view) ----------------
+// A third view over the SAME analysis. Deliberately builds nothing: the decision records come
+// from AdrExport.buildExports (one ADR renderer, not two), the coverage gaps from
+// mapAppPicksToKb's `omitted` list, the money from pickCostEstimate's bands. Three of those four
+// were already computed on every analysis and then shown only inside a DOWNLOADED file — a
+// reviewer who never clicked Export could not see what the pack left out or why.
+//
+// The one genuinely new thing is the sign-off ledger, and the single property that makes it
+// worth having rather than decorative is arbFingerprint below.
+
+const ARB_SIGNOFF_ROLES = [
+  {id:'security',     label:'Security',        asks:'Threat model, data-in-transit/at-rest posture, and the guardrail set.'},
+  {id:'architecture', label:'Architecture',    asks:'The decision records themselves, and the innovation-token spend against the ~3 budget.'},
+  {id:'cloudops',     label:'Cloud Ops / SRE', asks:'Whether this topology is operable by the team that has to run it, and whether the cost bands are fundable.'},
+  {id:'data',         label:'Data Governance', asks:'Residency, retention, and what the coverage gaps mean for auditability.'},
+];
+
+// FNV-1a. Not a cryptographic hash and not used as one — it only has to key a localStorage entry,
+// and the only property required is that a different set of decisions produces a different key.
+function arbHash(str){
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++){
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, '0');
+}
+
+// A sign-off has to be a sign-off OF something. Keying the ledger on the deck's own content means
+// changing the requirement — or overriding a signal, or re-running after an edit — produces a
+// different key, and the new deck starts unsigned. Four ticks silently carried across from an
+// architecture that no longer exists is worse than no ledger at all, because it looks like
+// governance happened.
+//
+// Deliberately NOT hashed: the ADR markdown. It embeds `- Status: proposed` and `- Date: <today>`
+// (renderAdr), so hashing it would invalidate every sign-off at midnight — the ledger would
+// appear to work and quietly reset itself daily. The decision is the number and the title; the
+// date it was rendered is not part of it.
+function arbFingerprint(deck){
+  return arbHash(JSON.stringify([
+    deck.records.map(r => [r.number, r.title]),
+    deck.gaps.map(g => g.category),
+    deck.costRows.map(c => [c.label, c.value]),
+  ]));
+}
+
+// Per-category bands, each keeping its own caveat, and no total anywhere. On-prem compute reads
+// "Not applicable — capex, not opex"; adding that to a monthly cloud bill would produce a
+// run-rate figure the engine deliberately refuses to state. Same decision the hero makes —
+// test_hero_does_not_invent_a_single_cost_figure — enforced here by its own test, because that
+// one only guards heroSpine and would pass no matter what this view rendered.
+function arbCostRows(rec){
+  const ce = rec && rec.costEstimate;
+  if (!ce || !ce.computeBand || !ce.dbBand) return [];
+  return [
+    {label:'Compute',  value: ce.computeBand.label, detail: ce.computeBand.detail},
+    {label:'Database', value: ce.dbBand.label,      detail: ce.dbBand.detail + (ce.vectorDbNote || '')},
+    (ce.usesLLM && ce.llmBand)
+      ? {label:'LLM API', value: ce.llmBand.label, detail: ce.llmBand.detail}
+      : {label:'LLM API', value:'$0', detail:'No significant LLM/chatbot/RAG/voice signal detected in this requirement — no meaningful token spend expected.'},
+  ];
+}
+
+// Assembles the deck as DATA, with no DOM in sight, so the invariants above can be tested without
+// a browser and without asserting on markup.
+function arbBuildDeck(rec, s){
+  const deck = {records:[], warnings:[], gaps:[], costRows: arbCostRows(rec), totalTokens:0, unavailable:null};
+  if (!window.AdrExport || typeof window.AdrExport.buildExports !== 'function'){
+    deck.unavailable = 'The decision-record exporter did not load on this page, so there are no records to review here.';
+    return deck;
+  }
+  // Guardrails-only mode proposes no stack at all (computeVisibleSections narrows the report to
+  // a single section), but computeRecommendations() still computes one internally — nothing
+  // upstream changes, by design — so mapAppPicksToKb will cheerfully map seventeen picks that
+  // the report deliberately never showed. Writing decision records for a stack nobody was
+  // recommended is the same defect renderTokenBudgetHtml already guards against, and this
+  // view's own test caught it here: it expected an empty pack and got a full one.
+  if (s && s.brownfieldGuardrailsOnly){
+    deck.unavailable = 'This analysis reviews the guardrails on a system you already run — it proposes no stack, so there are no decision records to review here.';
+    return deck;
+  }
+  try {
+    const {recommendations, omitted} = mapAppPicksToKb(rec, s);
+    deck.gaps = omitted || [];
+    if (!recommendations.length){
+      // Reached in the brownfield modes, where the stack this pack would document was never
+      // proposed. Saying so beats an empty panel that reads like a rendering failure.
+      deck.unavailable = 'None of this analysis’s picks map to the decision knowledge base, so there are no decision records to review — the coverage gaps below are the whole of what this pack can say.';
+      return deck;
+    }
+    const out = window.AdrExport.buildExports({kb: getKbData(), input: buildAdrInput(s), recommendations, omitted});
+    deck.records = (out.adrs || []).map(a => ({number:a.number, title:a.title, tokens:a.tokens || 0}));
+    deck.warnings = out.warnings || [];
+    deck.totalTokens = out.totalTokens || 0;
+  } catch(e){
+    deck.unavailable = 'Decision records could not be assembled for this analysis: ' + e.message;
+  }
+  return deck;
+}
+
+let arbState = {fingerprint:null};
+
+function arbSignoffKey(fp){ return 'arb_signoff:' + fp; }
+
+function arbLoadSignoffs(fp){
+  try {
+    const raw = localStorage.getItem(arbSignoffKey(fp));
+    const parsed = raw ? JSON.parse(raw) : {};
+    return (parsed && typeof parsed === 'object') ? parsed : {};
+  } catch(e){ return {}; }
+}
+
+function arbSaveSignoff(fp, roleId, signed){
+  const all = arbLoadSignoffs(fp);
+  if (signed) all[roleId] = {at: new Date().toISOString()};
+  else delete all[roleId];
+  try { localStorage.setItem(arbSignoffKey(fp), JSON.stringify(all)); } catch(e){}
+  return all;
+}
+
+function arbToggleSignoff(roleId){
+  if (!arbState.fingerprint) return;
+  const box = document.getElementById('arbSign-' + roleId);
+  const all = arbSaveSignoff(arbState.fingerprint, roleId, !!(box && box.checked));
+  const stamp = document.getElementById('arbStamp-' + roleId);
+  if (stamp) stamp.textContent = all[roleId] ? 'signed ' + String(all[roleId].at).slice(0, 10) : 'not signed';
+  const count = document.getElementById('arbSignCount');
+  if (count) count.textContent = `${Object.keys(all).length} of ${ARB_SIGNOFF_ROLES.length} signed`;
+}
+
+function arbPanel(title, sub, body){
+  return `<section class="arb-panel"><h3>${title}</h3><p class="arb-sub">${sub}</p>${body}</section>`;
+}
+
+function renderArbDeck(rec, s){
+  const wrap = document.getElementById('arbWrap');
+  if (!wrap) return;
+  const deck = arbBuildDeck(rec, s);
+  const fp = arbFingerprint(deck);
+  arbState.fingerprint = fp;
+  const signed = arbLoadSignoffs(fp);
+
+  const recordsBody = deck.unavailable
+    ? `<p class="arb-empty">${escapeHtml(deck.unavailable)}</p>`
+    : deck.records.map(r => `<div class="arb-record"><span class="arb-num">ADR-${String(r.number).padStart(4,'0')}</span><span class="arb-title">${escapeHtml(r.title)}</span><span class="arb-tokens">${r.tokens} tok</span></div>`).join('')
+      + `<div class="arb-nototal">${deck.totalTokens} innovation tokens across ${deck.records.length} record${deck.records.length===1?'':'s'}, against a rule-of-thumb budget of ~3 for a whole company. Export the full pack from the Export menu — these are the same records, not a second rendering of them.</div>`;
+
+  const warningsBody = deck.warnings.length
+    ? deck.warnings.map(w => `<div class="arb-warn ${escapeHtml(w.level)}"><span class="lvl">${escapeHtml(String(w.level).toUpperCase())}</span><span>${escapeHtml(w.message)}</span></div>`).join('')
+    : '<p class="arb-empty">No advisor warnings for this analysis.</p>';
+
+  const gapsBody = deck.gaps.length
+    ? deck.gaps.map(g => `<div class="arb-gap"><b>${escapeHtml(g.category)}</b> — ${escapeHtml(g.detail)}</div>`).join('')
+    : '<p class="arb-empty">Every category on the report is covered by a decision record.</p>';
+
+  const costBody = deck.costRows.length
+    ? deck.costRows.map(c => `<div class="arb-cost"><span class="c-label">${escapeHtml(c.label)}</span><span class="c-value">${escapeHtml(c.value)}</span><span class="c-detail">${escapeHtml(c.detail)}</span></div>`).join('')
+      + '<p class="arb-nototal">These are not added up, here or anywhere else in the product. They are order-of-magnitude planning bands on different meters — an on-prem compute band is amortised capex, an LLM band is variable per-token spend — and a single monthly figure would state a precision this engine does not have.</p>'
+    : '<p class="arb-empty">No cost bands were produced for this analysis.</p>';
+
+  const signBody = ARB_SIGNOFF_ROLES.map(r => `<div class="arb-sign">
+      <input type="checkbox" id="arbSign-${r.id}" ${signed[r.id] ? 'checked' : ''} onchange="arbToggleSignoff('${r.id}')" aria-label="Sign off as ${escapeHtml(r.label)}">
+      <span class="s-body"><label class="s-role" for="arbSign-${r.id}">${escapeHtml(r.label)}</label><div class="s-asks">${escapeHtml(r.asks)}</div></span>
+      <span class="s-stamp" id="arbStamp-${r.id}">${signed[r.id] ? 'signed ' + escapeHtml(String(signed[r.id].at).slice(0,10)) : 'not signed'}</span>
+    </div>`).join('');
+
+  wrap.innerHTML = `<div class="arb-deck">
+    <p class="arb-intro">The same analysis, arranged for a review board: what was decided, what this tool could not speak to, and what it costs. Nothing on this page is recalculated — it is the decision pack the Export menu produces, shown before you download it. Sign-offs are stored in this browser only and are tied to these decisions (reference <span style="font-family:var(--font-mono)">${fp}</span>); change the analysis and the ledger starts empty again.</p>
+    ${arbPanel('Decision records', 'One record per pick the decision knowledge base can cite evidence for.', recordsBody)}
+    ${arbPanel('Advisor notes', 'Raised by the exporter against this specific set of picks and constraints.', warningsBody)}
+    ${arbPanel('Coverage gaps', 'On the report, but not in the decision pack — named rather than dropped silently, so a reviewer knows what this tool did not assess.', gapsBody)}
+    ${arbPanel('Cost and operational risk bands', 'Per category, each with the caveat it depends on.', costBody)}
+    ${arbPanel(`Sign-off ledger <span class="arb-tokens" id="arbSignCount">${Object.keys(signed).length} of ${ARB_SIGNOFF_ROLES.length} signed</span>`, 'A local checklist, not an approval system — it records that someone looked, not that anyone is accountable.', signBody)}
+  </div>`;
+}
+
 // ---------------- Generic File Download Helper ----------------
 function downloadGenericFile(filename, text, mimeType = 'text/plain;charset=utf-8') {
   const blob = new Blob([text], { type: mimeType });
@@ -9580,6 +9812,7 @@ function cmdkBuildItems(){
   items.push({group:'Actions', label:'Audit your harness', hint:'self-audit', run:() => startHarnessAudit()});
   if (analysisOnScreen) {
     items.push({group:'Actions', label:'Show architecture canvas', hint:'flow view', run:() => setView('flow')});
+    items.push({group:'Actions', label:'Show architecture review pack', hint:'review view', run:() => setView('arb')});
     items.push({group:'Actions', label:'Show recommendation cards', hint:'cards view', run:() => setView('cards')});
     items.push({group:'Actions', label:'Export architecture decision record', hint:'markdown', run:() => onExportAdrClick()});
     items.push({group:'Actions', label:'Export diagram as SVG', run:() => onExportSvgClick()});
