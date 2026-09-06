@@ -19,7 +19,7 @@ TEST_CASES = [
         "category": "Enterprise Architecture & Governance",
         "dimensions": "Cloud: AWS (Mono) | Scale: Ent (600 devs) | Tech: Java/Spring, Postgres | Domain: Fintech/Banking | Gov: TOGAF + COBIT | Sec: PCI-DSS, SOC2, CyberArk PAM | LLM: None | MCP: None | RAG: None | Obs: Datadog | Client: Web app + Mobile",
         "input": "We are a large enterprise banking platform with 600 engineers building on AWS. Our web application backend is written in Java with PostgreSQL for transactional ledger records. We must comply with PCI-DSS and SOC2, require TOGAF architecture governance, COBIT for IT audit controls, CyberArk for privileged access management, Datadog for APM observability, and support both web application and mobile banking apps.",
-        "expected_signals": ["awsShop", "enterprise", "largeTeam", "javaMentioned", "postgresMentioned", "pciMentioned", "soc2Mentioned", "togafMentioned", "cobitMentioned", "privilegedAccess", "datadogMentioned", "web", "mobile"],
+        "expected_signals": ["awsShop", "enterprise", "largeTeam", "javaMentioned", "postgresMentioned", "pciMentioned", "soc2Mentioned", "togafMentioned", "cobitMentioned", "privilegedAccess", "datadogMentioned", "web", "mobile", "compliance", "cyberarkMentioned", "finance", "structured"],
         "expected_behavior": "Enterprise scale AWS stack, Java backend, PostgreSQL ledger, CyberArk PAM, Datadog observability, Microservices architecture, TOGAF + COBIT governance recommendations."
     },
     {
@@ -29,17 +29,20 @@ TEST_CASES = [
         "category": "Air-Gapped Sovereign AI",
         "dimensions": "Cloud: On-Prem (Air-Gapped, No Cloud) | Scale: Small (7 devs) | Tech: Python | Domain: Healthcare / EHR | Gov: Light | Sec: HIPAA, Zero Trust mTLS | LLM: Self-hosted local (vLLM) | MCP: With FastMCP | RAG: Qdrant Clinical KB | Obs: Prometheus/Grafana | Client: Web app",
         "input": "Air-gapped on-premises deployment only with no public cloud. We are building an enterprise hospital patient records web application with a team of 50 engineers. Written in Python. Strict HIPAA compliance and zero-trust mTLS required. We host our own GPU hardware and use vLLM for local LLM inference, autonomous agentic workflows using tool use, FastMCP to expose hospital tools as MCP servers, Qdrant for a medical knowledge base document search RAG, Prometheus and Grafana for monitoring.",
-        "expected_signals": ["onPrem", "enterprise", "largeTeam", "pythonMentioned", "hipaaMentioned", "mtlsMentioned", "selfHostInfra", "vllmMentioned", "agentic", "fastmcpMentioned", "qdrantMentioned", "knowledgeBase", "ragNeed", "prometheusMentioned", "web"],
+        "expected_signals": ["onPrem", "enterprise", "largeTeam", "pythonMentioned", "hipaaMentioned", "mtlsMentioned", "selfHostInfra", "vllmMentioned", "agentic", "fastmcpMentioned", "qdrantMentioned", "knowledgeBase", "ragNeed", "prometheusMentioned", "web", "compliance", "grafanaMentioned", "healthcare"],
         "expected_behavior": "Air-gapped on-prem floor (no public cloud), Keycloak self-hosted IdP, vLLM continuous batching inference, FastMCP tool exposition, Qdrant vector search, Prometheus + Grafana observability."
     },
     {
-        "id": "POS-03",
+"id": "POS-03",
         "type": "Positive",
         "title": "E-Commerce Multi-Cloud High-Scale (AWS + GCP + Hosted LLM + FastMCP + RAG + Realtime)",
         "category": "High-Throughput Multi-Cloud",
         "dimensions": "Cloud: Multi-Cloud (AWS + GCP) | Scale: Mid (45 devs) | Tech: Go, React, Redis | Domain: E-Commerce Marketplace | Gov: Scaled Agile (SAFe) | Sec: SOC2 | LLM: Hosted Claude | MCP: FastMCP + Agentic Tool Use | RAG: Pinecone Product Search | Obs: Datadog | Client: Web + Mobile",
         "input": "High volume e-commerce marketplace web application running across both AWS and Google Cloud with 45 engineers. Peak load during sales events. Backend services written in Go with React web application and mobile apps. We use Pinecone for product recommendation document search RAG, agentic tool use with FastMCP for agent tools, hosted Anthropic Claude LLM, Redis for session cache, Datadog for observability, SOC2 compliance, and scaled agile framework delivery coordination.",
-        "expected_signals": ["multiCloudMentioned", "awsShop", "gcpShop", "highScale", "marketplace", "goMentioned", "reactMentioned", "mobile", "pineconeMentioned", "agentic", "fastmcpMentioned", "llmProviderMentioned", "redisMentioned", "datadogMentioned", "soc2Mentioned", "safeMentioned", "web"],
+        "expected_signals": ["multiCloudMentioned", "awsShop", "gcpShop", "highScale", "marketplace", "goMentioned", "reactMentioned", "mobile", "pineconeMentioned", "agentic", "fastmcpMentioned", "llmProviderMentioned", "redisMentioned", "datadogMentioned", "soc2Mentioned", "safeMentioned", "web", "compliance", "ecommerce", "knowledgeBase", "largeTeam", "ragNeed"],
+        "known_false_positives": {
+            "realtime": "Fires on the substring 'live' inside 'delivery coordination'. The realtime term list holds a bare 'live' and has() is a plain substring match, so 'delivery', 'deliver' and 'olive' all set it too. The same list is in both engines, so the differential test cannot see it. Found by the unexpected-signal check on its first run.",
+        },
         "expected_behavior": "Multi-cloud recognition, AWS/GCP bridging guidance, Redis caching, Pinecone vector search, FastMCP tool integration, Datadog APM, Microservices architecture."
     },
     {
@@ -59,7 +62,7 @@ TEST_CASES = [
         "category": "Hybrid Infrastructure & IoT",
         "dimensions": "Cloud: Hybrid (Direct Connect transit to AWS) | Scale: Mid (30 devs) | Tech: Python, Kafka, ClickHouse | Domain: Logistics / Fleet GPS | Gov: ITIL | Sec: Standard | LLM: None | MCP: None | RAG: None | Obs: Splunk | Client: Web app + Mobile",
         "input": "Fleet tracking and route optimization web application with live map and device telemetry for delivery trucks. We use Direct Connect as a dedicated link to bridge our on-prem depot servers to AWS. Team of 30 engineers using Python, Apache Kafka for event bus streaming, ClickHouse for telemetry analytics, Splunk for log analysis, ITIL for service management, dispatch web application and mobile driver app.",
-        "expected_signals": ["hybridConnectivity", "geospatial", "iot", "realtime", "awsShop", "pythonMentioned", "kafkaMentioned", "clickhouseMentioned", "splunkMentioned", "itilMentioned", "web", "mobile"],
+        "expected_signals": ["hybridConnectivity", "geospatial", "iot", "realtime", "awsShop", "pythonMentioned", "kafkaMentioned", "clickhouseMentioned", "splunkMentioned", "itilMentioned", "web", "mobile", "dataHeavy", "largeTeam"],
         "expected_behavior": "Hybrid dedicated link transit (AWS Direct Connect), Kafka messaging, ClickHouse real-time analytics, Splunk log analytics, ITIL operational process."
     },
     {
@@ -69,7 +72,7 @@ TEST_CASES = [
         "category": "Enterprise GenAI Knowledge Base",
         "dimensions": "Cloud: Azure (Mono) | Scale: Ent (500 devs) | Tech: Python, React | Domain: Enterprise Internal Tools | Gov: TOGAF, SailPoint IGA | Sec: Okta SSO, SOC2 | LLM: Hosted Claude | MCP: With FastMCP | RAG: Confluence RAG | Obs: Langfuse | Client: Web app",
         "input": "Enterprise internal knowledge assistant web application on Microsoft Azure for a platform team of 500 engineers. Document search across Confluence and policy documents using RAG. Multi-agent workflows orchestrated with LangGraph, tool use with FastMCP, Langfuse for LLM observability, Okta for SSO, SailPoint for identity governance and access reviews, TOGAF framework, and React web application interface.",
-        "expected_signals": ["azureShop", "enterprise", "largeTeam", "knowledgeBase", "ragNeed", "agentic", "langgraphMentioned", "fastmcpMentioned", "langfuseMentioned", "oktaMentioned", "sailpointMentioned", "identityGovernance", "togafMentioned", "reactMentioned", "web"],
+        "expected_signals": ["azureShop", "enterprise", "largeTeam", "knowledgeBase", "ragNeed", "agentic", "langgraphMentioned", "fastmcpMentioned", "langfuseMentioned", "oktaMentioned", "sailpointMentioned", "identityGovernance", "togafMentioned", "reactMentioned", "web", "chatbot", "unstructured"],
         "expected_behavior": "Azure hosting, LangGraph agent orchestration + FastMCP tool servers, SailPoint IGA access governance, Langfuse LLM tracing, React web frontend."
     },
     {
@@ -109,7 +112,7 @@ TEST_CASES = [
         "category": "Domain Floor — Static Site",
         "dimensions": "Cloud: CDN only | Scale: Solo (1 dev) | Tech: HTML/CSS | Domain: Marketing Landing Page | Gov: None | Sec: SSL | LLM: None | MCP: None | RAG: None | Obs: None | Client: Web Static",
         "input": "I want to make a simple static marketing website with no backend, just pure HTML and CSS for our product landing page.",
-        "expected_signals": ["staticSite"],
+        "expected_signals": ["staticSite", "web"],
         "expected_behavior": "Cloud states Static hosting / CDN (Cloudflare Pages, Vercel, Netlify); Database and Containers state Not applicable."
     },
     {
@@ -119,7 +122,7 @@ TEST_CASES = [
         "category": "Sovereign / Regional Cloud",
         "dimensions": "Cloud: Huawei Cloud (Mono) | Scale: Ent (200 devs) | Tech: Java, MySQL | Domain: Telecom / APAC | Gov: COBIT | Sec: Data Residency | LLM: None | MCP: None | RAG: None | Obs: Prometheus | Client: Web app",
         "input": "Large enterprise telecom web application running on Huawei Cloud in the APAC region with a team of 200 engineers. Backend in Java using MySQL databases. IT risk governed under COBIT framework, monitored with Prometheus and Grafana.",
-        "expected_signals": ["huaweiShop", "enterprise", "largeTeam", "javaMentioned", "mysqlMentioned", "cobitMentioned", "prometheusMentioned", "web"],
+        "expected_signals": ["huaweiShop", "enterprise", "largeTeam", "javaMentioned", "mysqlMentioned", "cobitMentioned", "prometheusMentioned", "web", "grafanaMentioned", "structured"],
         "expected_behavior": "Huawei Cloud selected, MySQL relational database, COBIT risk governance, Prometheus + Grafana monitoring."
     },
     {
@@ -129,7 +132,7 @@ TEST_CASES = [
         "category": "Lean Startup MVP",
         "dimensions": "Cloud: Serverless | Scale: Solo (1 founder) | Tech: TypeScript, React, Neon | Domain: B2B SaaS | Gov: None | Sec: Clerk Auth | LLM: None | MCP: None | RAG: None | Obs: Better Stack | Client: Web app",
         "input": "Solo founder building an early-stage B2B SaaS MVP web application, move fast on a bootstrapped budget. Using React with TypeScript, Neon serverless Postgres, Clerk for authentication, Better Stack for uptime monitoring.",
-        "expected_signals": ["startupMvp", "smallTeam", "reactMentioned", "neonMentioned", "clerkMentioned", "betterStackMentioned", "web"],
+        "expected_signals": ["startupMvp", "smallTeam", "reactMentioned", "neonMentioned", "clerkMentioned", "betterStackMentioned", "web", "postgresMentioned", "serverlessMentioned"],
         "expected_behavior": "Clerk authentication, Neon serverless Postgres, Better Stack uptime monitoring, single modular monolith."
     },
 
@@ -183,7 +186,7 @@ TEST_CASES = [
         "category": "Inference Architecture",
         "dimensions": "Production-scale self-hosted continuous batching vs lightweight runtime",
         "input": "Large enterprise team of 100 engineers running our own GPUs on premises with high traffic, hosting open-weight LLMs using vLLM for inference serving.",
-        "expected_signals": ["enterprise", "largeTeam", "highScale", "selfHostInfra", "vllmMentioned"],
+        "expected_signals": ["enterprise", "largeTeam", "highScale", "selfHostInfra", "vllmMentioned", "onPrem"],
         "expected_behavior": "Selects vLLM continuous batching for production serving rather than Ollama dev runtime."
     },
     {
@@ -203,7 +206,7 @@ TEST_CASES = [
         "category": "Brownfield AI Scope",
         "dimensions": "Brownfield AI pattern #5 — guardrails review without changing LLM",
         "input": "We already have AI built and running in production; we just need our guardrails and safety layer reviewed for prompt injection, jailbreak and PII leakage.",
-        "expected_signals": ["brownfieldGuardrailsOnly", "routingGuardrailService"],
+        "expected_signals": ["brownfieldGuardrailsOnly", "routingGuardrailService", "security"],
         "expected_behavior": "brownfieldGuardrailsOnly fires in BOTH engines (ported to rule_engine.py). RoutingGuardrailService detected in both. Section suppression remains a rendering concern in index.html."
     },
     {
@@ -213,7 +216,7 @@ TEST_CASES = [
         "category": "MCP Protocol Exposition",
         "dimensions": "FastMCP tool server complement to agent reasoning loop",
         "input": "Building FastMCP tool servers in Python to expose internal databases and document search as callable tools for autonomous AI agents.",
-        "expected_signals": ["fastmcpMentioned", "pythonMentioned", "agentic"],
+        "expected_signals": ["fastmcpMentioned", "pythonMentioned", "agentic", "knowledgeBase", "ragNeed"],
         "expected_behavior": "Recommends FastMCP for MCP tool exposition alongside agent orchestration guidance."
     },
     {
@@ -233,7 +236,7 @@ TEST_CASES = [
         "category": "Context Disambiguation",
         "dimensions": "Distinguish 'is X in MVP scope?' from early-stage startup declaration",
         "input": "Is audit log streaming within the MVP scope? We are an enterprise team of 120 engineers building a corporate compliance platform.",
-        "expected_signals": ["enterprise", "largeTeam"],
+        "expected_signals": ["enterprise", "largeTeam", "compliance", "realtime"],
         "expected_behavior": "Does not misclassify as startupMvp; preserves enterprise scale, IAM, and compliance recommendations."
     },
 
@@ -277,7 +280,7 @@ TEST_CASES = [
         "category": "Negation Engine — Quantity Scoping",
         "dimensions": "Prevent false database exclusion when user retains current database",
         "input": "We already use PostgreSQL in production and don't need another database added to our architecture.",
-        "expected_signals": ["postgresMentioned"],
+        "expected_signals": ["postgresMentioned", "structured"],
         "expected_behavior": "Database category not excluded; PostgreSQL correctly recommended as transactional store."
     },
     {
@@ -356,6 +359,8 @@ def run_tests():
             "Expected Signals": ", ".join(tc.get("expected_signals", [])),
             "Expected Behavior": tc.get("expected_behavior", ""),
             "Actual Signals Detected": "",
+            "Unexpected Signals": "",
+            "Known False Positives": ", ".join(sorted(tc.get("known_false_positives", {}))),
             "Actual Key Recommendations": "",
             "Status": "UNKNOWN",
             "Notes / Findings": ""
@@ -379,6 +384,9 @@ def run_tests():
             
             # Extract active signals
             active_signals = [k for k, v in s.items() if v is True]
+            # The comparison runs on the booleans alone: the excluded/throughput entries appended
+            # below are formatted for the CSV and would never match an expected_signals name.
+            active_signals_only = list(active_signals)
             if s.get("excluded"):
                 active_signals.append(f"excluded:{list(s['excluded'].keys())}")
             if s.get("throughputTarget"):
@@ -399,17 +407,41 @@ def run_tests():
             passed = True
             notes = []
             
-            # Check expected signals
+            # Two directions, not one. Checking only that every EXPECTED signal fired lets a row
+            # pass while carrying a signal that is plainly wrong for the scenario — which is not
+            # hypothetical: ALT-04 read PASS for weeks while selfHostInfra fired on "Kubernetes is
+            # off the table", because the row never listed the signal it was wrong about. A matrix
+            # that can only see omissions cannot see over-matching, and over-matching is the defect
+            # class this engine actually produces.
             missing_sigs = [sig for sig in tc.get("expected_signals", []) if not s.get(sig)]
             if missing_sigs:
                 passed = False
                 notes.append(f"Missing signals: {missing_sigs}")
+
+            # `known_false_positives` is deliberately separate from `expected_signals`. Folding a
+            # wrong signal into the expectations would silence the check and record the defect as
+            # correct behaviour; naming it keeps the row green while stating, in the artifact, that
+            # the engine is wrong here and why.
+            known_fp = tc.get("known_false_positives", {})
+            unexpected = sorted(
+                set(active_signals_only) - set(tc.get("expected_signals", [])) - set(known_fp)
+            )
+            if unexpected:
+                passed = False
+                notes.append(f"Unexpected signals: {unexpected}")
+            if known_fp:
+                notes.append("Known false positive(s): " + "; ".join(
+                    f"{k} — {v}" for k, v in sorted(known_fp.items())))
                 
+            res["Unexpected Signals"] = ", ".join(unexpected)
             if passed:
                 res["Status"] = "PASS"
-                res["Notes / Findings"] = "Verified: matches all target signals and architecture dimensions."
+                res["Notes / Findings"] = ("Verified: every expected signal fired and nothing else did."
+                                           + (" " + "; ".join(notes) if notes else ""))
             else:
-                res["Status"] = "BEHAVIOR-NOTED"
+                # FAIL, not BEHAVIOR-NOTED. The old vocabulary had no failing state for a signal
+                # mismatch at all, so "32/32 PASS" was the only outcome the matrix could report.
+                res["Status"] = "FAIL"
                 res["Notes / Findings"] = "; ".join(notes)
                 
         except Exception as e:
@@ -429,4 +461,11 @@ if __name__ == "__main__":
         writer.writerows(results)
     print(f"Wrote {len(results)} test cases to {csv_path}")
     pass_count = sum(1 for r in results if r["Status"] == "PASS")
-    print(f"Summary: {pass_count}/{len(results)} PASS, {len(results)-pass_count} NOTED/OTHER")
+    over = sum(1 for r in results if r["Unexpected Signals"])
+    known = sum(1 for r in results if r["Known False Positives"])
+    print(f"Summary: {pass_count}/{len(results)} PASS, {len(results)-pass_count} FAIL")
+    print(f"  rows with unexpected signals: {over}")
+    print(f"  rows carrying a known false positive: {known}")
+    for r in results:
+        if r["Status"] != "PASS":
+            print(f"  {r['Test ID']}: {r['Notes / Findings']}")
