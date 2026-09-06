@@ -106,7 +106,7 @@ def strip_negations(text: str) -> str:
         flags=re.IGNORECASE,
     )
     text = re.sub(
-        r"\b(no|not|without|avoid|skip|ditch|steer clear of|don't|doesn't|isn't|won't|never|excluding|except for|except)\b"
+        r"\b(no|not|cannot|can not|can't|unable to|without|avoid|skip|ditch|steer clear of|don't|doesn't|isn't|won't|never|excluding|except for|except)\b"
         r"[^.!?;\n]{0,300}?" + _CLAUSE_END,
         " ",
         text,
@@ -143,8 +143,18 @@ EXCLUSION_TERMS = {
     "languages": ["java", "python", "javascript", "typescript", "ruby", "php", "kotlin", "swift", "rust", "c#", ".net", "node.js", "nodejs"],
 }
 
+# "cannot"/"can't"/"unable to" state inability, and inability is exclusion: a team that
+# "cannot operate our own infrastructure" is stating a constraint as plainly as one that
+# "does not want" to. Their absence was doing real damage rather than merely missing a
+# phrasing — "Kubernetes is off the table because our team cannot operate k8s complexity"
+# stripped the first clause and left the second, so the surviving "k8s" set selfHostInfra
+# on a requirement whose entire point was that this team runs no infrastructure. That
+# signal gates the sensitive-data branch and the startup-MVP branch of pick_runtime, so
+# the miss changed recommendations, not just signal bookkeeping.
+# "not" cannot match inside "cannot" (no word boundary there), which is why the word has
+# to be listed in its own right. Bare "cant" is deliberately absent — it is a real word.
 _NEGATION_CLAUSE = re.compile(
-    r"\b(?:no|not|without|avoid|skip|ditch|steer clear of|don't|doesn't|isn't|won't|never|excluding|except for|except)\b"
+    r"\b(?:no|not|cannot|can not|can't|unable to|without|avoid|skip|ditch|steer clear of|don't|doesn't|isn't|won't|never|excluding|except for|except)\b"
     r"([^.!?;\n]{0,300}?)" + _CLAUSE_END,
     re.I,
 )

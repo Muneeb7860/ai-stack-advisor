@@ -2207,7 +2207,7 @@ function stripNegations(text){
   // pass below never fires on "neither" at all (not in its negator list), so without this,
   // both names survive to be read as positive mentions. See NEITHER_NOR_CLAUSE below.
   text = text.replace(new RegExp('\\bneither\\b[^.!?;\\n]{0,300}?' + NEGATION_CLAUSE_END, 'gi'), ' ');
-  text = text.replace(new RegExp('\\b(no|not|without|avoid|skip|ditch|steer clear of|don\'t|doesn\'t|isn\'t|won\'t|never|excluding|except for|except)\\b[^.!?;\\n]{0,300}?' + NEGATION_CLAUSE_END, 'gi'), ' ');
+  text = text.replace(new RegExp('\\b(no|not|cannot|can not|can\'t|unable to|without|avoid|skip|ditch|steer clear of|don\'t|doesn\'t|isn\'t|won\'t|never|excluding|except for|except)\\b[^.!?;\\n]{0,300}?' + NEGATION_CLAUSE_END, 'gi'), ' ');
   return text;
 }
 
@@ -2268,6 +2268,12 @@ const NON_EXCLUSION_QUALIFIERS = [
 // ("another database"), not at the start of the whole clause like NON_EXCLUSION_QUALIFIERS
 // ("not only a website..."), so a clause-level startsWith() check can't catch it. Checked
 // per-term-match instead, against the text immediately preceding that specific match.
+// A container-tool name (docker/kubernetes/k8s) counts as a self-hosting signal only when a
+// self-hosting verb sits within a short clause-bounded window on either side. A bare mention does
+// not qualify — managed Kubernetes and containerized deploys to serverless (Fargate/Cloud Run)
+// name these exact tools while being the opposite of self-hosting. Ported verbatim in intent from
+// rule_engine.py _SELF_HOST_TOOL_RE; the differential test fails if the two engines diverge.
+const SELF_HOST_TOOL_RE = /(?:(?:self[\s-]?host(?:ed|ing)?|run(?:ning)?\s+our\s+own|our\s+own|on[\s-]?prem(?:ise|ises)?|bare[\s-]?metal|manage\s+our\s+own)[^.!?;\n]{0,40}?\b(?:docker|kubernetes|k8s)\b)|(?:\b(?:docker|kubernetes|k8s)\b[^.!?;\n]{0,40}?(?:self[\s-]?host(?:ed|ing)?|our\s+own\s+(?:hardware|servers|infrastructure|gpus?|data\s*cent(?:er|re))|bare[\s-]?metal|on[\s-]?prem))/i;
 const QUANTITY_QUALIFIER_RE = /\b(?:another|a second|an additional|a different|one more)\s*$/i;
 
 // Found by running a real OTP-verification design document through the engine. It said "The code
@@ -2305,7 +2311,7 @@ const CONTAINMENT_DESTINATION_RE = /\b(?:appear|appears|surface|surfaces|show\s+
 function findExclusions(text, termsByKey){
   const t = String(text || '').toLowerCase();
   // Same clause shape stripNegations() removes, but capturing the clause instead of dropping it.
-  const NEG = new RegExp('\\b(?:no|not|without|avoid|skip|ditch|steer clear of|don\'t|doesn\'t|isn\'t|won\'t|never|excluding|except for|except)\\b([^.!?;\\n]{0,300}?)' + NEGATION_CLAUSE_END, 'gi');
+  const NEG = new RegExp('\\b(?:no|not|cannot|can not|can\'t|unable to|without|avoid|skip|ditch|steer clear of|don\'t|doesn\'t|isn\'t|won\'t|never|excluding|except for|except)\\b([^.!?;\\n]{0,300}?)' + NEGATION_CLAUSE_END, 'gi');
   // Passive voice ("Kubernetes must not be used") — see PASSIVE_NEGATION_PHRASES above.
   const PASSIVE_NEG = new RegExp('(' + PASSIVE_NEGATION_PREFIX + ')\\b(?:' + PASSIVE_NEGATION_ALT + ')\\b', 'gi');
   // "Neither Java nor Python" — a correlating conjunction, not a single negator word, so it

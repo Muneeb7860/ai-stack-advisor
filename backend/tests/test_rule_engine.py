@@ -281,8 +281,19 @@ def test_cost_estimate_llm_band_is_zero_for_local_hosting():
     """The audit-fixed bug this field's own comment warns about: a broad /hybrid/i regex would
     have incorrectly zeroed out LLM cost for the real-scale 'Hybrid: cloud API as the
     default...' branch, whose rec does NOT start with 'Local'. Confirm the fix holds: only
-    hosting recs starting with 'Local' zero out the LLM band."""
-    onprem = recommend_stack("Air-gapped government system, cannot use any public cloud, needs a chatbot assistant.")
+    hosting recs starting with 'Local' zero out the LLM band.
+
+    Fixture rephrased when "cannot" joined the negator list. The old one put the chatbot need
+    INSIDE the negated clause ("cannot use any public cloud, needs a chatbot assistant") and a
+    negation clause runs to the end of its sentence, commas included — so once "cannot" was
+    recognised, strip_negations correctly removed the chatbot along with the cloud, and llmBand
+    came back None. That over-reach is pre-existing and unrelated to this test: on the engine
+    before that change, "no public cloud, needs a chatbot assistant" already loses the chatbot
+    the same way. Splitting the constraint into its own sentence keeps the fixture testing the
+    LLM band rather than negation scope, and still exercises the new negator.
+    """
+    onprem = recommend_stack(
+        "Air-gapped government system that needs a chatbot assistant. Cannot use any public cloud.")
     assert onprem["recommendations"]["cost_estimate"]["llmBand"]["label"] == "$0 direct API spend"
 
 
