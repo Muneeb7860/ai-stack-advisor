@@ -16,9 +16,14 @@ prior bare-word fixes (`mvp`, `ai`); these extend the same pattern rather than i
    rate-limiting table made a single-region product look geographically distributed — and that
    signal drives four cost and trade-off branches.
 """
+import re
+from pathlib import Path
+
 import pytest
 
 from app.rule_engine import detect_signals
+
+INDEX_HTML = Path(__file__).resolve().parents[2] / "index.html"
 
 
 def _excluded(text):
@@ -161,3 +166,58 @@ def test_naming_docker_kubernetes_without_a_self_host_verb_does_not_reach_that_b
     # Post-fix this must NOT land the "you already self-host" runtime rec.
     rt = _runtime("We run Docker and Kubernetes in production today and process PII under GDPR.")
     assert "on the infrastructure you already run" not in rt.get("rec", "")
+
+
+# ------------------------------------------------------------------ "live" is two different words
+# realtime held a bare "live" and has() does not anchor, so every word containing those four
+# letters set a latency signal: "delivery", "deliver", "deliverables", "olive". Found by the QA
+# matrix's unexpected-signal check on its first run, on "scaled agile framework delivery
+# coordination" — a phrase about sprint process in a scenario with no latency requirement at all.
+#
+# Word boundaries alone are not enough. "We go live in March" is a launch date, and the launch
+# sense is what "live" usually means when it is not attached to a noun like map or leaderboard,
+# so it would have replaced one silent false positive with a commoner one.
+def _realtime(text):
+    return detect_signals(text).get("realtime")
+
+
+@pytest.mark.parametrize("text", [
+    "Scaled agile framework delivery coordination across squads.",
+    "Reliable delivery of order confirmation emails.",
+    "An olive oil marketplace for small producers.",
+    "Deliverables for the next sprint are agreed.",
+    "We go live in March with the first cohort.",
+    "The platform went live last year.",
+    "Planning our go-live date with the client.",
+])
+def test_the_word_live_inside_another_word_is_not_a_latency_requirement(text):
+    assert not _realtime(text), f"{text!r} wrongly set realtime"
+
+
+@pytest.mark.parametrize("text", [
+    "Live leaderboards and live scoring for concurrent players.",
+    "A live map showing every vehicle position.",
+    "Push live updates to the client as they happen.",
+    "Real-time multiplayer with sub-100ms response.",
+    "Streaming analytics over the event bus.",
+    "The dashboard must be low latency under load.",
+])
+def test_a_genuine_latency_requirement_still_sets_realtime(text):
+    assert _realtime(text), f"{text!r} should set realtime but did not"
+
+
+def test_both_engines_agree_on_the_live_boundary():
+    """The JS twin is a regex literal, where `\\\\b` means a literal backslash rather than a word
+    boundary — a double-escape that works perfectly in Python and silently does nothing in the
+    browser. That exact mistake shipped once in this repo already, so the source is asserted
+    rather than assumed."""
+    js = INDEX_HTML.read_text(encoding="utf-8")
+    m = re.search(r"const LIVE_REALTIME_RE = /(.+?)/i;", js)
+    assert m, "LIVE_REALTIME_RE not found in index.html"
+    assert "\\\\b" not in m.group(1), (
+        "the JS regex is double-escaped: \\\\b is a literal backslash, not a word boundary"
+    )
+    assert m.group(1).endswith(r"\blive\b")
+    assert "realtime: has(['real-time','real time','low latency','streaming'])" in js, (
+        "bare 'live' is back in the JS realtime term list"
+    )

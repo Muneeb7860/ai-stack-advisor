@@ -2279,6 +2279,11 @@ const NON_EXCLUSION_QUALIFIERS = [
 // not qualify — managed Kubernetes and containerized deploys to serverless (Fargate/Cloud Run)
 // name these exact tools while being the opposite of self-hosting. Ported verbatim in intent from
 // rule_engine.py _SELF_HOST_TOOL_RE; the differential test fails if the two engines diverge.
+// Twin of rule_engine.py's _LIVE_REALTIME_RE — see the reasoning there. Bare 'live' matched
+// inside "delivery"/"olive"; word boundaries fix that, and the lookbehinds keep "we go live in
+// March" (a launch date) out of a latency signal.
+const LIVE_REALTIME_RE = /(?<!\bgo\s)(?<!\bgoes\s)(?<!\bgoing\s)(?<!\bwent\s)(?<!\bgo-)\blive\b/i;
+
 const SELF_HOST_TOOL_RE = /(?:(?:self[\s-]?host(?:ed|ing)?|run(?:ning)?\s+our\s+own|our\s+own|on[\s-]?prem(?:ise|ises)?|bare[\s-]?metal|manage\s+our\s+own)[^.!?;\n]{0,40}?\b(?:docker|kubernetes|k8s)\b)|(?:\b(?:docker|kubernetes|k8s)\b[^.!?;\n]{0,40}?(?:self[\s-]?host(?:ed|ing)?|our\s+own\s+(?:hardware|servers|infrastructure|gpus?|data\s*cent(?:er|re))|bare[\s-]?metal|on[\s-]?prem))/i;
 const QUANTITY_QUALIFIER_RE = /\b(?:another|a second|an additional|a different|one more)\s*$/i;
 
@@ -2737,7 +2742,7 @@ function detectSignals(text){
     highScale: has(['high traffic','high volume','high transaction','scale','millions of users','peak load','sales event','black friday'])
       || !!(_tt && _tt.perSecond >= THROUGHPUT_HIGH_SCALE_RPS)
                || !!(_ct && _ct.count >= CONCURRENCY_HIGH_SCALE_THRESHOLD),
-    realtime: has(['real-time','real time','low latency','streaming','live']),
+    realtime: has(['real-time','real time','low latency','streaming']) || LIVE_REALTIME_RE.test(t),
     chatbot: has(['chatbot','conversational','customer support bot','assistant','virtual agent']),
     knowledgeBase: has(['knowledge base','internal documents','policy documents','confluence','wiki','document search','faq']),
     agentic: has(['agentic','multi-agent','take actions','automate workflow','autonomous','tool use','function calling']),

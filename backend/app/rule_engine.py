@@ -190,6 +190,16 @@ NON_EXCLUSION_QUALIFIERS = (
 # managed Kubernetes and containerized deploys to serverless (Fargate/Cloud Run) name these exact
 # tools while being the opposite of self-hosting. Window is small and clause-bounded (no sentence
 # terminators) so it can't reach across "... Kubernetes. We deploy to Cloud Run" and re-trigger.
+# "live" was a bare substring in the realtime term list and has() does not anchor, so "delivery",
+# "deliver", "deliverables" and "olive" all set realtime — found by the QA matrix's unexpected-
+# signal check on its first run, on the phrase "scaled agile framework delivery coordination".
+# Word boundaries fix that but leave a second, commoner false positive: "we go live in March" is a
+# launch date, not a latency requirement, and the launch sense is what "live" usually means when
+# it is not attached to a noun like map/leaderboard/dashboard. Both engines carry this regex
+# verbatim; the plain terms beside it stay substring matches, which is safe for multi-word phrases.
+_LIVE_REALTIME_RE = re.compile(
+    r"(?<!\bgo\s)(?<!\bgoes\s)(?<!\bgoing\s)(?<!\bwent\s)(?<!\bgo-)\blive\b", re.I)
+
 _SELF_HOST_TOOL_RE = re.compile(
     r"(?:(?:self[\s-]?host(?:ed|ing)?|run(?:ning)?\s+our\s+own|our\s+own|on[\s-]?prem(?:ise|ises)?|"
     r"bare[\s-]?metal|manage\s+our\s+own)[^.!?;\n]{0,40}?\b(?:docker|kubernetes|k8s)\b)"
@@ -731,7 +741,8 @@ def detect_signals(text: str) -> dict:
         "highScale": has(["high traffic", "high volume", "high transaction", "scale", "millions of users", "peak load", "sales event", "black friday"])
         or bool(_tt and _tt["perSecond"] >= THROUGHPUT_HIGH_SCALE_RPS)
                      or bool(_ct and _ct["count"] >= CONCURRENCY_HIGH_SCALE_THRESHOLD),
-        "realtime": has(["real-time", "real time", "low latency", "streaming", "live"]),
+        "realtime": has(["real-time", "real time", "low latency", "streaming"])
+        or bool(_LIVE_REALTIME_RE.search(t)),
         "chatbot": has(["chatbot", "conversational", "customer support bot", "assistant", "virtual agent"]),
         "knowledgeBase": has(["knowledge base", "internal documents", "policy documents", "confluence", "wiki", "document search", "faq"]),
         "agentic": has(["agentic", "multi-agent", "take actions", "automate workflow", "autonomous", "tool use", "function calling"]),

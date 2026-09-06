@@ -53,6 +53,8 @@
     "Self-hosted enterprise deployment of a multi-agent security platform. Air-gapped operation: no internet connectivity required after initial container pull. All LLM inference routes through local Ollama.",
     "All LLM inference routes through local Ollama (no outbound API calls required). Recommendation: keep the gateway internal. Global check rate limits apply per tenant.",
     "We already have an application in production and only want to add AI to our existing system for a customer support bot.",
-    "We already have AI built and running in production; we just need our guardrails and safety layer reviewed for prompt injection, jailbreak and PII leakage."
+    "We already have AI built and running in production; we just need our guardrails and safety layer reviewed for prompt injection, jailbreak and PII leakage.",
+    "Scaled agile framework delivery coordination for an e-commerce marketplace on AWS.",
+    "We go live in March with a modular monolith for an internal admin tool."
   ]
 }

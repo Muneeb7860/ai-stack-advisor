@@ -40,9 +40,6 @@ TEST_CASES = [
         "dimensions": "Cloud: Multi-Cloud (AWS + GCP) | Scale: Mid (45 devs) | Tech: Go, React, Redis | Domain: E-Commerce Marketplace | Gov: Scaled Agile (SAFe) | Sec: SOC2 | LLM: Hosted Claude | MCP: FastMCP + Agentic Tool Use | RAG: Pinecone Product Search | Obs: Datadog | Client: Web + Mobile",
         "input": "High volume e-commerce marketplace web application running across both AWS and Google Cloud with 45 engineers. Peak load during sales events. Backend services written in Go with React web application and mobile apps. We use Pinecone for product recommendation document search RAG, agentic tool use with FastMCP for agent tools, hosted Anthropic Claude LLM, Redis for session cache, Datadog for observability, SOC2 compliance, and scaled agile framework delivery coordination.",
         "expected_signals": ["multiCloudMentioned", "awsShop", "gcpShop", "highScale", "marketplace", "goMentioned", "reactMentioned", "mobile", "pineconeMentioned", "agentic", "fastmcpMentioned", "llmProviderMentioned", "redisMentioned", "datadogMentioned", "soc2Mentioned", "safeMentioned", "web", "compliance", "ecommerce", "knowledgeBase", "largeTeam", "ragNeed"],
-        "known_false_positives": {
-            "realtime": "Fires on the substring 'live' inside 'delivery coordination'. The realtime term list holds a bare 'live' and has() is a plain substring match, so 'delivery', 'deliver' and 'olive' all set it too. The same list is in both engines, so the differential test cannot see it. Found by the unexpected-signal check on its first run.",
-        },
         "expected_behavior": "Multi-cloud recognition, AWS/GCP bridging guidance, Redis caching, Pinecone vector search, FastMCP tool integration, Datadog APM, Microservices architecture."
     },
     {
