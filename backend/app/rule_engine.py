@@ -184,6 +184,19 @@ NON_EXCLUSION_QUALIFIERS = (
 # database"), not at the start of the whole clause like NON_EXCLUSION_QUALIFIERS above ("not
 # only a website..."), so a clause-level startswith() check can't catch it. Checked per-term-
 # match instead, against the text immediately preceding that specific match.
+# A container-tool name (docker/kubernetes/k8s) counts as a self-hosting signal only when a
+# self-hosting verb sits within a short window on either side — "self-host kubernetes", "run our
+# own k8s", "kubernetes on our own hardware/bare metal". A bare mention does not qualify, because
+# managed Kubernetes and containerized deploys to serverless (Fargate/Cloud Run) name these exact
+# tools while being the opposite of self-hosting. Window is small and clause-bounded (no sentence
+# terminators) so it can't reach across "... Kubernetes. We deploy to Cloud Run" and re-trigger.
+_SELF_HOST_TOOL_RE = re.compile(
+    r"(?:(?:self[\s-]?host(?:ed|ing)?|run(?:ning)?\s+our\s+own|our\s+own|on[\s-]?prem(?:ise|ises)?|"
+    r"bare[\s-]?metal|manage\s+our\s+own)[^.!?;\n]{0,40}?\b(?:docker|kubernetes|k8s)\b)"
+    r"|(?:\b(?:docker|kubernetes|k8s)\b[^.!?;\n]{0,40}?(?:self[\s-]?host(?:ed|ing)?|"
+    r"our\s+own\s+(?:hardware|servers|infrastructure|gpus?|data\s*cent(?:er|re))|bare[\s-]?metal|on[\s-]?prem))",
+    re.I,
+)
 _QUANTITY_QUALIFIER_RE = re.compile(r"\b(?:another|a second|an additional|a different|one more)\s*$", re.I)
 
 # Ported from index.html. "The code must not appear in any observability surface" is a rule about
@@ -753,7 +766,20 @@ def detect_signals(text: str) -> dict:
         "mlFeatureStore": has(["recommendation model", "recommender system", "fraud scoring", "fraud detection model", "risk scoring model", "ranking model", "forecasting model", "demand forecasting", "churn model", "propensity model", "custom ml model", "feature store", "model training pipeline", "model registry"]),
         "searchRecommendation": has(["search bar", "product search", "site search", "search relevance", "autocomplete", "instant search", "faceted search", "recommendations", "recommended for you", "you may also like", "personalized feed", "for you page", "discovery feed", "similar items", "related products"]),
         "routingGuardrailService": has(["route between models", "multiple llm providers", "cost-optimize llm calls", "model selection per task", "different models per task", "llm gateway", "llm proxy", "ai gateway", "centralized guardrails", "prompt injection", "jailbreak", "pii redaction", "content policy enforcement", "semantic router", "model router", "fall back to a stronger model"]),
-        "selfHostInfra": has(["docker", "kubernetes", "k8s", "self-hosted", "self hosted", "own gpu", "own gpus", "own servers", "own infrastructure", "own hardware", "on our own hardware", "ollama"]),
+        # Two tiers. The unambiguous terms below state self-hosting outright, so a bare
+        # substring match is safe. But "docker"/"kubernetes"/"k8s" name a technology, not a
+        # hosting choice: managed GKE/EKS and Docker-on-Fargate are the OPPOSITE of running
+        # your own infrastructure, and "Kubernetes is not an option" survives negation-strip
+        # as a bare mention across a sentence boundary. So the container tools set this signal
+        # only when a self-hosting verb sits near them (see _SELF_HOST_TOOL_RE). This gates
+        # pick_runtime's sensitive-data and startup-MVP branches, so a false positive here
+        # changed recommendations, not just bookkeeping — the reason it earns a dedicated rule
+        # rather than a line in the has() list, same discipline as the `mvp`/`ai` bare-word fixes.
+        "selfHostInfra": (
+            has(["self-hosted", "self hosted", "own gpu", "own gpus", "own servers",
+                 "own infrastructure", "own hardware", "on our own hardware", "ollama"])
+            or bool(_SELF_HOST_TOOL_RE.search(t))
+        ),
         "vllmMentioned": has(["vllm"]),
         "sglangMentioned": has(["sglang", "sg-lang"]),
         # Bare "tgi" deliberately excluded (too short/common a substring to trust) — only the
@@ -2365,7 +2391,7 @@ def pick_runtime(s):
     if s["onPrem"]:
         return {"rec": "Ollama (fully local, no external network calls)", "why": "Air-gapped/no-public-cloud rules out any router or API that proxies requests to third-party infrastructure — Ollama running entirely inside your network boundary is the only option that fits, not a preference.", "conf": "high"}
     if sensitive and s["selfHostInfra"]:
-        return {"rec": "Ollama, self-hosted alongside your existing Docker/Kubernetes infrastructure", "why": "You already carry the ops burden of self-hosting (Docker/K8s in the stack) and have sensitive-data handling requirements — Ollama keeps prompts/outputs on infrastructure you already operate and control, rather than adding a new third-party data-processing relationship for a marginal convenience gain.", "conf": "high"}
+        return {"rec": "Ollama, self-hosted on the infrastructure you already run", "why": "You've stated you self-host (own servers/GPUs or a self-managed cluster) and have sensitive-data handling requirements — Ollama keeps prompts/outputs on infrastructure you already operate and control, rather than adding a new third-party data-processing relationship for a marginal convenience gain.", "conf": "high"}
     if sensitive:
         return {"rec": "Ollama (self-hosted) for anything touching regulated/sensitive data; direct provider SDK for the rest", "why": "Compliance/security-sensitive data shouldn't transit a third-party router even one that claims not to log content — Ollama keeps it on infrastructure you control. Non-sensitive auxiliary tasks can still use a direct cloud provider SDK without adding OpenRouter's extra hop for something that doesn't need model-routing flexibility.", "conf": "high"}
     if s["startupMvp"] and not s["selfHostInfra"]:

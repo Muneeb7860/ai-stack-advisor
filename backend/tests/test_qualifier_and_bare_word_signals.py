@@ -89,3 +89,75 @@ def test_the_word_global_alone_is_not_multi_region(text):
 ])
 def test_genuine_geographic_distribution_still_fires(text):
     assert detect_signals(text)["globalMultiRegion"] is True, text
+
+
+# ------------------------------------------------------------ a tool mention is not a hosting choice
+# Fourth instance of the same failure class: bare "docker"/"kubernetes"/"k8s" in the selfHostInfra
+# term list is a substring match, so naming the technology set the signal regardless of who operates
+# it. But managed Kubernetes (GKE/EKS) and containerization (Docker on Fargate) are the OPPOSITE of
+# self-hosting infrastructure, and "Kubernetes is not an option" across a sentence boundary survives
+# negation-stripping as a bare mention. selfHostInfra gates the sensitive-data branch and the
+# startup-MVP branch of pick_runtime, so this changed recommendations, not just signal bookkeeping.
+# The genuine self-host terms (own gpu/servers/infrastructure/hardware, self-hosted, ollama) must
+# still set it — the fix narrows the three tool names, it does not remove the signal.
+def _self_host(text):
+    return detect_signals(text).get("selfHostInfra")
+
+
+@pytest.mark.parametrize("text", [
+    "We deploy to managed GKE; Kubernetes handles our orchestration.",
+    "Our app is containerized with Docker and runs on AWS Fargate.",
+    "Kubernetes is not an option for us.",
+    "The team has never used Kubernetes.",
+    "We use Docker Compose locally but deploy to Cloud Run.",
+])
+def test_naming_a_container_tool_does_not_assert_self_hosting(text):
+    assert not _self_host(text), f"{text!r} wrongly set selfHostInfra -> {detect_signals(text).get('selfHostInfra')}"
+
+
+@pytest.mark.parametrize("text", [
+    "We self-host everything on our own GPUs.",
+    "Runs on our own hardware inside the data center.",
+    "All inference is local via Ollama on our own servers.",
+    "We run our own infrastructure end to end.",
+    "Self-hosted Kubernetes on our own bare-metal servers.",   # tool name + genuine self-host verb
+])
+def test_genuine_self_hosting_still_sets_the_signal(text):
+    assert _self_host(text), f"{text!r} should set selfHostInfra but did not"
+
+
+# ------------------------------------------------ a branch's rationale must not cite its own dead trigger
+# When selfHostInfra stopped firing on bare "docker"/"kubernetes", the pick_runtime branch it gates
+# still justified itself with "your existing Docker/Kubernetes infrastructure" / "(Docker/K8s in the
+# stack)" — evidence that, post-fix, specifically no longer triggers it. Nothing pinned the string, so
+# the signal-and-prose contradiction was invisible to the suite. These tie the rationale to a genuine
+# triggering input so the two can't drift apart again.
+from app.rule_engine import recommend_stack
+
+
+def _runtime(text):
+    r = recommend_stack(text)["recommendations"]
+    return r.get("llm_runtime") or r.get("runtime") or {}
+
+
+def test_self_host_sensitive_runtime_still_fires_on_a_real_self_host_signal():
+    rt = _runtime("We self-host on our own GPU servers and handle HIPAA-regulated patient data.")
+    assert "Ollama" in rt["rec"]
+    assert rt["conf"] == "high"
+
+
+def test_that_runtime_rationale_does_not_cite_bare_container_tools_as_its_trigger():
+    # The branch is reached by a self-hosting posture, not by naming Docker/K8s — which no longer
+    # sets selfHostInfra on their own. The rationale must not claim otherwise.
+    rt = _runtime("We self-host on our own GPU servers and handle HIPAA-regulated patient data.")
+    why = rt["why"].lower()
+    assert "docker/k8s" not in why and "docker/kubernetes" not in why, (
+        f"rationale cites container tools its trigger no longer keys on: {rt['why']!r}"
+    )
+
+
+def test_naming_docker_kubernetes_without_a_self_host_verb_does_not_reach_that_branch():
+    # The exact contradiction: production Docker/K8s mention, sensitive data, but no self-host verb.
+    # Post-fix this must NOT land the "you already self-host" runtime rec.
+    rt = _runtime("We run Docker and Kubernetes in production today and process PII under GDPR.")
+    assert "on the infrastructure you already run" not in rt.get("rec", "")

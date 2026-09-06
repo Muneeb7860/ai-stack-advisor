@@ -2797,7 +2797,15 @@ function detectSignals(text){
     mlFeatureStore: has(['recommendation model','recommender system','fraud scoring','fraud detection model','risk scoring model','ranking model','forecasting model','demand forecasting','churn model','propensity model','custom ml model','feature store','model training pipeline','model registry']),
     searchRecommendation: has(['search bar','product search','site search','search relevance','autocomplete','instant search','faceted search','recommendations','recommended for you','you may also like','personalized feed','for you page','discovery feed','similar items','related products']),
     routingGuardrailService: has(['route between models','multiple llm providers','cost-optimize llm calls','model selection per task','different models per task','llm gateway','llm proxy','ai gateway','centralized guardrails','prompt injection','jailbreak','pii redaction','content policy enforcement','semantic router','model router','fall back to a stronger model']),
-    selfHostInfra: has(['docker','kubernetes','k8s','self-hosted','self hosted','own gpu','own gpus','own server','own servers','own infrastructure','own hardware','on our own hardware','ollama']),
+    // Two tiers — mirrors rule_engine.py selfHostInfra exactly (differential test enforces parity).
+    // The unambiguous terms state self-hosting outright, so a bare substring match is safe. But
+    // "docker"/"kubernetes"/"k8s" name a technology, not a hosting choice: managed GKE/EKS and
+    // Docker-on-Fargate are the OPPOSITE of running your own infra, and "Kubernetes is not an
+    // option" survives negation-strip as a bare mention across a sentence boundary. So the
+    // container tools set this only when a self-hosting verb sits near them (SELF_HOST_TOOL_RE).
+    // Gates pick_runtime's sensitive-data and startup-MVP branches, so a false positive changed
+    // recommendations, not just bookkeeping.
+    selfHostInfra: has(['self-hosted','self hosted','own gpu','own gpus','own server','own servers','own infrastructure','own hardware','on our own hardware','ollama']) || SELF_HOST_TOOL_RE.test(t),
     vllmMentioned: has(['vllm']),
     sglangMentioned: has(['sglang','sg-lang']),
     // Bare "tgi" deliberately excluded (too short/common a substring to trust) — only the full
@@ -4257,7 +4265,7 @@ function pickRuntime(s){
     return {rec:'Ollama (fully local, no external network calls)', why:'Air-gapped/no-public-cloud rules out any router or API that proxies requests to third-party infrastructure — Ollama running entirely inside your network boundary is the only option that fits, not a preference.', conf:'high'};
   }
   if(sensitive && s.selfHostInfra){
-    return {rec:'Ollama, self-hosted alongside your existing Docker/Kubernetes infrastructure', why:'You already carry the ops burden of self-hosting (Docker/K8s in the stack) and have sensitive-data handling requirements — Ollama keeps prompts/outputs on infrastructure you already operate and control, rather than adding a new third-party data-processing relationship for a marginal convenience gain.', conf:'high'};
+    return {rec:'Ollama, self-hosted on the infrastructure you already run', why:'You\'ve stated you self-host (own servers/GPUs or a self-managed cluster) and have sensitive-data handling requirements — Ollama keeps prompts/outputs on infrastructure you already operate and control, rather than adding a new third-party data-processing relationship for a marginal convenience gain.', conf:'high'};
   }
   if(sensitive){
     return {rec:'Ollama (self-hosted) for anything touching regulated/sensitive data; direct provider SDK for the rest', why:'Compliance/security-sensitive data shouldn\'t transit a third-party router even one that claims not to log content — Ollama keeps it on infrastructure you control. Non-sensitive auxiliary tasks can still use a direct cloud provider SDK without adding OpenRouter\'s extra hop for something that doesn\'t need model-routing flexibility.', conf:'high'};
