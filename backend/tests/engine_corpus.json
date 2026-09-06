@@ -51,6 +51,8 @@
     "Verification API for one-time passcodes. At 300M/day the aggregate cost of a redundant SMS is material, so escalation timers are cancelled on approval. Latency target is tight.",
     "Enterprise verification platform. Enterprise integrators hold the verification ID; audit logging and role-based access are required. Decisions still open: is cancel in MVP scope?",
     "Self-hosted enterprise deployment of a multi-agent security platform. Air-gapped operation: no internet connectivity required after initial container pull. All LLM inference routes through local Ollama.",
-    "All LLM inference routes through local Ollama (no outbound API calls required). Recommendation: keep the gateway internal. Global check rate limits apply per tenant."
+    "All LLM inference routes through local Ollama (no outbound API calls required). Recommendation: keep the gateway internal. Global check rate limits apply per tenant.",
+    "We already have an application in production and only want to add AI to our existing system for a customer support bot.",
+    "We already have AI built and running in production; we just need our guardrails and safety layer reviewed for prompt injection, jailbreak and PII leakage."
   ]
 }

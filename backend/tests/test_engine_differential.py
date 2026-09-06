@@ -120,6 +120,32 @@ def test_boolean_signal_sets_are_identical(js):
 
 
 @requires_node
+def test_signal_KEY_sets_are_identical(js):
+    """The test above compares which signals are TRUE. This one compares which signals EXIST.
+
+    That distinction is not academic — it is the hole brownfieldAiOnly and brownfieldGuardrailsOnly
+    lived in for months. Both were defined in index.html and absent from rule_engine.py entirely,
+    and the True-value comparison could not see them because no corpus requirement said "we
+    already have AI built". A signal missing from one engine is invisible to a test that only
+    looks at the ones that fired, on texts that never fire them. Comparing key sets needs no
+    corpus coverage at all: a signal defined on one side and not the other fails immediately, on
+    any input.
+
+    (Corpus requirements for both were added alongside this, so the True-value comparison covers
+    them too — but that only works because someone thought to add them. This does not depend on
+    anyone thinking of anything.)
+    """
+    text = CORPUS[0]
+    j = set(js[text]["signals"].keys())
+    p = set(recommend_stack(text)["signals"].keys())
+    assert j == p, (
+        f"signal key divergence — JS-only={sorted(j - p)} PY-only={sorted(p - j)}. "
+        "A signal defined in one engine and not the other is a silent behavioural fork for every "
+        "API and MCP caller, however it is consumed."
+    )
+
+
+@requires_node
 def test_pick_values_are_identical(js):
     diffs = []
     for text in CORPUS:
@@ -203,6 +229,28 @@ def test_shared_keyword_tables_are_identical():
         else:
             j, p = sorted(j), sorted(p)
         assert j == p, f"{name} differs between engines"
+
+
+def test_the_brownfield_keyword_lists_are_identical_in_both_engines():
+    """test_shared_keyword_tables_are_identical only reaches NAMED module-level tables. The three
+    brownfield patterns are inline `has([...])` literals in both engines, so nothing compared
+    them — and a term dropped from one side stays invisible: the key-set test sees the signal
+    still exists, and the True-value test only notices if a corpus requirement happens to use
+    that exact phrasing. Mutation-tested by deleting one keyword from each list, which every
+    other test in this file passed through.
+    """
+    js_src = INDEX_HTML.read_text(encoding="utf-8")
+    py_src = (Path(py_engine.__file__)).read_text(encoding="utf-8")
+    for signal in ("brownfieldAiOnly", "brownfieldOmnichannel", "brownfieldGuardrailsOnly"):
+        j = re.search(rf"{signal}:\s*has\(\[(.*?)\]\)", js_src, re.S)
+        p = re.search(rf'"{signal}":\s*has\(\[(.*?)\]\)', py_src, re.S)
+        assert j and p, f"{signal} literal not found in both engines"
+        jl = sorted(re.findall(r"['\"]([^'\"]+)['\"]", j.group(1)))
+        pl = sorted(re.findall(r"['\"]([^'\"]+)['\"]", p.group(1)))
+        assert jl == pl, (
+            f"{signal} keyword lists differ:\n  JS-only={sorted(set(jl) - set(pl))}"
+            f"\n  PY-only={sorted(set(pl) - set(jl))}"
+        )
 
 
 def test_on_prem_keywords_cover_owning_your_own_servers():

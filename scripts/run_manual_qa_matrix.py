@@ -193,8 +193,8 @@ TEST_CASES = [
         "category": "Brownfield AI Scope",
         "dimensions": "Brownfield AI pattern #1 — suppress greenfield infra replacement",
         "input": "We already have an application in production and only want to add AI to our existing system for a customer support bot.",
-        "expected_signals": ["chatbot"],
-        "expected_behavior": "Frontend index.html detects brownfieldAiOnly; backend rule_engine currently lacks brownfieldAiOnly keyword mapping (differential gap). Chatbot signal detected."
+        "expected_signals": ["brownfieldAiOnly", "chatbot"],
+        "expected_behavior": "brownfieldAiOnly fires in BOTH engines (ported to rule_engine.py), so an API/MCP caller sees the same brownfield scope the browser does. Chatbot signal detected; the browser additionally suppresses the greenfield stack sections, which is rendering and stays frontend-only."
     },
     {
         "id": "ALT-07",
@@ -203,8 +203,8 @@ TEST_CASES = [
         "category": "Brownfield AI Scope",
         "dimensions": "Brownfield AI pattern #5 — guardrails review without changing LLM",
         "input": "We already have AI built and running in production; we just need our guardrails and safety layer reviewed for prompt injection, jailbreak and PII leakage.",
-        "expected_signals": ["routingGuardrailService"],
-        "expected_behavior": "Frontend index.html detects brownfieldGuardrailsOnly; backend rule_engine lacks signal. RoutingGuardrailService detected in both."
+        "expected_signals": ["brownfieldGuardrailsOnly", "routingGuardrailService"],
+        "expected_behavior": "brownfieldGuardrailsOnly fires in BOTH engines (ported to rule_engine.py). RoutingGuardrailService detected in both. Section suppression remains a rendering concern in index.html."
     },
     {
         "id": "ALT-08",

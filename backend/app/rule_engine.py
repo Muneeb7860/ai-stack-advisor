@@ -671,9 +671,33 @@ def detect_signals(text: str) -> dict:
         "throughputTarget": _tt,
         "teamSize": _team,
         "timeline": detect_timeline(text),
+        # The three brownfield patterns, ported from index.html with identical keyword lists.
+        # brownfieldOmnichannel drives a pick here (see pick_integration below); the other two
+        # drive only rendering in the browser — which section list to show, the hero headline,
+        # the view toggle. That is exactly why they were missing: nothing on this side consumed
+        # them, so nothing noticed.
+        #
+        # They still belong here. An API or MCP caller sending "we already have AI built, we just
+        # need our guardrails reviewed" got a full greenfield stack recommendation with no
+        # indication the request was scoped to guardrails, while the same text in the browser
+        # suppressed every other section. Detection is the layer that must match; what a consumer
+        # does with the signal is its own business, and a caller cannot make that choice from a
+        # signal it never receives.
+        "brownfieldAiOnly": has([
+            "already have an existing application", "already have an existing app",
+            "already have an application in production", "existing application in production",
+            "add ai to our existing", "only want to add ai", "add a chatbot to our existing",
+            "adding a chatbot to our existing", "add omnichannel ai support",
+        ]),
         "brownfieldOmnichannel": has([
             "omnichannel ai support", "omnichannel support", "omni-channel ai",
             "multiple channels", "across channels", "web widget, whatsapp", "channel routing",
+        ]),
+        # The strictest of the three: "already have AI built" says the AI EXISTS, where plain
+        # brownfieldAiOnly only says the app does.
+        "brownfieldGuardrailsOnly": has([
+            "guardrails and safety layer reviewed", "guardrails only", "already have ai built",
+            "we already have ai built", "review our guardrails", "guardrails reviewed",
         ]),
         "healthcare": has(["health", "hipaa", "patient", "clinical", "ehr", "medical"]),
         "finance": has(["fintech", "bank", "payment", "fraud", "pci", "transaction", "trading", "ledger", "finance"]),
