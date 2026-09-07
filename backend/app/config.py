@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,6 +10,24 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg2://advisor:advisor@localhost:5432/advisor"
     cors_origins: str = "http://localhost:3000,http://localhost:8080"
+
+    # Managed Postgres providers (Render, Heroku, Railway) hand out connection strings on the
+    # legacy `postgres://` scheme. SQLAlchemy 2.x removed that alias, so create_engine() raises
+    # `Can't load plugin: sqlalchemy.dialects:postgres` at import time — the app never starts,
+    # and the host reports it only as a failed health check. Normalising here rather than in
+    # db.py keeps every consumer of settings.database_url (alembic's env.py included) on the
+    # same value; alembic runs first in the container CMD, so a fix that covered only the app
+    # would still fail the migration step.
+    @field_validator("database_url")
+    @classmethod
+    def _normalise_pg_scheme(cls, v: str) -> str:
+        if v.startswith("postgres://"):
+            return "postgresql+psycopg2://" + v[len("postgres://"):]
+        # `postgresql://` alone is valid but resolves to whichever DBAPI is installed; this
+        # image ships psycopg2-binary, so pin it explicitly rather than relying on discovery.
+        if v.startswith("postgresql://"):
+            return "postgresql+psycopg2://" + v[len("postgresql://"):]
+        return v
 
     # --- Retrieval embeddings (app/retrieval.py) ---
     # Local-first per the project's own framing (see retrieval.py's module docstring): the

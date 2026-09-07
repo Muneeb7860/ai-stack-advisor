@@ -3,6 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Where the optional AI features reach their backend. Without this the API_BASE resolver
+     (see its comment further down) falls through to http://localhost:8000, which is correct for
+     local development and dead for every visitor to the hosted page — /health fails, backendAvailable
+     goes false, and Refine, Ask, saved analyses and live cost tracking silently stop existing.
+     The core analysis does not read this: it runs entirely client-side, offline, per NFR-1/NFR-5.
+     Points at the Render service defined in render.yaml; correct the host here if Render assigns
+     a different one. -->
+<meta name="api-base" content="https://ai-stack-advisor-api.onrender.com">
 <title>AI Stack Advisor</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
