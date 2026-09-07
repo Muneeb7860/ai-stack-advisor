@@ -97,22 +97,16 @@ def test_pruning_contracts_edges_rather_than_orphaning_nodes(requirement):
     dangling = [e for e in g["edges"] if e["from"] not in ids or e["to"] not in ids]
     assert not dangling, f"edges reference removed nodes: {dangling}"
 
-    # Reachability alone does NOT catch this, and the first version of this test proved it: an
-    # orphaned node has no incoming edge, so a root-first traversal counts it as a root and calls
-    # it reached. Deleting the contraction line passed all eleven tests.
+    # Reachability alone does NOT catch a failed contraction, and the first version of this test
+    # proved it: an orphaned node has no incoming edge, so a root-first traversal counts it as a
+    # root and calls it reached. Removing the contraction line passed all eleven tests.
     #
-    # The property that does catch it: only nodes that legitimately never had a parent may be
-    # parentless. `frontend` is the spine head, `gateway` becomes it when frontend is floored
-    # away, `dns` has no edges at all (true of the original 18-node graph too), and `guardrails`
-    # points INTO llm rather than being pointed at. Anything else with no parent is a node whose
-    # parent was pruned without rewiring.
-    LEGITIMATELY_PARENTLESS = {"frontend", "gateway", "dns", "guardrails"}
-    targets = {e["to"] for e in g["edges"]}
-    orphans = {i for i in ids if i not in targets} - LEGITIMATELY_PARENTLESS
-    assert not orphans, (
-        f"nodes lost their parent without being rewired to its parent: {sorted(orphans)} — "
-        "edges were deleted rather than contracted"
-    )
+    # A "nothing may be parentless" rule was the second attempt and was also wrong — once the
+    # floors deepened, a CLI tool legitimately reduces to {lang, cicd} with no edges at all,
+    # because every node above them was pruned. Being parentless is fine; losing a connection to
+    # a surviving ancestor is not.
+    #
+    # test_contraction_reconnects_across_pruned_nodes below is the assertion that actually bites.
 
 
 @requires_node
@@ -125,3 +119,75 @@ def test_the_diagram_shrinks_with_the_requirement():
     assert sizes["cli"] < sizes["plain"], sizes
     # It was 18 for all of them; anything near that for a static page means the prune stopped working.
     assert sizes["static"] <= 10, f"static site still gets {sizes['static']} nodes"
+
+
+@requires_node
+def test_contraction_reconnects_across_pruned_nodes():
+    """The assertion that separates contraction from deletion, on a case where both ends survive.
+
+    For a static marketing site the spine prunes in the middle: `gateway` sits between `frontend`
+    and `cloud`, and `arch` + `computemodel` sit between `cloud` and `lang`. All three are floored
+    away. Contraction must therefore produce edges that did not exist in the original graph:
+
+        frontend -> cloud      (gateway removed between them)
+        cloud    -> lang       (arch AND computemodel removed between them)
+
+    A naive `nodes.filter(...)` leaves this graph with zero edges, which is exactly what the
+    surviving mutation did. Checked on the static site rather than the CLI tool because the CLI
+    prunes its whole spine — {lang, cicd} with no edges is correct there and proves nothing.
+    """
+    g = _graph(STATIC_SITE)
+    ids = {n["id"] for n in g["nodes"]}
+    assert {"frontend", "cloud", "lang"} <= ids, f"fixture drifted; nodes are {sorted(ids)}"
+
+    pairs = {(e["from"], e["to"]) for e in g["edges"]}
+    for a, b in [("frontend", "cloud"), ("cloud", "lang")]:
+        assert (a, b) in pairs, (
+            f"{a} -> {b} is missing: the node(s) between them were deleted rather than "
+            f"contracted, so the graph fell apart. edges={sorted(pairs)}"
+        )
+
+
+@requires_node
+def test_the_no_server_floor_does_not_reach_a_server_backed_app():
+    """The over-reach direction, and it was missing: widening noServerTier() to return true for
+    everything passed every other test in this file. A normal web app must keep the categories
+    the floor removes — it has a backend to front, services to mesh, and a tier to cache."""
+    ids = {n["id"] for n in _graph(PLAIN_APP)["nodes"]}
+    for essential in ("gateway", "mesh", "cache", "db", "containers"):
+        assert essential in ids, (
+            f"a server-backed app lost its {essential} node — the no-server floor is firing on "
+            f"projects that do run a server. nodes={sorted(ids)}"
+        )
+
+
+@requires_node
+def test_a_static_site_keeps_its_dns_decision():
+    """DNS is floored for a CLI, a desktop app and a browser extension, and deliberately NOT for a
+    static site: a marketing page is served from a domain, so where that domain points is a real
+    decision. Applying the floor to all four shapes passed every other test here."""
+    assert "dns" in {n["id"] for n in _graph(STATIC_SITE)["nodes"]}, (
+        "the static site lost its DNS node — a site served from a domain needs that decision"
+    )
+    assert "dns" not in {n["id"] for n in _graph(CLI_TOOL)["nodes"]}, (
+        "a CLI tool has no hostname of its own and should not be shown a DNS pick"
+    )
+
+
+@requires_node
+@pytest.mark.parametrize("requirement", [STATIC_SITE, CLI_TOOL])
+def test_no_server_shapes_get_no_server_tier_nodes(requirement):
+    """Absence-of-"Not applicable" is not enough on its own, and two mutations proved it.
+
+    Removing the mesh or cache floor does not reintroduce a "Not applicable" node — those picks
+    fall back to "Not needed yet (revisit past ~10-15 services)" and "Not required yet", which are
+    perfectly good advice for an app that has services and a database, and pure noise on a static
+    page. They are not caught by the prefix prune, and the node-count bound is loose enough to
+    absorb two extra nodes. So the categories themselves are named here.
+    """
+    ids = {n["id"] for n in _graph(requirement)["nodes"]}
+    forbidden = {"gateway", "mesh", "cache", "iam", "computemodel", "containers", "db", "messaging"}
+    present = ids & forbidden
+    assert not present, (
+        f"a shape that runs no server was drawn server-tier nodes: {sorted(present)}"
+    )

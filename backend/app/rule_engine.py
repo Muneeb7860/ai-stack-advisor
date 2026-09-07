@@ -998,7 +998,24 @@ def pick_cloud(s):
     return {"v": "AWS", "why": "Default choice given broadest ecosystem maturity; revisit if there is an existing cloud commitment.", "conf": "low"}
 
 
+def _no_server_tier(s) -> bool:
+    """The four shapes that ship no server of their own.
+
+    Each already floors SOME categories ("Not applicable — a static site has no application
+    architecture") but not others, so a static marketing site was still recommended an AWS API
+    Gateway to front a backend it does not have, and a service mesh for services it does not run.
+    Named once here because the set was previously re-tested inline per pick, which is how four
+    categories came to be missing from it.
+    """
+    return bool(s["staticSite"] or s["cliTool"] or s["browserExtension"] or s["desktopApp"])
+
+
 def pick_gateway(s):
+    # No backend to put a gateway in front of. Worded "Not applicable" deliberately: that prefix
+    # is what the card filter and the diagram prune key off, so a floor stated any other way
+    # still costs the reader a card and draws a node.
+    if _no_server_tier(s):
+        return {"v": "Not applicable — no server-side API to front with a gateway", "why": "A gateway terminates, routes and protects traffic to backend services. There are none here: the client talks to a CDN, the local filesystem, or the browser's own APIs.", "conf": "high"}
     if s["onPrem"]:
         return {"v": "Internal API gateway (Kong or Apigee Edge on-prem, or NGINX/Envoy) — no public CDN/edge service", "why": "Cloudflare and similar public edge services require internet egress, which an air-gapped environment doesn't have. Run your gateway entirely inside the isolated network boundary.", "conf": "high"}
     if s["huaweiShop"]:
@@ -1796,6 +1813,8 @@ def pick_messaging(s):
 
 
 def pick_mesh(s):
+    if _no_server_tier(s):
+        return {"v": "Not applicable — no services to mesh", "why": "A service mesh manages traffic, identity and retries BETWEEN services. This shape runs one unit and no server-side services at all, so there is nothing for a mesh to sit between.", "conf": "high"}
     if (s["mtlsMentioned"] or s["compliance"]) and (s["enterprise"] or s["largeTeam"]):
         return {"v": "Istio with SPIFFE/SPIRE-issued workload identity (not just mTLS certs Istio manages internally)", "why": "Istio's built-in mTLS secures the transport, but its default self-managed certificate identity is Istio-internal — it doesn't give you a portable, verifiable workload identity standard auditors or a zero-trust program can reason about independently of your mesh vendor. SPIFFE/SPIRE issues short-lived, cryptographically verifiable identity documents (SVIDs) per workload that Istio can consume, which is the difference between \"traffic between our services happens to be encrypted\" and \"every service call carries a verifiable identity you can write a policy against.\" Worth the added SPIRE-server operational piece specifically because compliance/audit and multi-team trust boundaries are both in play here.", "conf": "high"}
     if s["enterprise"] or s["largeTeam"]:
@@ -1924,6 +1943,8 @@ def pick_security_gates(s):
 
 
 def pick_cache(s):
+    if _no_server_tier(s):
+        return {"v": "Not applicable — no server tier to cache", "why": "A cache tier sits in front of a database or an expensive server-side computation, neither of which exists here. CDN edge caching and the browser cache are separate concerns and are already covered by the hosting pick.", "conf": "high"}
     # This ignored `s` entirely and returned Redis unconditionally, so a static site or a
     # notebook-only ML script got a cache tier it has no use for. Redis is still right when a
     # cache is warranted — the fix is requiring a reason, not changing the product.
@@ -2360,6 +2381,11 @@ def pick_cicd(s):
 
 
 def pick_dns(s):
+    # staticSite is deliberately NOT floored here: a marketing site is served from a domain and
+    # a DNS/CDN choice is a real decision for it. A CLI, a desktop app and a browser extension
+    # have no hostname of their own to point anywhere.
+    if s["cliTool"] or s["browserExtension"] or s["desktopApp"]:
+        return {"v": "Not applicable — nothing is served from a domain you control", "why": "DNS answers \"where does this hostname point\". This ships as a binary, an app bundle or a browser extension; there is no origin to resolve to.", "conf": "high"}
     if s["onPrem"]:
         return {"v": "Internal DNS (BIND / Windows DNS / private zone) — no public DNS provider", "conf": "high"}
     if s["awsShop"]:

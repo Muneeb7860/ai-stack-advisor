@@ -2990,7 +2990,18 @@ function pickCloud(s){
   if(s.startupMvp) return {v:'AWS (or GCP)', why:'Broadest managed-service catalog and hiring pool for a small team moving fast; GCP is a fine alternative if the team is more data/ML-leaning.', conf:'medium'};
   return {v:'AWS', why:'Default choice given broadest ecosystem maturity; revisit if there is an existing cloud commitment.', conf:'low'};
 }
+// Twin of rule_engine.py's _no_server_tier. The four shapes that ship no server of their own.
+// Each already floored SOME categories and not others, so a static marketing site was recommended
+// an AWS API Gateway to front a backend it does not have. Named once because re-testing the set
+// inline per pick is how four categories came to be missing from it.
+function noServerTier(s){
+  return !!(s.staticSite || s.cliTool || s.browserExtension || s.desktopApp);
+}
+
 function pickGateway(s){
+  // "Not applicable" is the exact prefix the stack-card filter and the diagram prune key off — a
+  // floor worded any other way still costs a card and still draws a node.
+  if(noServerTier(s)) return {v:'Not applicable — no server-side API to front with a gateway', why:'A gateway terminates, routes and protects traffic to backend services. There are none here: the client talks to a CDN, the local filesystem, or the browser\'s own APIs.', conf:'high'};
   if(s.onPrem) return {v:'Internal API gateway (Kong or Apigee Edge on-prem, or NGINX/Envoy) — no public CDN/edge service', why:'Cloudflare and similar public edge services require internet egress, which an air-gapped environment doesn\'t have. Run your gateway entirely inside the isolated network boundary.', conf:'high'};
   if(s.huaweiShop) return {v:'Huawei Cloud APIG (API Gateway) + ROMA Connect for integration/eventing', why:'Explicit Huawei Cloud usage detected — APIG is Huawei\'s native API gateway; ROMA Connect adds enterprise integration (ESB-style) and eventing on top if you need to bridge multiple backend services.', conf:'high'};
   const picks=[]; let hits=0;
@@ -3690,6 +3701,7 @@ function pickMessaging(s){
   return {v:picks.join(' · '), why:"Kafka for durable, replayable event streams (audit, fraud, analytics); lighter managed queues/RabbitMQ when volume/ops budget don't justify Kafka yet.", conf: hits>=2?'high':hits===1?'medium':'low'};
 }
 function pickMesh(s){
+  if(noServerTier(s)) return {v:'Not applicable — no services to mesh', why:'A service mesh manages traffic, identity and retries BETWEEN services. This shape runs one unit and no server-side services at all, so there is nothing for a mesh to sit between.', conf:'high'};
   if((s.mtlsMentioned || s.compliance) && (s.enterprise || s.largeTeam)){
     return {v:'Istio with SPIFFE/SPIRE-issued workload identity (not just mTLS certs Istio manages internally)', why:'Istio\'s built-in mTLS secures the transport, but its default self-managed certificate identity is Istio-internal — it doesn\'t give you a portable, verifiable workload identity standard auditors or a zero-trust program can reason about independently of your mesh vendor. SPIFFE/SPIRE issues short-lived, cryptographically verifiable identity documents (SVIDs) per workload that Istio can consume, which is the difference between "traffic between our services happens to be encrypted" and "every service call carries a verifiable identity you can write a policy against." Worth the added SPIRE-server operational piece specifically because compliance/audit and multi-team trust boundaries are both in play here.', conf:'high'};
   }
@@ -3832,6 +3844,7 @@ function pickSecurityGates(s){
 }
 
 function pickCache(s){
+  if(noServerTier(s)) return {v:'Not applicable — no server tier to cache', why:'A cache tier sits in front of a database or an expensive server-side computation, neither of which exists here. CDN edge caching and the browser cache are separate concerns and are already covered by the hosting pick.', conf:'high'};
   // This function used to ignore `s` entirely and return Redis unconditionally, so a static
   // brochure site or a notebook-only ML script got a cache tier it has no use for. Redis is
   // still the right answer when a cache is actually warranted — the fix is requiring a reason,
@@ -4205,6 +4218,9 @@ function pickCICD(s){
   return skillNote({v:`${ci} → Terraform + Kubernetes (or Vercel for frontend-only pieces)`, why:'Balanced CI/CD with infra-as-code as the team and service count grow.', conf:'low'});
 }
 function pickDNS(s){
+  // staticSite deliberately NOT floored: a marketing site is served from a domain, so a DNS/CDN
+  // choice is a real decision for it. A CLI, desktop app or extension has no hostname of its own.
+  if(s.cliTool || s.browserExtension || s.desktopApp) return {v:'Not applicable — nothing is served from a domain you control', why:'DNS answers "where does this hostname point". This ships as a binary, an app bundle or a browser extension; there is no origin to resolve to.', conf:'high'};
   if(s.onPrem) return {v:'Internal DNS (BIND / Windows DNS / private zone) — no public DNS provider', conf:'high'};
   if(s.awsShop) return {v:'Route 53 (AWS-native, integrates with ALB/CloudFront)', conf:'high'};
   if(s.huaweiShop) return {v:'Huawei Cloud DNS (native, integrates with ELB and CDN)', conf:'high'};
