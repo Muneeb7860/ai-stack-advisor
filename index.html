@@ -5096,10 +5096,38 @@ const ALL_SECTION_IDS = ['stack','iamcompare','tradeoffs','llm','orchestration',
 // — when that happens, only THIS function's body needs to change (what computes the list), not
 // the renderer or any individual sec() call site. Pattern #5 (guardrails-only) is the maximal
 // test of that boundary: suppress everything except one section, including the LLM pick itself.
+// The eleven sections that only exist because there is an LLM in the picture — model choice,
+// where it runs, how it is orchestrated, what it retrieves from, and what guards it. Their own
+// headings say so ("for LLM serving, RAG & agents"), which is the test for membership here.
+const AI_SECTION_IDS = ['llm','orchestration','hosting','topology','mcpapi','mcpservers',
+  'agentframework','llmobservability','rag','vectordb','guardrails'];
+
+// Server-shaped concerns: an identity-provider bake-off and a concurrency/throughput plan both
+// presuppose a server tier to put them on.
+const SERVER_SECTION_IDS = ['iamcompare','throughput'];
+
 function computeVisibleSections(s){
   if (s.brownfieldGuardrailsOnly) return new Set(['guardrails']);
   if (s.brownfieldAiOnly) return new Set(ALL_SECTION_IDS.filter(id => !['stack','iamcompare','tradeoffs','throughput'].includes(id)));
-  return new Set(ALL_SECTION_IDS.filter(id => id !== 'integration'));
+
+  let ids = ALL_SECTION_IDS.filter(id => id !== 'integration');
+
+  // The domain floors used to act only on pick CONTENT — every card still rendered, saying
+  // "Not applicable — static site". So "a simple static marketing website, no backend, just
+  // HTML and CSS" produced 25 cards across 18 sections, eleven of them about LLMs, and the
+  // architecture diagram drew AWS API Gateway, FastAPI/Spring Boot, GPT-4o, MCP servers and
+  // Terraform+Kubernetes nodes. Reported by a user as "tons of unnecessary recommendations"
+  // and "how is this optimal" — correctly. A floor has to remove the section, not caption it.
+  //
+  // Gated on llmUsageDetected rather than on the floors, because the fault is general: a
+  // requirement with no chatbot, agent, knowledge-base or voice signal has no LLM to make
+  // decisions about, whatever shape it is. The floors then drop the server-tier sections on
+  // top, since none of these four run a server at all.
+  if (!llmUsageDetected(s)) ids = ids.filter(id => !AI_SECTION_IDS.includes(id));
+  if (s.staticSite || s.browserExtension || s.cliTool || s.desktopApp) {
+    ids = ids.filter(id => !SERVER_SECTION_IDS.includes(id));
+  }
+  return new Set(ids);
 }
 
 // Render half of the old analyze() — takes a {signals, recommendations} pair (either just
@@ -5167,7 +5195,21 @@ function renderRecommendations(s, rec){
     ['Network Boundary', networkBoundary.v, networkBoundary.why, networkBoundary.conf, 'Enterprise Architect', '', getCardBasis('networkboundary', networkBoundary.conf)],
     ['Multi-Cloud Bridging', multiCloudBridging.v, multiCloudBridging.why, multiCloudBridging.conf, 'Enterprise Architect', '', getCardBasis('multicloudbridging', multiCloudBridging.conf)],
     ['Security Gates (CI/CD)', securityGates.v, securityGates.why, securityGates.conf, 'SDE', '', getCardBasis('securitygates', securityGates.conf)],
-  ];
+  ]
+    // A card whose entire pick reads "Not applicable — a static site has no application
+    // architecture" costs the reader a card to tell them about a decision that does not exist.
+    // Seven of these rendered for "a simple static marketing website, no backend, just HTML and
+    // CSS" and nine for a CLI tool, which is most of what made that page 25 cards long.
+    //
+    // Filtered on the pick text rather than a list of category keys, so it covers the promoted
+    // categories (Code Execution Sandbox, Real-Time Analytics, Multi-Cloud Bridging, Network
+    // Boundary...) without a second list to keep in sync — the same drift that let this survive.
+    //
+    // "Not recommended — you excluded X" deliberately still renders: the user asked for that
+    // exclusion and seeing it confirmed is the point. Only "Not applicable", which the domain
+    // floors emit for categories that structurally cannot exist, is removed. A normal
+    // server-backed app produces zero of these, so nothing changes for the common case.
+    .filter(([, pick]) => !/^\s*Not applicable\b/i.test(String(pick ?? '')));
 
   const confLabel = c => ({high:'High confidence', medium:'Medium confidence', low:'Low confidence (default)'}[c] || 'Low confidence (default)');
 
