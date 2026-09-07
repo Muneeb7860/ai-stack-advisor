@@ -1720,6 +1720,25 @@ def _pick_language_alternative(s, excluded_terms):
 
 
 def pick_languages(s):
+    # Shape floors first. The split below — "Java (Spring Boot) for core transactional services ·
+    # Python (FastAPI) for AI/ML, RAG, and agent orchestration services" — describes a backend web
+    # service. A static site has no backend language at all, and a CLI, a desktop app and a browser
+    # extension each have one but emphatically not a server framework: recommending FastAPI to
+    # someone writing a log-analysis CLI is the "web-shaped advice for a non-web project" this
+    # closes. Placed above every other branch because the shape decides this before scale, domain
+    # or team skill get a say.
+    if s["staticSite"]:
+        return {"v": "Not applicable — a static site has no backend language", "why": "The page is HTML and CSS served from a CDN, with optional vanilla JavaScript running in the visitor's browser. There is no server-side runtime to choose a language for; the frontend pick covers what actually gets written.", "conf": "high"}
+    if s["browserExtension"]:
+        return {"v": "TypeScript (or plain JavaScript) — extension code runs in the browser, not on a server", "why": "A Manifest V3 extension is a background service worker plus popup/content scripts, all executing in the browser's own JavaScript runtime. TypeScript is worth it for the message-passing contracts between those pieces, which are easy to get wrong and awkward to debug.", "conf": "high"}
+    if s["cliTool"]:
+        lang = ("Python with Typer or Click" if s["pythonMentioned"]
+                else "Go" if s["goMentioned"]
+                else "Node with Commander" if s["nodeMentioned"]
+                else "Go or Rust for a single distributable binary, or Python with Typer if your team already ships Python")
+        return {"v": lang + " — an argument-parsing entry point, not a web framework", "why": "A CLI's interface is argv and exit codes. The language choice follows how you want to distribute it: Go and Rust compile to one binary a user can download and run, while Python and Node need a runtime present but are faster to iterate on and ship to a package registry.", "conf": "high" if (s["pythonMentioned"] or s["goMentioned"] or s["nodeMentioned"]) else "medium"}
+    if s["desktopApp"]:
+        return {"v": "Tauri (Rust core + TypeScript UI) or Electron (TypeScript) — the language follows the desktop shell", "why": "A cross-platform desktop app's language is decided by which shell you adopt, not by workload split. Tauri produces much smaller binaries and uses the OS webview; Electron bundles Chromium, which costs disk and memory but removes per-platform webview differences.", "conf": "high"}
     picks = []
     hits = 0
     if s["javaMentioned"] or s["enterprise"] or s["finance"]:
@@ -2364,6 +2383,18 @@ def pick_cicd(s):
                                   "isn't just the balanced default — it matches existing skills too.",
                 "conf": "high" if v["conf"] == "high" else "medium"}
 
+    # Shape floors before onPrem: "deploying via Terraform to your private infrastructure" is still
+    # wrong for a CLI that ships as a binary. None of these four provision infrastructure, so the
+    # Terraform + Kubernetes half of the default pipeline has nothing to act on. The CI platform
+    # itself still comes from `ci` above, so a team that named Jenkins keeps Jenkins.
+    if s["staticSite"]:
+        return skill_note({"v": f"{ci} → build and publish to your static host (Cloudflare Pages, Vercel or Netlify) — no infrastructure to provision", "why": "The deploy target is a CDN that takes a built directory. Terraform and Kubernetes exist to manage servers and clusters, neither of which is in this picture; most static hosts will also build straight from a git push if you would rather not run CI at all.", "conf": "high"})
+    if s["cliTool"]:
+        return skill_note({"v": f"{ci} → test matrix across supported versions, build, publish to the language's package registry or GitHub Releases", "why": "Shipping a CLI means producing artifacts a user installs, so the pipeline's real work is testing against every runtime version you claim to support and publishing signed releases — not provisioning infrastructure, of which there is none.", "conf": "high"})
+    if s["browserExtension"]:
+        return skill_note({"v": f"{ci} → build, package, and upload to the extension store (Chrome Web Store or AMO)", "why": "Distribution goes through a store with its own review queue, so the pipeline ends at an upload rather than a deploy. Budget for review turnaround between merging and users actually receiving the update.", "conf": "high"})
+    if s["desktopApp"]:
+        return skill_note({"v": f"{ci} → cross-platform build, code-sign and notarize, publish release artifacts", "why": "Signing and notarization are the load-bearing steps: unsigned desktop binaries are blocked or heavily warned against by both macOS and Windows. That needs CI runners on each target OS and secrets handling for the signing keys.", "conf": "high"})
     if s["onPrem"]:
         # Air-gapped runners must be self-hosted regardless — but still honor a named team-known
         # tool over the generic "GitLab CE or Jenkins either-or" phrasing when one was stated.

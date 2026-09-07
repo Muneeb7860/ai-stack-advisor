@@ -57,6 +57,12 @@
     "Scaled agile framework delivery coordination for an e-commerce marketplace on AWS.",
     "We go live in March with a modular monolith for an internal admin tool.",
     "We already run Docker Swarm on servers in our colo and want to add a chatbot.",
-    "Kubernetes manages our infrastructure across three regions on managed GKE."
+    "Kubernetes manages our infrastructure across three regions on managed GKE.",
+    "A command line tool in Python that analyses local log files. Solo developer.",
+    "A simple static marketing website, no backend, just HTML and CSS. Solo developer.",
+    "Cross-platform desktop application, no backend server, data stays on the machine.",
+    "A Chrome extension with Manifest V3 that summarises web pages.",
+    "A command line tool in Python that analyses local log files. We use Jenkins for CI.",
+    "A simple static marketing website, no backend. Our team uses GitLab CI."
   ]
 }

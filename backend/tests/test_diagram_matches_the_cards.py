@@ -126,22 +126,26 @@ def test_contraction_reconnects_across_pruned_nodes():
     """The assertion that separates contraction from deletion, on a case where both ends survive.
 
     For a static marketing site the spine prunes in the middle: `gateway` sits between `frontend`
-    and `cloud`, and `arch` + `computemodel` sit between `cloud` and `lang`. All three are floored
+    and `cloud`, and `arch` + `computemodel` sit between `cloud` and `cicd`. All three are floored
     away. Contraction must therefore produce edges that did not exist in the original graph:
 
         frontend -> cloud      (gateway removed between them)
-        cloud    -> lang       (arch AND computemodel removed between them)
+        cloud    -> cicd       (arch AND computemodel removed between them)
 
     A naive `nodes.filter(...)` leaves this graph with zero edges, which is exactly what the
     surviving mutation did. Checked on the static site rather than the CLI tool because the CLI
     prunes its whole spine — {lang, cicd} with no edges is correct there and proves nothing.
+
+    The second pair was `cloud -> lang` until `languages` gained its own static-site floor ("a
+    static site has no backend language") and that node stopped existing. The assertion moved to
+    the next surviving descendant rather than being weakened — the property is unchanged.
     """
     g = _graph(STATIC_SITE)
     ids = {n["id"] for n in g["nodes"]}
-    assert {"frontend", "cloud", "lang"} <= ids, f"fixture drifted; nodes are {sorted(ids)}"
+    assert {"frontend", "cloud", "cicd"} <= ids, f"fixture drifted; nodes are {sorted(ids)}"
 
     pairs = {(e["from"], e["to"]) for e in g["edges"]}
-    for a, b in [("frontend", "cloud"), ("cloud", "lang")]:
+    for a, b in [("frontend", "cloud"), ("cloud", "cicd")]:
         assert (a, b) in pairs, (
             f"{a} -> {b} is missing: the node(s) between them were deleted rather than "
             f"contracted, so the graph fell apart. edges={sorted(pairs)}"
