@@ -2666,13 +2666,21 @@ function detectSignals(text){
   // there, by design, unlike this bare "on-prem" phrase, where "on-prem" itself is the subject
   // that can be negated.
   const ON_PREM_NEGATED_BEFORE_RE = /\b(?:not|no|never|isn't|won't be|will not be|don't want|do not want|doesn't want|does not want|avoid|without)\s*$/i;
+  // Twin of rule_engine.py's _ON_PREM_MENTION_RE — see the reasoning there. Three literal
+  // spellings covered three of nineteen ordinary phrasings; every miss fell through to the AWS
+  // default. Bare "self-hosted" is deliberately excluded (self-hosting on EC2 is not air-gapped).
+  const ON_PREM_MENTION_RE = /\bon[\s-]?prem(?:ise|ises)?\b|\bour\s+own\s+(?:[\w-]+\s+){0,2}(?:servers?|hardware|infrastructure|machines?|boxes|racks?)\b|\bour\s+(?:own\s+)?(?:data\s?cent(?:er|re)|racks?)\b|\bcolo(?:cation)?\b|\bin[\s-]house\s+(?:servers?|hardware|infrastructure|data\s?cent(?:er|re)|deployment|hosting)\b/gi;
   const mentionsOnPremUnnegated = (text) => {
-    for (const term of ['on-prem','on premises','on-premise']){
-      const re = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-      let m;
-      while ((m = re.exec(text)) !== null){
-        if (!ON_PREM_NEGATED_BEFORE_RE.test(text.slice(Math.max(0, m.index - 30), m.index))) return true;
-      }
+    // Defensive, and currently unreachable: this /g regex is declared inside detectSignals, so it
+    // is rebuilt per call and lastIndex cannot survive. It matters the moment anyone hoists it to
+    // module scope the way the Python twin is — the loop below returns early on the first
+    // unnegated match, leaving lastIndex mid-string, and the next call would start from there and
+    // miss a match nearer the front. Verified inert today rather than assumed: removing this line
+    // changes no result, because of the scoping and nothing else.
+    ON_PREM_MENTION_RE.lastIndex = 0;
+    let m;
+    while ((m = ON_PREM_MENTION_RE.exec(text)) !== null){
+      if (!ON_PREM_NEGATED_BEFORE_RE.test(text.slice(Math.max(0, m.index - 30), m.index))) return true;
     }
     return false;
   };

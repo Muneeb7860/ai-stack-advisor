@@ -606,11 +606,39 @@ _ON_PREM_NEGATED_BEFORE_RE = re.compile(
 )
 
 
+# Three literal spellings used to stand for every way a person says "we run this ourselves":
+# "on-prem", "on premises", "on-premise". Measured against nineteen ordinary phrasings, sixteen
+# missed — including "on premise" (space, singular), "our own hardware", "our own data centre"
+# and "in-house servers". Every miss falls through to pick_cloud's default, which is AWS, so a
+# user writing "on premise deployment on our own hardware" was recommended AWS and serverless.
+# Reported by a user as "i clearly says on premises and even i say on own server still it
+# recommends AWS cloud and serverless" — and "why always aws?", which has the same answer.
+#
+# A regex family rather than a longer literal list, because the list is what failed: any spelling
+# nobody thought to add was silently absent.
+#
+# Deliberately NOT included: bare "self-hosted". A team self-hosting Postgres on EC2 is not
+# air-gapped, and onPrem means no public cloud reachability at all — firing it there would kill a
+# correct AWS pick. selfHostInfra already carries that weaker meaning separately.
+_ON_PREM_MENTION_RE = re.compile(
+    # on-prem / on prem / onprem / on premise / on-premises / on premises
+    r"\bon[\s-]?prem(?:ise|ises)?\b"
+    # hardware you own: "our own servers", "our own physical servers", "our own hardware"
+    r"|\bour\s+own\s+(?:[\w-]+\s+){0,2}(?:servers?|hardware|infrastructure|machines?|boxes|racks?)\b"
+    # premises you operate: "our data centre", "our own data center", "our racks"
+    r"|\bour\s+(?:own\s+)?(?:data\s?cent(?:er|re)|racks?)\b"
+    # a colo is by definition your hardware in someone else's building, never public cloud
+    r"|\bcolo(?:cation)?\b"
+    # "in-house" alone is about staffing ("our in-house engineers"), so it needs a hosting noun
+    r"|\bin[\s-]house\s+(?:servers?|hardware|infrastructure|data\s?cent(?:er|re)|deployment|hosting)\b",
+    re.I,
+)
+
+
 def _mentions_on_prem_unnegated(raw: str) -> bool:
-    for term in ("on-prem", "on premises", "on-premise"):
-        for m in re.finditer(re.escape(term), raw):
-            if not _ON_PREM_NEGATED_BEFORE_RE.search(raw[max(0, m.start() - 30): m.start()]):
-                return True
+    for m in _ON_PREM_MENTION_RE.finditer(raw):
+        if not _ON_PREM_NEGATED_BEFORE_RE.search(raw[max(0, m.start() - 30): m.start()]):
+            return True
     return False
 
 
