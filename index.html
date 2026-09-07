@@ -6264,6 +6264,49 @@ function buildCanonicalArchitectureGraph(ctx, signals = {}){
     }
   });
 
+  // ---- Prune what this requirement has no decision about ------------------
+  // Every N() above runs unconditionally, so the graph was a fixed 18-node template: byte
+  // identical for an on-prem requirement with four explicit exclusions, a CLI tool, and a static
+  // marketing site. Reported by a user as "flow diagram is not minimal but unnecessary cluster of
+  // worthless additions" and "never matches with cards" — both correct, and the second follows
+  // from the first: the cards said "Not applicable — a static site has no application
+  // architecture" while the diagram drew the node anyway, next to AWS API Gateway, FastAPI and
+  // Terraform+Kubernetes nodes for a page made of HTML and CSS.
+  //
+  // Keyed off the same picks the cards use, so the two cannot drift apart again. Nodes whose pick
+  // carries the value in the TITLE rather than the sub (iam, llm) are covered because this reads
+  // ctx directly rather than parsing rendered node text.
+  const pickFor = {
+    frontend: fe, gateway: gw, iam, dns, cloud, arch, computemodel: compute,
+    containers, lang, db, cache, messaging: msg, mesh, observability: obs, cicd,
+  };
+  const drop = new Set();
+  for (const [id, pick] of Object.entries(pickFor)) {
+    if (/^\s*Not applicable\b/i.test(String((pick || {}).v ?? ''))) drop.add(id);
+  }
+  // The AI spine, on the same signal the AI sections use (chatbot/agentic/knowledgeBase/voice).
+  // Without it a static site was shown an "LLM — OpenAI GPT (mid tier)" node it never asked for.
+  if (typeof llmUsageDetected === 'function' && !llmUsageDetected(s)) {
+    ['llm','mcp','guardrails', ragId, vecId].forEach(id => { if (id) drop.add(id); });
+  }
+
+  if (drop.size) {
+    // Contract, don't just delete. This graph is a spine — frontend → gateway → cloud → arch →
+    // computemodel → everything else — so removing a node mid-chain would strand every node below
+    // it with no path from the frontend. For each removed node, every in-edge is rewired to every
+    // out-edge, which is the standard contraction and keeps the remaining graph connected.
+    let e2 = edges;
+    for (const id of drop) {
+      const ins = e2.filter(e => e.to === id).map(e => e.from);
+      const outs = e2.filter(e => e.from === id).map(e => e.to);
+      e2 = e2.filter(e => e.from !== id && e.to !== id);
+      for (const a of ins) for (const b of outs) if (a !== b) e2.push({from: a, to: b});
+    }
+    const seen = new Set();
+    e2 = e2.filter(e => { const k = e.from + '>' + e.to; if (seen.has(k)) return false; seen.add(k); return true; });
+    return {nodes: nodes.filter(n => !drop.has(n.id)), edges: e2};
+  }
+
   return {nodes, edges};
 }
 
